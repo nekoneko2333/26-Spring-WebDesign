@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Italy Drive · 3D</title>
+  </head>
+  <body>
+
+    <!-- 顶部标题 -->
+    <div class="hud-title">🇮🇹 Italy <span>Drive</span></div>
+
+    <!-- 返回地图视角按钮（跟随视角时显示） -->
+    <button id="btn-map-view" class="btn-map-view" aria-label="返回地图">
+      <span class="icon">🗺️</span> 地图视角
+    </button>
+
+    <!-- 操作提示 HUD -->
+    <div id="hud-hints" class="hud-hints">
+      <span class="hud-key"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 驾驶</span>
+      <span class="hud-key"><kbd>Shift</kbd> 加速</span>
+      <span class="hud-key">🗺️ 返回地图</span>
+    </div>
+
+    <!-- POI 弹窗 -->
+    <div id="poi-popup" class="poi-popup" aria-live="polite">
+      <div class="poi-popup__card">
+        <button id="poi-close" class="poi-popup__close" aria-label="关闭">✕</button>
+        <p class="poi-popup__tag">📍 Italy Landmark</p>
+        <h2 id="poi-title" class="poi-popup__title">Landmark</h2>
+        <p id="poi-desc" class="poi-popup__desc">description</p>
+        <div class="poi-popup__footer">
+          <span id="poi-distance" class="poi-popup__distance">📏 0 m</span>
+          <button id="poi-action" class="poi-popup__btn" type="button">🔍 查看模型</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Focus 说明面板 -->
+    <div id="focus-overlay" class="focus-overlay" aria-hidden="true">
+      <div class="focus-panel" role="dialog" aria-modal="true" aria-labelledby="focus-title">
+        <button id="focus-back" class="focus-back" type="button">🚗 返回驾驶</button>
+        <p class="focus-tag">🏛️ Landmark Focus</p>
+        <h2 id="focus-title" class="focus-title">建筑名称</h2>
+        <p id="focus-description" class="focus-description">建筑介绍</p>
+      </div>
+    </div>
+
+    <!-- 模型预览弹窗 -->
+    <div id="model-viewer-overlay" class="mv-overlay" aria-hidden="true">
+      <div class="mv-dialog" role="dialog" aria-modal="true" aria-labelledby="mv-title">
+        <div class="mv-header">
+          <div>
+            <p class="mv-tag">✨ 3D Preview</p>
+            <h2 id="mv-title" class="mv-title">模型名称</h2>
+          </div>
+          <button id="mv-close" class="mv-close" aria-label="关闭">✕</button>
+        </div>
+        <canvas id="mv-canvas" class="mv-canvas"></canvas>
+        <p class="mv-hint">拖拽旋转 · 滚轮缩放</p>
+        <p id="mv-desc" class="mv-desc"></p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
