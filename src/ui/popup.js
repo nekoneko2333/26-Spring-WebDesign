@@ -12,6 +12,7 @@ const focusOverlayEl = document.getElementById('focus-overlay');
 const focusTitleEl = document.getElementById('focus-title');
 const focusDescEl = document.getElementById('focus-description');
 const focusBackEl = document.getElementById('focus-back');
+const focusModelBtnEl = document.getElementById('focus-model-btn');
 
 // 当前弹窗对应的 POI 对象（供"查看详情"按钮使用）
 let _currentPOI = null;
@@ -51,6 +52,7 @@ if (popupCloseEl) {
 // ==================== Focus 面板 ====================
 export function openFocusPanel(poi) {
   if (!focusOverlayEl || !focusTitleEl || !focusDescEl) return;
+  _currentPOI = poi;
   focusTitleEl.textContent = poi.name;
   focusDescEl.textContent = poi.description;
   focusOverlayEl.classList.add('is-visible');
@@ -71,6 +73,11 @@ export function registerFocusPanelListeners({ onExitFocus, onEnterFocus }) {
   // "查看详情"按钮 → 打开模型预览弹窗
   if (popupActionEl) {
     popupActionEl.addEventListener('click', () => {
+      if (_currentPOI) openModelViewer(_currentPOI);
+    });
+  }
+  if (focusModelBtnEl) {
+    focusModelBtnEl.addEventListener('click', () => {
       if (_currentPOI) openModelViewer(_currentPOI);
     });
   }

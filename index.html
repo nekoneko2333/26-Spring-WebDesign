@@ -7,57 +7,133 @@
   </head>
   <body>
 
-    <!-- 顶部标题 -->
-    <div class="hud-title">🇮🇹 Italy <span>Drive</span></div>
+    <!-- ==================== INTRO SCREEN ==================== -->
+    <div id="intro-screen" class="intro-screen" role="dialog" aria-modal="true" aria-label="Italy Drive opening screen">
 
-    <!-- 返回地图视角按钮（跟随视角时显示） -->
-    <button id="btn-map-view" class="btn-map-view" aria-label="返回地图">
-      <span class="icon">🗺️</span> 地图视角
-    </button>
+      <div id="intro-road" class="intro-road">
+        <div class="intro-road__line intro-road__line--1"></div>
+        <div class="intro-road__line intro-road__line--2"></div>
+        <div class="intro-road__line intro-road__line--3"></div>
+      </div>
 
-    <!-- 操作提示 HUD -->
-    <div id="hud-hints" class="hud-hints">
-      <span class="hud-key"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 驾驶</span>
-      <span class="hud-key"><kbd>Shift</kbd> 加速</span>
-      <span class="hud-key">🗺️ 返回地图</span>
+      <div id="intro-car-svg" class="intro-car" aria-hidden="true">
+        <svg width="180" height="90" viewBox="0 0 180 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="90" cy="85" rx="68" ry="5" fill="rgba(0,0,0,0.32)"/>
+          <rect x="12" y="44" width="156" height="34" rx="8" fill="#c7784a"/>
+          <path d="M52 44 L68 18 H118 L136 44 Z" fill="#a85f38"/>
+          <path d="M118 44 L108 24 H90 L76 44 Z" fill="#d4e8f0" opacity="0.7"/>
+          <path d="M68 18 L78 44 H62 Z" fill="#d4e8f0" opacity="0.6"/>
+          <rect x="145" y="60" width="18" height="10" rx="4" fill="#f0b86f"/>
+          <rect x="17" y="60" width="18" height="10" rx="4" fill="#f0b86f"/>
+          <rect x="153" y="51" width="10" height="6" rx="2" fill="#fff9e8"/>
+          <rect x="17" y="51" width="10" height="6" rx="2" fill="#d26b64" opacity="0.9"/>
+          <circle cx="48" cy="78" r="14" fill="#1c2233"/>
+          <circle cx="48" cy="78" r="7" fill="#e8e0d0"/>
+          <circle cx="48" cy="78" r="3" fill="#1c2233"/>
+          <circle cx="132" cy="78" r="14" fill="#1c2233"/>
+          <circle cx="132" cy="78" r="7" fill="#e8e0d0"/>
+          <circle cx="132" cy="78" r="3" fill="#1c2233"/>
+          <line x1="90" y1="44" x2="90" y2="74" stroke="#a05030" stroke-width="2" opacity="0.45"/>
+        </svg>
+      </div>
+
+      <div id="intro-card" class="intro-card">
+        <p class="intro-eyebrow">Italy &nbsp;&middot;&nbsp; Interactive 3D</p>
+        <h1 id="intro-title" class="intro-title">
+          Italy<br><span>Drive</span>
+        </h1>
+        <p id="intro-subtitle" class="intro-subtitle">
+          Drive through Italy. Discover the Colosseum and the Leaning Tower of Pisa.
+        </p>
+
+        <div class="intro-progress-wrap" id="intro-progress-wrap">
+          <div class="intro-progress-track">
+            <div id="intro-progress" class="intro-progress-bar"></div>
+          </div>
+          <span class="intro-progress-label">Loading&hellip;</span>
+        </div>
+
+        <button id="intro-start-btn" class="intro-start-btn" type="button">
+          <span class="intro-start-btn__icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><polygon points="4,2 16,9 4,16" fill="currentColor"/></svg>
+          </span>
+          Start Driving
+        </button>
+
+        <p class="intro-hint">Press <kbd>Enter</kbd> or click to begin</p>
+      </div>
+
+      <div class="intro-grain" aria-hidden="true"></div>
     </div>
 
-    <!-- POI 弹窗 -->
+    <!-- ==================== VIEW TRANSITION ==================== -->
+    <div id="view-flash" class="view-flash" aria-hidden="true"></div>
+
+    <!-- ==================== HUD ==================== -->
+    <div class="hud-title" id="hud-title">Italy <span>Drive</span></div>
+
+    <button id="btn-map-view" class="btn-map-view" aria-label="Return to map view">
+      <svg class="btn-map-view__icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="0.6"/><rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor"/><rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor"/><rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="0.6"/></svg>
+      Map View
+    </button>
+
+    <div id="hud-hints" class="hud-hints">
+      <span class="hud-key"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Drive</span>
+      <span class="hud-key"><kbd>Shift</kbd> Boost</span>
+      <span class="hud-key"><kbd>V</kbd> Map/Drive</span>
+      <span class="hud-key"><kbd>C</kbd> First Person</span>
+      <span class="hud-key"><kbd>F</kbd> Interact</span>
+    </div>
+
+    <div id="interact-prompt" class="interact-prompt" aria-live="polite">
+      <span class="interact-prompt__key">F</span>
+      <span class="interact-prompt__text">Interact with landmark</span>
+    </div>
+
+    <div id="hud-speed" class="hud-speed" aria-live="polite">
+      <span id="hud-speed-val" class="hud-speed__val">0</span>
+      <span class="hud-speed__unit">km/h</span>
+    </div>
+
+    <div id="hud-mode" class="hud-mode"></div>
+
+    <!-- ==================== POI POPUP ==================== -->
     <div id="poi-popup" class="poi-popup" aria-live="polite">
       <div class="poi-popup__card">
-        <button id="poi-close" class="poi-popup__close" aria-label="关闭">✕</button>
-        <p class="poi-popup__tag">📍 Italy Landmark</p>
+        <button id="poi-close" class="poi-popup__close" aria-label="Close">&times;</button>
+        <p class="poi-popup__tag">Landmark</p>
         <h2 id="poi-title" class="poi-popup__title">Landmark</h2>
         <p id="poi-desc" class="poi-popup__desc">description</p>
         <div class="poi-popup__footer">
-          <span id="poi-distance" class="poi-popup__distance">📏 0 m</span>
-          <button id="poi-action" class="poi-popup__btn" type="button">🔍 查看模型</button>
+          <span id="poi-distance" class="poi-popup__distance">0 m</span>
+          <button id="poi-action" class="poi-popup__btn" type="button">View 3D Model</button>
         </div>
       </div>
     </div>
 
-    <!-- Focus 说明面板 -->
+    <!-- ==================== FOCUS PANEL ==================== -->
     <div id="focus-overlay" class="focus-overlay" aria-hidden="true">
       <div class="focus-panel" role="dialog" aria-modal="true" aria-labelledby="focus-title">
-        <button id="focus-back" class="focus-back" type="button">🚗 返回驾驶</button>
-        <p class="focus-tag">🏛️ Landmark Focus</p>
-        <h2 id="focus-title" class="focus-title">建筑名称</h2>
-        <p id="focus-description" class="focus-description">建筑介绍</p>
+        <button id="focus-back" class="focus-back" type="button">Return to Driving</button>
+        <p class="focus-tag">Landmark Focus</p>
+        <h2 id="focus-title" class="focus-title">Building Name</h2>
+        <p id="focus-description" class="focus-description">Description</p>
+        <button id="focus-model-btn" class="focus-model-btn" type="button">View 3D Model</button>
       </div>
     </div>
 
-    <!-- 模型预览弹窗 -->
+    <!-- ==================== MODEL VIEWER ==================== -->
     <div id="model-viewer-overlay" class="mv-overlay" aria-hidden="true">
       <div class="mv-dialog" role="dialog" aria-modal="true" aria-labelledby="mv-title">
         <div class="mv-header">
           <div>
-            <p class="mv-tag">✨ 3D Preview</p>
-            <h2 id="mv-title" class="mv-title">模型名称</h2>
+            <p class="mv-tag">3D Preview</p>
+            <h2 id="mv-title" class="mv-title">Model</h2>
           </div>
-          <button id="mv-close" class="mv-close" aria-label="关闭">✕</button>
+          <button id="mv-close" class="mv-close" aria-label="Close">&times;</button>
         </div>
         <canvas id="mv-canvas" class="mv-canvas"></canvas>
-        <p class="mv-hint">拖拽旋转 · 滚轮缩放</p>
+        <p class="mv-hint">Drag to rotate &middot; Scroll to zoom</p>
         <p id="mv-desc" class="mv-desc"></p>
       </div>
     </div>

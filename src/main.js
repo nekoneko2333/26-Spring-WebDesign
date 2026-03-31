@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { scene, camera, renderer } from './core/scene.js';
 import { buildMapGround } from './core/mapTiles.js';
-import { initPhysicsCar, chassisMesh, updateCar } from './car/carPhysics.js';
-import { carModelRoot } from './car/carVisual.js';
-import { controls, resetControls, registerKeyboardListeners } from './car/carControls.js';
+import { initPhysicsCar, chassisMesh, updateCar, carState } from './car/carPhysics.js';
+import { carModelRoot, carVisualGroup } from './car/carVisual.js';
+import { controls, registerKeyboardListeners } from './car/carControls.js';
 import {
   initLandmarksFromAPI,
   pointsOfInterest,
@@ -24,74 +24,178 @@ import {
   getIsFocusingLandmark,
   switchToFollowView,
   switchToMapView,
+  switchToFPV,
+  switchFPVToFollow,
   enterLandmarkFocus,
   exitLandmarkFocus,
   updateFollowCamera,
 } from './camera/cameraController.js';
+import { initIntroScreen, showLoadingProgress } from './ui/introScreen.js';
 import './style.css';
 
 // ==================== 初始化 ====================
 initPhysicsCar();
 
-// ==================== 返回地图按钮 & HUD 显隐 ====================
+// ==================== HUD 元素 ====================
 const btnMapView = document.getElementById('btn-map-view');
-const hudHints   = document.getElementById('hud-hints');
+const hudHints = document.getElementById('hud-hints');
+const hudTitle = document.getElementById('hud-title');
+const hudSpeed = document.getElementById('hud-speed');
+const hudSpeedVal = document.getElementById('hud-speed-val');
+const hudMode = document.getElementById('hud-mode');
+const viewFlash = document.getElementById('view-flash');
+
+let _hasStarted = false;
+let _lastMode = getCameraMode();
+let _nearestPOIForInteract = null;
+
+function flashTransition() {
+  if (!viewFlash) return;
+  viewFlash.classList.add('flash-in');
+  setTimeout(() => viewFlash.classList.remove('flash-in'), 120);
+}
+
+function showHUDAfterStart() {
+  hudTitle?.classList.add('is-visible');
+  hudMode?.classList.add('is-visible');
+}
+
+function getPOIRootById(poiId) {
+  return landmarkClickableRoots.find((r) => r.userData.poiId === poiId);
+}
+
+function interactNearestPOI() {
+  if (!_nearestPOIForInteract) return;
+  const root = getPOIRootById(_nearestPOIForInteract.id);
+  if (!root) return;
+  flashTransition();
+  enterLandmarkFocus(_nearestPOIForInteract, root, chassisMesh);
+}
+
+function toggleView() {
+  const mode = getCameraMode();
+  if (mode === 'map') {
+    flashTransition();
+    switchToFollowView(chassisMesh);
+    return;
+  }
+  if (mode === 'follow' || mode === 'fpv') {
+    if (mode === 'fpv') switchFPVToFollow(chassisMesh);
+    flashTransition();
+    switchToMapView();
+  }
+}
+
+function toggleFPV() {
+  const mode = getCameraMode();
+  if (mode === 'follow') {
+    flashTransition();
+    switchToFPV(chassisMesh);
+    return;
+  }
+  if (mode === 'fpv') {
+    flashTransition();
+    switchFPVToFollow(chassisMesh);
+  }
+}
 
 if (btnMapView) {
-  btnMapView.addEventListener('click', () => switchToMapView());
+  btnMapView.addEventListener('click', toggleView);
 }
 
 // 每帧根据相机模式控制 HUD 显隐
 function updateHUD() {
+  if (!_hasStarted) return;
+
   const mode = getCameraMode();
-  const inFollow = mode === 'follow';
-  btnMapView?.classList.toggle('is-visible', inFollow);
-  hudHints?.classList.toggle('is-visible', inFollow);
+  const inDrivingMode = mode === 'follow' || mode === 'fpv';
+
+  btnMapView?.classList.toggle('is-visible', inDrivingMode);
+  hudHints?.classList.toggle('is-visible', inDrivingMode);
+  hudSpeed?.classList.toggle('is-visible', inDrivingMode);
+
+  if (hudMode) {
+    const modeText = mode === 'map'
+      ? 'MAP VIEW'
+      : mode === 'focus'
+        ? 'LANDMARK FOCUS'
+        : mode === 'fpv'
+          ? 'FIRST PERSON'
+          : 'DRIVING';
+    hudMode.textContent = modeText;
+  }
+
+  if (mode !== _lastMode) {
+    flashTransition();
+    _lastMode = mode;
+  }
+
+  if (hudSpeedVal) {
+    const kmh = Math.round(Math.abs(carState.speed) * 3.6);
+    hudSpeedVal.textContent = String(kmh);
+    hudSpeedVal.classList.toggle('is-boosting', controls.boost && inDrivingMode);
+  }
 }
 
 // ==================== 键盘 & 面板事件 ====================
 registerKeyboardListeners({
-  onToggleView: () => switchToMapView(),
-  onExitFocus:  () => exitLandmarkFocus(chassisMesh),
+  onToggleView: toggleView,
+  onToggleFPV: toggleFPV,
+  onInteractLandmark: interactNearestPOI,
+  onExitFocus: () => {
+    flashTransition();
+    exitLandmarkFocus(chassisMesh);
+  },
   getDrivingEnabled,
   getCameraMode,
 });
 
 registerFocusPanelListeners({
-  onExitFocus:  () => exitLandmarkFocus(chassisMesh),
+  onExitFocus: () => {
+    flashTransition();
+    exitLandmarkFocus(chassisMesh);
+  },
   onEnterFocus: (poi) => {
-    // 找到对应的 3D 根节点用于相机定焦
     const root = landmarkClickableRoots.find((r) => r.userData.poiId === poi.id);
+    flashTransition();
     enterLandmarkFocus(poi, root || { position: poi.position, userData: {} }, chassisMesh);
   },
 });
 
 // ==================== 射线拾取 ====================
 const raycaster = new THREE.Raycaster();
-const mouseNDC  = new THREE.Vector2();
+const mouseNDC = new THREE.Vector2();
 
 renderer.domElement.addEventListener('pointerdown', (event) => {
-  if (getIsCameraTransitioning()) return;
+  if (!_hasStarted || getIsCameraTransitioning()) return;
 
   const rect = renderer.domElement.getBoundingClientRect();
-  mouseNDC.x = ((event.clientX - rect.left) / rect.width)  *  2 - 1;
-  mouseNDC.y = -((event.clientY - rect.top)  / rect.height) * 2 + 1;
+  mouseNDC.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouseNDC.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(mouseNDC, camera);
 
-  if (getCameraMode() === 'map') {
+  const mode = getCameraMode();
+
+  if (mode === 'map') {
     const clickableCar = carModelRoot || carVisualGroup;
     const carHit = raycaster.intersectObject(clickableCar, true);
-    if (carHit.length > 0) switchToFollowView(chassisMesh);
+    if (carHit.length > 0) {
+      flashTransition();
+      switchToFollowView(chassisMesh);
+    }
     return;
   }
 
-  if (getCameraMode() === 'follow') {
+  if (mode === 'follow' || mode === 'fpv') {
     const hits = raycaster.intersectObjects(landmarkClickableRoots, true);
     if (hits.length > 0) {
       let root = hits[0].object;
       while (root.parent && !root.userData.poiId) root = root.parent;
       const poi = landmarkById.get(root.userData.poiId);
-      if (poi) enterLandmarkFocus(poi, root, chassisMesh);
+      if (poi) {
+        flashTransition();
+        enterLandmarkFocus(poi, root, chassisMesh);
+      }
     }
   }
 });
@@ -100,23 +204,27 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
 const _carPos = new THREE.Vector3();
 
 function updatePOITriggerByDistance() {
-  if (getCameraMode() !== 'follow' || getIsFocusingLandmark()) {
+  const mode = getCameraMode();
+  if (!_hasStarted || (mode !== 'follow' && mode !== 'fpv') || getIsFocusingLandmark()) {
+    _nearestPOIForInteract = null;
     hidePOIPopup();
     return;
   }
 
   _carPos.copy(chassisMesh.position);
 
-  let nearestPOI      = null;
+  let nearestPOI = null;
   let nearestDistance = Infinity;
 
   for (const poi of pointsOfInterest) {
     const distance = _carPos.distanceTo(poi.position);
     if (distance <= poi.triggerRadius && distance < nearestDistance) {
-      nearestPOI      = poi;
+      nearestPOI = poi;
       nearestDistance = distance;
     }
   }
+
+  _nearestPOIForInteract = nearestPOI;
 
   if (!nearestPOI) {
     resetDismissed();
@@ -135,7 +243,7 @@ function animate(time) {
   requestAnimationFrame(animate);
 
   if (lastTime !== undefined) {
-    const delta = Math.min((time - lastTime) / 1000, 0.1); // 限制最大 delta 防卡顿
+    const delta = Math.min((time - lastTime) / 1000, 0.1);
 
     updateCar(delta, controls, getDrivingEnabled());
     updatePOITriggerByDistance();
@@ -147,7 +255,22 @@ function animate(time) {
   renderer.render(scene, camera);
 }
 
-// ==================== 启动 ====================
-buildMapGround(); // 异步加载 OSM 瓦片，加载期间显示海洋底色
-initLandmarksFromAPI();
+async function boot() {
+  initIntroScreen({
+    onStart: () => {
+      _hasStarted = true;
+      showHUDAfterStart();
+      flashTransition();
+      switchToFollowView(chassisMesh);
+    },
+  });
+
+  showLoadingProgress(15);
+  await buildMapGround();
+  showLoadingProgress(70);
+  await initLandmarksFromAPI();
+  showLoadingProgress(100);
+}
+
+boot();
 animate();

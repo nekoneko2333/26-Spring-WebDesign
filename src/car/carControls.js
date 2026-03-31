@@ -24,23 +24,52 @@ const MOVEMENT_KEYS = [
 
 /**
  * 注册键盘事件。
- * @param {{ onToggleView: Function, onExitFocus: Function, getDrivingEnabled: Function, getCameraMode: Function }} callbacks
+ * @param {{
+ *   onToggleView: Function,
+ *   onExitFocus: Function,
+ *   onInteractLandmark: Function,
+ *   onToggleFPV: Function,
+ *   getDrivingEnabled: Function,
+ *   getCameraMode: Function,
+ * }} callbacks
  */
-export function registerKeyboardListeners({ onToggleView, onExitFocus, getDrivingEnabled, getCameraMode }) {
+export function registerKeyboardListeners({
+  onToggleView,
+  onExitFocus,
+  onInteractLandmark,
+  onToggleFPV,
+  getDrivingEnabled,
+  getCameraMode,
+}) {
   window.addEventListener('keydown', (event) => {
     if (MOVEMENT_KEYS.includes(event.code)) event.preventDefault();
 
+    const mode = getCameraMode();
+
+    // V — 地图 <-> 跟随 双向切换
     if (event.code === 'KeyV') {
-      if (getCameraMode() === 'follow') onToggleView();
-      return;
+      if (mode === 'follow' || mode === 'fpv') { onToggleView(); return; }
+      if (mode === 'map')                      { onToggleView(); return; }
     }
 
-    if (event.code === 'Escape' && getCameraMode() === 'focus') {
-      onExitFocus();
-      return;
+    // C — 跟随 <-> FPV 切换（follow 状态下）
+    if (event.code === 'KeyC') {
+      if (mode === 'follow' || mode === 'fpv') { onToggleFPV(); return; }
     }
 
-    if (!getDrivingEnabled() || getCameraMode() !== 'follow') return;
+    // F — 与最近地标交互
+    if (event.code === 'KeyF') {
+      if (mode === 'follow' || mode === 'fpv') { onInteractLandmark(); return; }
+      if (mode === 'focus')                    { onExitFocus(); return; }
+    }
+
+    // Escape — 退出聚焦或地图模式退回驾驶
+    if (event.code === 'Escape') {
+      if (mode === 'focus') { onExitFocus(); return; }
+      if (mode === 'map')   { onToggleView(); return; }
+    }
+
+    if (!getDrivingEnabled() || (mode !== 'follow' && mode !== 'fpv')) return;
 
     if (event.code === 'KeyW' || event.code === 'ArrowUp')    controls.forward  = true;
     if (event.code === 'KeyS' || event.code === 'ArrowDown')  controls.backward = true;

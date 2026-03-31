@@ -14,6 +14,9 @@ export const landmarkById = new Map();
 /** 当前加载完毕的 POI 列表 */
 export let pointsOfInterest = [];
 
+/** 自动驾驶道路路径点（世界坐标） */
+export let autoDriveWaypoints = [];
+
 // ==================== 数据规范化 ====================
 function normalizeLandmarkData(landmark) {
   const [x, y, z] = landmark.coordinates;
@@ -37,12 +40,64 @@ function normalizeLandmarkData(landmark) {
   };
 }
 
-// ==================== API 请求 ====================
+// ==================== 内嵌地标数据（与 backend/main.py 保持一致，无需后端服务） ====================
+const _LON_MIN = 6.6, _LON_MAX = 18.5;
+const _LAT_MIN = 36.6, _LAT_MAX = 47.1;
+const _WORLD = 240;
+
+function _mercY(lat) {
+  return Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+}
+const _MERC_Y_MIN = _mercY(_LAT_MIN);
+const _MERC_Y_MAX = _mercY(_LAT_MAX);
+
+function _lngLatToWorld(lon, lat) {
+  const tx = (lon - _LON_MIN) / (_LON_MAX - _LON_MIN);
+  const tz = 1.0 - (_mercY(lat) - _MERC_Y_MIN) / (_MERC_Y_MAX - _MERC_Y_MIN);
+  return [
+    parseFloat(((tx - 0.5) * _WORLD).toFixed(2)),
+    0,
+    parseFloat(((tz - 0.5) * _WORLD).toFixed(2)),
+  ];
+}
+
+const _RAW_LANDMARKS = [
+  {
+    id: 'colosseum',
+    name: 'Colosseum · 罗马斗兽场',
+    description: '古罗马时代最宏伟的圆形竞技场之一，是罗马文明象征。',
+    model_path: '/models/colosseum.glb',
+    lon: 12.4922, lat: 41.8902,
+  },
+  {
+    id: 'pisa',
+    name: 'Leaning Tower of Pisa · 比萨斜塔',
+    description: '始建于 1173 年，以独特倾斜结构闻名世界。',
+    model_path: '/models/leaning_tower_of_pisa.glb',
+    lon: 10.3963, lat: 43.7230,
+  },
+];
+
+const _STATIC_LANDMARKS = _RAW_LANDMARKS.map(({ lon, lat, model_path, ...rest }) => ({
+  ...rest,
+  model_path,
+  coordinates: _lngLatToWorld(lon, lat),
+}));
+
 async function fetchLandmarks() {
-  const response = await fetch('http://127.0.0.1:8000/api/landmarks');
-  if (!response.ok) throw new Error(`landmarks API failed: ${response.status}`);
-  const data = await response.json();
-  return data.map(normalizeLandmarkData);
+  // 优先尝试从本地后端 API 获取，失败时回退到内嵌静态数据
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const response = await fetch('http://127.0.0.1:8000/api/landmarks', { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!response.ok) throw new Error(`landmarks API failed: ${response.status}`);
+    const data = await response.json();
+    return data.map(normalizeLandmarkData);
+  } catch {
+    console.info('[landmarkLoader] 后端不可用，使用内嵌静态地标数据');
+    return _STATIC_LANDMARKS.map(normalizeLandmarkData);
+  }
 }
 
 // ==================== GLTF 加载 ====================
@@ -112,8 +167,11 @@ function buildRoadFromLandmarks(landmarks) {
   ];
 
   const roadCurve = new THREE.CatmullRomCurve3(roadPoints, false, 'catmullrom', 0.2);
-  const ROAD_WIDTH = 2.2;
-  const SEGMENTS = 200;
+  const ROAD_WIDTH = 2.4;
+  const SEGMENTS = 260;
+
+  // 提供给自动驾驶的路径点
+  autoDriveWaypoints = roadCurve.getPoints(220).map((p) => p.clone());
 
   // 沿曲线逐段构建平面条带顶点
   const positions = [];
