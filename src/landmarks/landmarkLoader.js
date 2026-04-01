@@ -14,9 +14,6 @@ export const landmarkById = new Map();
 /** 当前加载完毕的 POI 列表 */
 export let pointsOfInterest = [];
 
-/** 自动驾驶道路路径点（世界坐标） */
-export let autoDriveWaypoints = [];
-
 // ==================== 数据规范化 ====================
 function normalizeLandmarkData(landmark) {
   const [x, y, z] = landmark.coordinates;
@@ -43,7 +40,7 @@ function normalizeLandmarkData(landmark) {
 // ==================== 内嵌地标数据（与 backend/main.py 保持一致，无需后端服务） ====================
 const _LON_MIN = 6.6, _LON_MAX = 18.5;
 const _LAT_MIN = 36.6, _LAT_MAX = 47.1;
-const _WORLD = 240;
+const _WORLD = 170;
 
 function _mercY(lat) {
   return Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
@@ -77,6 +74,8 @@ const _RAW_LANDMARKS = [
     lon: 10.3963, lat: 43.7230,
   },
 ];
+
+export let roadCurve = null; // 导出供自动驾驶使用
 
 const _STATIC_LANDMARKS = _RAW_LANDMARKS.map(({ lon, lat, model_path, ...rest }) => ({
   ...rest,
@@ -166,12 +165,9 @@ function buildRoadFromLandmarks(landmarks) {
     new THREE.Vector3(-45, 0, -10),
   ];
 
-  const roadCurve = new THREE.CatmullRomCurve3(roadPoints, false, 'catmullrom', 0.2);
-  const ROAD_WIDTH = 2.4;
-  const SEGMENTS = 260;
-
-  // 提供给自动驾驶的路径点
-  autoDriveWaypoints = roadCurve.getPoints(220).map((p) => p.clone());
+  roadCurve = new THREE.CatmullRomCurve3(roadPoints, false, 'catmullrom', 0.2);
+  const ROAD_WIDTH = 1.8;
+  const SEGMENTS = 200;
 
   // 沿曲线逐段构建平面条带顶点
   const positions = [];
@@ -221,9 +217,9 @@ function buildRoadFromLandmarks(landmarks) {
   const roadMesh = new THREE.Mesh(
     geo,
     new THREE.MeshStandardMaterial({
-      color: THEME.road,
-      roughness: 0.88,
-      metalness: 0.04,
+      color: 0x2a2d35,
+      roughness: 0.4,
+      metalness: 0.1,
       polygonOffset: true,
       polygonOffsetFactor: -1,
     })
@@ -264,8 +260,10 @@ function buildRoadFromLandmarks(landmarks) {
   const lineMesh = new THREE.Mesh(
     lineGeo,
     new THREE.MeshStandardMaterial({
-      color: THEME.roadLine,
-      roughness: 0.7,
+      color: 0xfff9e8,
+      emissive: 0xfff9e8,
+      emissiveIntensity: 0.4,
+      roughness: 0.3,
       polygonOffset: true,
       polygonOffsetFactor: -2,
     })

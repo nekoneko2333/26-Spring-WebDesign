@@ -7,6 +7,7 @@ const popupDescEl = document.getElementById('poi-desc');
 const popupDistanceEl = document.getElementById('poi-distance');
 const popupCloseEl = document.getElementById('poi-close');
 const popupActionEl = document.getElementById('poi-action');
+const interactPromptTextEl = document.getElementById('interact-prompt-text');
 
 const focusOverlayEl = document.getElementById('focus-overlay');
 const focusTitleEl = document.getElementById('focus-title');
@@ -31,6 +32,9 @@ export function showPOIPopup(poi, distance) {
   popupTitleEl.textContent = poi.name;
   popupDescEl.textContent = poi.description;
   popupDistanceEl.textContent = `距离 ${distance.toFixed(1)} m`;
+  if (interactPromptTextEl) interactPromptTextEl.textContent = 'Explore Landmark';
+  const promptEl = document.getElementById('interact-prompt');
+  if (promptEl) promptEl.classList.add('is-visible');
   popupEl.classList.add('is-visible');
   activePOIId = poi.id;
   _currentPOI = poi;
@@ -39,12 +43,17 @@ export function showPOIPopup(poi, distance) {
 export function hidePOIPopup() {
   if (!popupEl) return;
   popupEl.classList.remove('is-visible');
+  if (interactPromptTextEl) interactPromptTextEl.textContent = 'Cruise & Discover';
+  const promptEl = document.getElementById('interact-prompt');
+  if (promptEl) promptEl.classList.remove('is-visible');
   activePOIId = null;
 }
 
-if (popupCloseEl) {
+  if (popupCloseEl) {
   popupCloseEl.addEventListener('click', () => {
     dismissedPOIId = activePOIId;
+    const promptEl = document.getElementById('interact-prompt');
+    if (promptEl) promptEl.classList.remove('is-visible');
     hidePOIPopup();
   });
 }

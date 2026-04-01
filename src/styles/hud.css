@@ -1,0 +1,159 @@
+/* ============================================================
+   HUD - TITLE
+   ============================================================ */
+.hud-title {
+  position: fixed; top: 20px; left: 50%;
+  transform: translateX(-50%); z-index: 20;
+  font-family: var(--font-display);
+  font-size: 24px; font-weight: 500; font-style: italic;
+  color: rgba(16, 35, 59, 0.9); letter-spacing: 0.06em;
+  pointer-events: none; white-space: nowrap; opacity: 0;
+  transition: opacity 1s ease 0.36s;
+  text-shadow: 0 10px 24px rgba(180, 206, 230, 0.35);
+}
+.hud-title.is-visible { opacity: 1; }
+.hud-title span { color: var(--c-gold-light); font-style: normal; }
+
+/* ============================================================
+   HUD - KEYBOARD HINTS
+   ============================================================ */
+.hud-hints {
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%); z-index: 20;
+  display: flex; gap: 8px; align-items: center;
+  pointer-events: none; opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.hud-hints.is-visible { opacity: 1; }
+.hud-key {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,0.48); border: 1px solid rgba(22, 42, 68, 0.14);
+  border-radius: var(--radius-pill); padding: 6px 12px;
+  font-size: 10px; font-weight: 500; color: var(--c-ink-mid);
+  backdrop-filter: blur(14px); letter-spacing: 0.06em;
+}
+.hud-key kbd {
+  font-family: var(--font-ui);
+  background: rgba(201,169,110,0.12); color: var(--c-gold-light);
+  border: 1px solid rgba(201,169,110,0.26); border-radius: 3px;
+  padding: 1px 5px; font-size: 10px; letter-spacing: 0.04em;
+}
+
+/* ============================================================
+   HUD - SPEEDOMETER
+   ============================================================ */
+.hud-speed {
+  position: fixed; bottom: 24px; right: 24px; z-index: 20;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 72px; height: 72px; border-radius: 50%;
+  background: rgba(255,255,255,0.42); border: 1px solid rgba(22, 42, 68, 0.16);
+  backdrop-filter: blur(14px); opacity: 0;
+  transform: scale(0.86) translateY(8px);
+  transition: opacity 0.65s ease, transform 0.65s cubic-bezier(.2,.85,.2,1);
+  pointer-events: none;
+}
+.hud-speed.is-visible { opacity: 1; transform: scale(1) translateY(0); }
+.hud-speed__val {
+  font-family: var(--font-display);
+  font-size: 22px; font-weight: 400; line-height: 1;
+  color: var(--c-ink); transition: color 0.2s;
+}
+.hud-speed__val.is-boosting { color: var(--c-gold-light); }
+.hud-speed__unit {
+  font-size: 8px; font-weight: 500; letter-spacing: 0.14em;
+  color: var(--c-ink-dim); text-transform: uppercase;
+}
+
+/* ============================================================
+   HUD - MODE LABEL
+   ============================================================ */
+.hud-mode {
+  position: fixed; top: 56px; left: 50%;
+  transform: translateX(-50%); z-index: 20;
+  font-size: 9px; font-weight: 500; letter-spacing: 0.28em;
+  color: var(--c-gold); text-transform: uppercase;
+  pointer-events: none; opacity: 0;
+  transition: opacity 0.35s ease; white-space: nowrap;
+}
+.hud-mode.is-visible { opacity: 0.8; }
+
+/* ============================================================
+   HUD - MAP VIEW BUTTON
+   ============================================================ */
+.btn-map-view {
+  position: fixed; top: 20px; left: 20px; z-index: 25;
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 16px;
+  border: 1px solid rgba(22, 42, 68, 0.16); border-radius: var(--radius-pill);
+  background: rgba(255,255,255,0.44); color: var(--c-ink-mid);
+  font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.12em; cursor: pointer;
+  backdrop-filter: blur(14px); opacity: 0; pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(.2,.85,.2,1), border-color 0.3s, color 0.3s;
+}
+.btn-map-view.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.btn-map-view:hover { border-color: var(--c-border-hi); color: var(--c-ink); }
+.btn-map-view:active { transform: scale(0.97); }
+.btn-map-view__icon { opacity: 0.7; flex-shrink: 0; }
+
+/* ============================================================
+   HUD - INTERACT PROMPT
+   ============================================================ */
+.interact-prompt {
+  position: fixed;
+  top: 88px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  z-index: 24;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(22, 42, 68, 0.16);
+  background: rgba(255, 255, 255, 0.52);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 30px rgba(108, 146, 184, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+.interact-prompt.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.interact-prompt__key {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--c-gold-light);
+  border: 1px solid rgba(158, 127, 92, 0.42);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.interact-prompt__text {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-ink-mid);
+  font-weight: 500;
+}
+
+/* HUD wake state */
+body:not(.ui-awake) .hud-title,
+body:not(.ui-awake) .hud-mode {
+  opacity: 0.28 !important;
+  transition: opacity 0.8s ease;
+}
+
+body.ui-awake .hud-title,
+body.ui-awake .hud-mode {
+  transition: opacity 0.5s ease;
+}

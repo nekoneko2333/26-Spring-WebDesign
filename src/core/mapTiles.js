@@ -11,10 +11,10 @@ export const MAP_BOUNDS = {
   lonMax: 18.5,
   latMin: 36.6,
   latMax: 47.1,
-  worldSize: 240,
+  worldSize: 170,
 };
 
-const HEIGHT_SCALE = 0.004;
+const HEIGHT_SCALE = 0.0022;
 
 export function lngLatToWorld(lon, lat) {
   const { lonMin, lonMax, latMin, latMax, worldSize } = MAP_BOUNDS;
@@ -96,10 +96,10 @@ function buildStylizedMapTexture(heightMap, width, height) {
   canvas.height = height;
   const ctx = canvas.getContext('2d');
 
-  // Dark ocean base
+  // Cartoon-style bright sea base
   const ocean = ctx.createLinearGradient(0, 0, 0, height);
-  ocean.addColorStop(0, '#08111d');
-  ocean.addColorStop(1, '#0b1523');
+  ocean.addColorStop(0, '#69c8ff');
+  ocean.addColorStop(1, '#3ea0ea');
   ctx.fillStyle = ocean;
   ctx.fillRect(0, 0, width, height);
 
@@ -116,23 +116,19 @@ function buildStylizedMapTexture(heightMap, width, height) {
       const i = y * width + x;
       const h = heightMap[i] / maxH;
 
-      // low-relief shaded land palette
       const land = h > 0.02;
       if (!land) continue;
 
-      const contour = Math.abs(((h * 24) % 1) - 0.5); // 0..0.5
-      const contourBand = contour < 0.03 ? 1 : 0;
+      const contour = Math.abs(((h * 32) % 1) - 0.5);
+      const contourBand = contour < 0.04 ? 1 : 0;
 
-      // base land color (cool dark slate with warm highlights)
-      let r = 22 + h * 34;
-      let g = 30 + h * 44;
-      let b = 38 + h * 40;
+      // Cartoon abstract terrain palette
+      let r = 92 + h * 82;
+      let g = 162 + h * 72;
+      let b = 102 + h * 46;
 
-      // contour accent
       if (contourBand) {
-        r += 40;
-        g += 34;
-        b += 20;
+        r += 52; g += 35; b += 8;
       }
 
       const p = i * 4;
@@ -145,10 +141,10 @@ function buildStylizedMapTexture(heightMap, width, height) {
 
   ctx.putImageData(image, 0, 0);
 
-  // subtle vignette for depth
-  const vignette = ctx.createRadialGradient(width * 0.5, height * 0.5, width * 0.25, width * 0.5, height * 0.5, width * 0.65);
-  vignette.addColorStop(0, 'rgba(0,0,0,0)');
-  vignette.addColorStop(1, 'rgba(0,0,0,0.38)');
+  // soft bright vignette for stylized depth
+  const vignette = ctx.createRadialGradient(width * 0.5, height * 0.5, width * 0.2, width * 0.5, height * 0.5, width * 0.72);
+  vignette.addColorStop(0, 'rgba(255,255,255,0.08)');
+  vignette.addColorStop(1, 'rgba(20,40,70,0.2)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, width, height);
 
@@ -199,7 +195,8 @@ export async function buildMapGround() {
     _heightMap[i] = Math.max(0, heightMapRaw[i]) * HEIGHT_SCALE;
   }
 
-  const SEG = Math.min(Math.max(hmW, hmH), 512);
+  // lower segment density for a more abstract look
+  const SEG = 180;
   const geo = new THREE.PlaneGeometry(worldSize, worldSize, SEG, SEG);
   geo.rotateX(-Math.PI / 2);
 
@@ -221,8 +218,12 @@ export async function buildMapGround() {
     geo,
     new THREE.MeshStandardMaterial({
       map: mapTexture,
-      roughness: 0.96,
+      color: 0xffffff,
+      emissive: 0x1e3853,
+      emissiveIntensity: 0.14,
+      roughness: 0.78,
       metalness: 0,
+      flatShading: true,
     })
   );
   ground.receiveShadow = true;

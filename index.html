@@ -80,14 +80,22 @@
     <div id="hud-hints" class="hud-hints">
       <span class="hud-key"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Drive</span>
       <span class="hud-key"><kbd>Shift</kbd> Boost</span>
-      <span class="hud-key"><kbd>V</kbd> Map/Drive</span>
-      <span class="hud-key"><kbd>C</kbd> First Person</span>
-      <span class="hud-key"><kbd>F</kbd> Interact</span>
+      <span class="hud-key"><kbd>V</kbd> View</span>
+      <span class="hud-key"><kbd>R</kbd> Auto-Drive</span>
+      <span class="hud-key"><kbd>F</kbd> Explore</span>
+    </div>
+
+    <!-- Map Compass Overlay -->
+    <div id="map-compass" class="map-compass">
+      <span class="comp-n">N</span>
+      <span class="comp-e">E</span>
+      <span class="comp-s">S</span>
+      <span class="comp-w">W</span>
     </div>
 
     <div id="interact-prompt" class="interact-prompt" aria-live="polite">
       <span class="interact-prompt__key">F</span>
-      <span class="interact-prompt__text">Interact with landmark</span>
+      <span id="interact-prompt-text" class="interact-prompt__text">Explore Landmark</span>
     </div>
 
     <div id="hud-speed" class="hud-speed" aria-live="polite">
@@ -101,7 +109,7 @@
     <div id="poi-popup" class="poi-popup" aria-live="polite">
       <div class="poi-popup__card">
         <button id="poi-close" class="poi-popup__close" aria-label="Close">&times;</button>
-        <p class="poi-popup__tag">Landmark</p>
+        <p class="poi-popup__tag">Curated Landmark</p>
         <h2 id="poi-title" class="poi-popup__title">Landmark</h2>
         <p id="poi-desc" class="poi-popup__desc">description</p>
         <div class="poi-popup__footer">
@@ -114,8 +122,8 @@
     <!-- ==================== FOCUS PANEL ==================== -->
     <div id="focus-overlay" class="focus-overlay" aria-hidden="true">
       <div class="focus-panel" role="dialog" aria-modal="true" aria-labelledby="focus-title">
-        <button id="focus-back" class="focus-back" type="button">Return to Driving</button>
-        <p class="focus-tag">Landmark Focus</p>
+        <button id="focus-back" class="focus-back" type="button">Back to Route</button>
+        <p class="focus-tag">Architectural Story</p>
         <h2 id="focus-title" class="focus-title">Building Name</h2>
         <p id="focus-description" class="focus-description">Description</p>
         <button id="focus-model-btn" class="focus-model-btn" type="button">View 3D Model</button>

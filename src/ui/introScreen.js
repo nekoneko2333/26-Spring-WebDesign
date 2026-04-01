@@ -21,13 +21,13 @@ export function initIntroScreen({ onStart }) {
   if (!introEl) return;
 
   // Animate intro elements in on load
-  const tl = gsap.timeline({ delay: 0.1 });
+  const tl = gsap.timeline({ delay: 0.25 });
 
-  tl.fromTo(introRoad, { scaleX: 0, transformOrigin: 'left center' }, { scaleX: 1, duration: 1.2, ease: 'power3.inOut' })
-    .fromTo(introCar,  { x: -120, opacity: 0 }, { x: 0, opacity: 1, duration: 0.8, ease: 'back.out(1.4)' }, '-=0.3')
-    .fromTo(introTitle,    { y: 36, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7, ease: 'power3.out' }, '-=0.4')
-    .fromTo(introSubtitle, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: 'power3.out' }, '-=0.4')
-    .fromTo(startBtn,      { scale: 0.7, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(2)' }, '-=0.2');
+  tl.fromTo(introRoad, { scaleX: 0, transformOrigin: 'left center' }, { scaleX: 1, duration: 1.8, ease: 'power2.inOut' })
+    .fromTo(introCar,  { x: -90, opacity: 0 }, { x: 0, opacity: 1, duration: 1.2, ease: 'power2.out' }, '-=0.65')
+    .fromTo(introTitle,    { y: 28, opacity: 0 }, { y: 0, opacity: 1, duration: 1.05, ease: 'power2.out' }, '-=0.85')
+    .fromTo(introSubtitle, { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.95, ease: 'power2.out' }, '-=0.82')
+    .fromTo(startBtn,      { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.9, ease: 'power2.out' }, '-=0.62');
 
   if (startBtn) {
     startBtn.addEventListener('click', () => dismissIntro());
@@ -55,9 +55,9 @@ function dismissIntro() {
     }
   });
 
-  tl.to(introCar,  { x: 300, opacity: 0, duration: 0.6, ease: 'power3.in' })
-    .to(introCard,  { y: -30, opacity: 0, duration: 0.45, ease: 'power2.in' }, '-=0.3')
-    .to(introEl,    { opacity: 0, duration: 0.4, ease: 'power2.in' }, '-=0.15');
+  tl.to(introCar,  { x: 280, opacity: 0, duration: 0.9, ease: 'power2.inOut' })
+    .to(introCard,  { y: -24, opacity: 0, duration: 0.72, ease: 'power2.inOut' }, '-=0.62')
+    .to(introEl,    { opacity: 0, duration: 0.62, ease: 'power2.inOut' }, '-=0.38');
 }
 
 export function showLoadingProgress(value) {

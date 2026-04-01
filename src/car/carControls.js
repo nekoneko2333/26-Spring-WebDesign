@@ -29,6 +29,7 @@ const MOVEMENT_KEYS = [
  *   onExitFocus: Function,
  *   onInteractLandmark: Function,
  *   onToggleFPV: Function,
+ *   onToggleAutoDrive: Function,
  *   getDrivingEnabled: Function,
  *   getCameraMode: Function,
  * }} callbacks
@@ -38,6 +39,7 @@ export function registerKeyboardListeners({
   onExitFocus,
   onInteractLandmark,
   onToggleFPV,
+  onToggleAutoDrive,
   getDrivingEnabled,
   getCameraMode,
 }) {
@@ -46,10 +48,14 @@ export function registerKeyboardListeners({
 
     const mode = getCameraMode();
 
-    // V — 地图 <-> 跟随 双向切换
     if (event.code === 'KeyV') {
-      if (mode === 'follow' || mode === 'fpv') { onToggleView(); return; }
-      if (mode === 'map')                      { onToggleView(); return; }
+      onToggleView();
+      return;
+    }
+
+    if (event.code === 'KeyR') {
+      onToggleAutoDrive();
+      return;
     }
 
     // C — 跟随 <-> FPV 切换（follow 状态下）

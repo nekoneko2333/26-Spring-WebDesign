@@ -46,12 +46,12 @@ export function switchToFollowView(chassisMesh) {
 
   gsap.to(camera.position, {
     x: targetPosition.x, y: targetPosition.y, z: targetPosition.z,
-    duration: 1.2, ease: 'power3.inOut',
+    duration: 1.55, ease: 'power2.inOut',
   });
 
   gsap.to(MAP_LOOK_TARGET, {
     x: tempLookTarget.x, y: tempLookTarget.y, z: tempLookTarget.z,
-    duration: 1.2, ease: 'power3.inOut',
+    duration: 1.55, ease: 'power2.inOut',
     onUpdate: () => camera.lookAt(MAP_LOOK_TARGET),
     onComplete: () => { _isCameraTransitioning = false; _drivingEnabled = true; },
   });
@@ -68,12 +68,12 @@ export function switchToMapView() {
 
   gsap.to(camera.position, {
     x: MAP_CAMERA_POSITION.x, y: MAP_CAMERA_POSITION.y, z: MAP_CAMERA_POSITION.z,
-    duration: 1.1, ease: 'power3.inOut',
+    duration: 1.45, ease: 'power2.inOut',
   });
 
   gsap.to(MAP_LOOK_TARGET, {
     x: 0, y: 0, z: 0,
-    duration: 1.1, ease: 'power3.inOut',
+    duration: 1.45, ease: 'power2.inOut',
     onUpdate: () => camera.lookAt(MAP_LOOK_TARGET),
     onComplete: () => { _isCameraTransitioning = false; },
   });
@@ -94,11 +94,11 @@ export function switchToFPV(chassisMesh) {
 
   gsap.to(camera.position, {
     x: fpvPos.x, y: fpvPos.y, z: fpvPos.z,
-    duration: 0.7, ease: 'power2.inOut',
+    duration: 0.95, ease: 'power2.inOut',
   });
   gsap.to(MAP_LOOK_TARGET, {
     x: fpvLook.x, y: fpvLook.y, z: fpvLook.z,
-    duration: 0.7, ease: 'power2.inOut',
+    duration: 0.95, ease: 'power2.inOut',
     onUpdate: () => camera.lookAt(MAP_LOOK_TARGET),
     onComplete: () => { _isCameraTransitioning = false; },
   });
@@ -117,11 +117,11 @@ export function switchFPVToFollow(chassisMesh) {
 
   gsap.to(camera.position, {
     x: targetPosition.x, y: targetPosition.y, z: targetPosition.z,
-    duration: 0.7, ease: 'power2.inOut',
+    duration: 0.95, ease: 'power2.inOut',
   });
   gsap.to(MAP_LOOK_TARGET, {
     x: tempLookTarget.x, y: tempLookTarget.y, z: tempLookTarget.z,
-    duration: 0.7, ease: 'power2.inOut',
+    duration: 0.95, ease: 'power2.inOut',
     onUpdate: () => camera.lookAt(MAP_LOOK_TARGET),
     onComplete: () => { _isCameraTransitioning = false; },
   });
@@ -202,10 +202,10 @@ export function updateFollowCamera(chassisMesh) {
   if (_cameraMode === 'follow') {
     tempFollowOffset.copy(FOLLOW_OFFSET_LOCAL).applyQuaternion(chassisMesh.quaternion);
     const desiredPosition = chassisMesh.position.clone().add(tempFollowOffset);
-    camera.position.lerp(desiredPosition, 0.12);
+    camera.position.lerp(desiredPosition, 0.07);
 
     tempLookTarget.copy(chassisMesh.position).add(FOLLOW_LOOK_OFFSET);
-    MAP_LOOK_TARGET.lerp(tempLookTarget, 0.18);
+    MAP_LOOK_TARGET.lerp(tempLookTarget, 0.11);
     camera.lookAt(MAP_LOOK_TARGET);
   }
 
@@ -215,8 +215,8 @@ export function updateFollowCamera(chassisMesh) {
     const fpvLook = chassisMesh.position.clone()
       .add(FPV_LOOK_OFFSET.clone().applyQuaternion(chassisMesh.quaternion));
 
-    camera.position.lerp(fpvPos, 0.28);
-    MAP_LOOK_TARGET.lerp(fpvLook, 0.28);
+    camera.position.lerp(fpvPos, 0.18);
+    MAP_LOOK_TARGET.lerp(fpvLook, 0.18);
     camera.lookAt(MAP_LOOK_TARGET);
   }
 }

@@ -48,16 +48,23 @@ const viewFlash = document.getElementById('view-flash');
 let _hasStarted = false;
 let _lastMode = getCameraMode();
 let _nearestPOIForInteract = null;
+let _uiWakeUntil = 0;
 
 function flashTransition() {
   if (!viewFlash) return;
+  wakeUI(1600);
   viewFlash.classList.add('flash-in');
-  setTimeout(() => viewFlash.classList.remove('flash-in'), 120);
+  setTimeout(() => viewFlash.classList.remove('flash-in'), 180);
 }
 
 function showHUDAfterStart() {
   hudTitle?.classList.add('is-visible');
   hudMode?.classList.add('is-visible');
+  wakeUI(2600);
+}
+
+function wakeUI(duration = 1800) {
+  _uiWakeUntil = performance.now() + duration;
 }
 
 function getPOIRootById(poiId) {
@@ -103,16 +110,24 @@ if (btnMapView) {
   btnMapView.addEventListener('click', toggleView);
 }
 
+window.addEventListener('pointermove', () => wakeUI(1300), { passive: true });
+window.addEventListener('keydown', () => wakeUI(1800));
+
 // 每帧根据相机模式控制 HUD 显隐
 function updateHUD() {
   if (!_hasStarted) return;
 
   const mode = getCameraMode();
   const inDrivingMode = mode === 'follow' || mode === 'fpv';
+  const isUIAwake = performance.now() < _uiWakeUntil || mode === 'map' || mode === 'focus';
+  document.body.classList.toggle('ui-awake', isUIAwake);
 
-  btnMapView?.classList.toggle('is-visible', inDrivingMode);
-  hudHints?.classList.toggle('is-visible', inDrivingMode);
-  hudSpeed?.classList.toggle('is-visible', inDrivingMode);
+  btnMapView?.classList.toggle('is-visible', inDrivingMode && isUIAwake);
+  hudHints?.classList.toggle('is-visible', inDrivingMode && isUIAwake);
+  hudSpeed?.classList.toggle('is-visible', inDrivingMode && isUIAwake);
+
+  const compass = document.getElementById('map-compass');
+  compass?.classList.toggle('is-visible', mode === 'map');
 
   if (hudMode) {
     const modeText = mode === 'map'
@@ -142,6 +157,20 @@ registerKeyboardListeners({
   onToggleView: toggleView,
   onToggleFPV: toggleFPV,
   onInteractLandmark: interactNearestPOI,
+  onToggleAutoDrive: () => {
+    // R：如果正在自动驾驶，优先退出
+    if (carState.autoDrive) {
+      carState.autoDrive = false;
+      return;
+    }
+
+    // 仅在驾驶视角允许开启自动驾驶
+    const mode = getCameraMode();
+    if (mode !== 'follow' && mode !== 'fpv') return;
+
+    carState.autoDrive = true;
+    carState.autoDriveT = 0;
+  },
   onExitFocus: () => {
     flashTransition();
     exitLandmarkFocus(chassisMesh);

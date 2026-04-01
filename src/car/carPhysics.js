@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { carVisualGroup, createCustomCarVisual } from './carVisual.js';
 import { worldPosToHeight } from '../core/mapTiles.js';
+import { roadCurve } from '../landmarks/landmarkLoader.js';
 
 // ==================== 小车状态（平面 kinematic 驱动） ====================
 const GROUND_Y = 0.65; // 车底距地高度（底盘高 0.7 / 2 + 少量余量）
@@ -9,6 +10,8 @@ export const carState = {
   position: new THREE.Vector3(0, GROUND_Y, 0),
   angle: 0,           // 绕 Y 轴偏航角（弧度）
   speed: 0,           // 当前速度（m/s，正向前）
+  autoDrive: false,   // 是否处于自动驾驶模式
+  autoDriveT: 0,      // 自动驾驶在曲线上的位置 (0~1)
 };
 
 // 驾驶参数
@@ -39,10 +42,20 @@ export function initPhysicsCar() {
  */
 export function updateCar(delta, controls, drivingEnabled) {
   if (!drivingEnabled) {
-    // 没在驾驶时自然减速到 0
     carState.speed = decayToZero(carState.speed, BRAKE_DECEL, delta);
     syncVisual();
     return;
+  }
+
+  if (carState.autoDrive && roadCurve) {
+    const hasManualInput = controls.forward || controls.backward || controls.left || controls.right;
+    if (hasManualInput) {
+      carState.autoDrive = false;
+    } else {
+      updateAutoDrive(delta);
+      syncVisual();
+      return;
+    }
   }
 
   const maxSpd = controls.boost ? MAX_SPEED_BOOST : MAX_SPEED;
@@ -84,6 +97,32 @@ function syncVisual() {
   carVisualGroup.position.copy(carState.position);
   _quat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, carState.angle);
   carVisualGroup.quaternion.copy(_quat);
+}
+
+const _tempVec = new THREE.Vector3();
+const _lookAtVec = new THREE.Vector3();
+
+function updateAutoDrive(delta) {
+  const speed = 15; // 自动驾驶速度
+  const length = roadCurve.getLength();
+  const dt = (speed * delta) / length;
+  
+  carState.autoDriveT = (carState.autoDriveT + dt) % 1.0;
+  
+  // 当前位置
+  roadCurve.getPointAt(carState.autoDriveT, _tempVec);
+  carState.position.x = _tempVec.x;
+  carState.position.z = _tempVec.z;
+  
+  // 朝向
+  const lookAtT = (carState.autoDriveT + 0.01) % 1.0;
+  roadCurve.getPointAt(lookAtT, _lookAtVec);
+  const angle = Math.atan2(_lookAtVec.x - _tempVec.x, _lookAtVec.z - _tempVec.z);
+  carState.angle = angle;
+
+  const terrainY = worldPosToHeight(carState.position.x, carState.position.z);
+  carState.position.y = terrainY + GROUND_Y;
+  carState.speed = speed;
 }
 
 // chassisMesh 兼容层：相机控制器通过它读取位置/旋转

@@ -4,8 +4,8 @@ import { THEME } from '../config/theme.js';
 
 // ==================== 场景 ====================
 export const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x7ecef4); // 卡通天蓝
-scene.fog = new THREE.FogExp2(0xb8e8ff, 0.0032); // 指数雾，远处自然消融
+scene.background = new THREE.Color(0xb8ddfa); // 柔和白天蓝
+scene.fog = new THREE.FogExp2(0xd8edff, 0.0026); // 轻雾
 
 // ==================== 相机 ====================
 export const camera = new THREE.PerspectiveCamera(
