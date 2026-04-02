@@ -96,14 +96,12 @@ function buildStylizedMapTexture(heightMap, width, height) {
   canvas.height = height;
   const ctx = canvas.getContext('2d');
 
-  // Cartoon-style bright sea base
   const ocean = ctx.createLinearGradient(0, 0, 0, height);
   ocean.addColorStop(0, '#69c8ff');
   ocean.addColorStop(1, '#3ea0ea');
   ctx.fillStyle = ocean;
   ctx.fillRect(0, 0, width, height);
 
-  // Convert terrain into stylized relief + contour lines
   let maxH = 0;
   for (let i = 0; i < heightMap.length; i++) maxH = Math.max(maxH, heightMap[i]);
   if (maxH <= 0) maxH = 1;
@@ -122,7 +120,6 @@ function buildStylizedMapTexture(heightMap, width, height) {
       const contour = Math.abs(((h * 32) % 1) - 0.5);
       const contourBand = contour < 0.04 ? 1 : 0;
 
-      // Cartoon abstract terrain palette
       let r = 92 + h * 82;
       let g = 162 + h * 72;
       let b = 102 + h * 46;
@@ -141,7 +138,7 @@ function buildStylizedMapTexture(heightMap, width, height) {
 
   ctx.putImageData(image, 0, 0);
 
-  // soft bright vignette for stylized depth
+
   const vignette = ctx.createRadialGradient(width * 0.5, height * 0.5, width * 0.2, width * 0.5, height * 0.5, width * 0.72);
   vignette.addColorStop(0, 'rgba(255,255,255,0.08)');
   vignette.addColorStop(1, 'rgba(20,40,70,0.2)');
@@ -195,7 +192,6 @@ export async function buildMapGround() {
     _heightMap[i] = Math.max(0, heightMapRaw[i]) * HEIGHT_SCALE;
   }
 
-  // lower segment density for a more abstract look
   const SEG = 180;
   const geo = new THREE.PlaneGeometry(worldSize, worldSize, SEG, SEG);
   geo.rotateX(-Math.PI / 2);

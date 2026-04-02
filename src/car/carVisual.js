@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { scene } from '../core/scene.js';
 
-// ==================== 小车视觉分组 ====================
+//小车视觉
 export const carVisualGroup = new THREE.Group();
 scene.add(carVisualGroup);
 
@@ -9,13 +9,13 @@ export const wheelBindings = [null, null, null, null];
 export let carModelRoot = null;
 
 // 卡通低多边形调色板
-const C_BODY    = 0xff6b35; // 暖橙 — 车身
-const C_ROOF    = 0xff8c42; // 浅橙 — 车顶
-const C_GLASS   = 0xa8daff; // 天蓝 — 玻璃
-const C_WHEEL   = 0x2d3561; // 深蓝 — 轮胎
-const C_HUB     = 0xf5f0e8; // 米白 — 轮毂
-const C_BUMPER  = 0xffd166; // 亮黄 — 保险杠
-const C_LIGHT   = 0xfffde7; // 近白黄 — 车灯
+const C_BODY    = 0xff6b35; // 车身
+const C_ROOF    = 0xff8c42; // 车顶
+const C_GLASS   = 0xa8daff; // 玻璃
+const C_WHEEL   = 0x2d3561; // 轮胎
+const C_HUB     = 0xf5f0e8; // 轮毂
+const C_BUMPER  = 0xffd166; // 保险杠
+const C_LIGHT   = 0xfffde7; // 车灯
 
 function mat(color, rough = 0.55, metal = 0.05) {
   return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, flatShading: true });

@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { THEME } from '../config/theme.js';
-// 地面由 mapTiles.js 的 buildMapGround() 负责生成，此处不再添加绿色地面
+// 地面由 mapTiles.js 的 buildMapGround() 负责生成，这个文件不生成地面，
+// 只负责场景、相机、渲染器和灯光的基础设置。
 
 // ==================== 场景 ====================
 export const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xb8ddfa); // 柔和白天蓝
-scene.fog = new THREE.FogExp2(0xd8edff, 0.0026); // 轻雾
+scene.background = new THREE.Color(0xb8ddfa); 
+scene.fog = new THREE.FogExp2(0xd8edff, 0.0026); 
 
 // ==================== 相机 ====================
 export const camera = new THREE.PerspectiveCamera(

@@ -37,7 +37,7 @@ function normalizeLandmarkData(landmark) {
   };
 }
 
-// ==================== 内嵌地标数据（与 backend/main.py 保持一致，无需后端服务） ====================
+// 地标数据嵌入在前端
 const _LON_MIN = 6.6, _LON_MAX = 18.5;
 const _LAT_MIN = 36.6, _LAT_MAX = 47.1;
 const _WORLD = 170;
@@ -155,7 +155,7 @@ function createInvisibleTrigger(poi) {
   scene.add(triggerMesh);
 }
 
-// ==================== 道路生成（平面条带，无 TubeGeometry） ====================
+// ==================== 道路生成 ====================
 function buildRoadFromLandmarks(landmarks) {
   if (landmarks.length < 2) return;
 
