@@ -1,108 +1,260 @@
 # Web3D Italy Drive
 
-一个基于 `Three.js` 的 3D 互动驾驶项目：在意大利地图上驾车、切换视角、探索地标并查看 3D 模型。
+`Web3D Italy Drive` 现在是一个 **旅游网站首页 + 3D 沉浸式子功能** 的混合项目：
+用户先进入旅游站风格首页，浏览意大利路线、坐标和景点简介；然后可进入 3D `Drive Explorer` 模块，进行驾驶、自动驾驶、地标交互、评论查看与模型预览。
+
+---
+
+## 当前产品结构
+
+### 1. 主网站：首页
+当前默认首屏是一个旅游网站风格首页，包含：
+- Hero 主视觉
+- stylized Italy map
+- landmark coordinate cards
+- route / itinerary 内容区
+- travel journal 风格内容区
+- 进入 3D explorer 的 CTA
+
+### 2. 子功能：3D Drive Explorer
+原本的 3D Italy Drive 页面现在被封装成主站里的一个沉浸式功能模块：
+- 从首页进入
+- 以覆盖层方式打开
+- 可返回主站首页
+- 保留原有 driving / landmark / focus / model viewer 能力
+
+---
+
+## 当前完成的能力
+
+### 首页层
+- 旅游网站风格主视觉
+- 地图与坐标展示
+- 地标卡片
+- itinerary / journal 内容块
+- 从首页进入 3D explorer
+
+### 3D Explorer 层
+- React 18 + R3F 场景容器
+- 开屏页 / HUD / Landmark Popup / Focus Panel / Model Viewer
+- `WASD` 驾驶、`V` 视角切换、`F` 地标交互、`R` 自动驾驶
+- DEM 风格地形加载与高度采样
+- 3D Tiles 接入层与加载提示
+
+### 后端层
+- FastAPI 评论接口（含 mock 数据）
+- PostGIS-ready 查询模板
+- Playwright 评论抓取脚本模板
+
+---
 
 ## 技术栈
 
 ### 前端
-- **Vite 8**：开发服务器与打包
-- **Three.js**：3D 场景、相机、材质、模型渲染
-- **GSAP**：开场动画、相机切换过渡动画
-- **原生 JS (ES Modules)**：模块化业务逻辑
+- **Vite 8**
+- **React 18**
+- **@react-three/fiber**
+- **@react-three/drei**
+- **@react-three/rapier**
+- **Zustand**
+- **@tanstack/react-query**
+- **3d-tiles-renderer**
+- **Tailwind CSS**（局部样式基础能力）
 
 ### 后端
-- **FastAPI**：提供地标 API（`/api/landmarks`）
-- **Uvicorn**：ASGI 运行
-
-> 前端带有静态地标回退逻辑：后端不可用时，仍可运行场景。
+- **FastAPI**
+- **Uvicorn**
+- **psycopg**
+- **Playwright**
 
 ---
 
-## 目录结构与文件用途
+## 目录结构
 
 ```text
 web3d-project/
 ├─ backend/
-│  ├─ main.py                 # FastAPI 服务，提供检查与地标数据
-│  └─ requirements.txt        # 后端依赖
+│  ├─ db.py                          # 数据库连接壳
+│  ├─ main.py                        # FastAPI 服务入口
+│  ├─ postgis_queries.py             # PostGIS 查询模板
+│  ├─ playwright_reviews.py          # 评论抓取模板
+│  └─ requirements.txt
 ├─ public/
 │  ├─ models/
-│  │  ├─ colosseum.glb        # 模型
+│  │  ├─ colosseum.glb
 │  │  ├─ leaning_tower_of_pisa.glb
 │  │  └─ low-poly_truck_car_drifter.glb
 │  ├─ favicon.svg
 │  └─ icons.svg
 ├─ src/
-│  ├─ camera/
-│  │  └─ cameraController.js  # 相机状态机：map/follow/fpv/focus 切换与每帧跟随
-│  ├─ car/
-│  │  ├─ carControls.js       # 键盘输入与控制状态
-│  │  ├─ carPhysics.js        # 车辆运动学（含自动驾驶）
-│  │  └─ carVisual.js         # 小车网格与外观构建
+│  ├─ components/
+│  │  ├─ camera/
+│  │  │  └─ FollowCamera.jsx         # map / follow / focus 相机
+│  │  ├─ home/
+│  │  │  └─ HomePage.jsx             # 主网站首页
+│  │  ├─ landmarks/
+│  │  │  └─ LandmarkModels.jsx       # 地标模型与点击交互
+│  │  ├─ layout/
+│  │  │  └─ AppShell.jsx             # 3D explorer 外壳与开屏
+│  │  ├─ scene/
+│  │  │  ├─ GroundPlane.jsx          # 物理支撑平面
+│  │  │  ├─ MapSurface.jsx           # DEM 地形表面
+│  │  │  ├─ RoadRibbon.jsx           # 路网条带
+│  │  │  ├─ SceneLights.jsx          # 场景灯光
+│  │  │  └─ TilesLayer.jsx           # 3D Tiles 加载层
+│  │  ├─ ui/
+│  │  │  ├─ ModelViewerOverlay.jsx   # 模型预览弹层
+│  │  │  └─ UIOverlay.jsx            # HUD / Popup / Focus / 评论 UI
+│  │  └─ vehicle/
+│  │     └─ VehicleController.jsx    # 当前车辆控制与视觉车体
 │  ├─ config/
-│  │  └─ theme.js             # 主题色配置
-│  ├─ core/
-│  │  ├─ scene.js             # Three 场景、相机、渲染器、灯光
-│  │  └─ mapTiles.js          # DEM 高程加载、地形构建、经纬度映射
-│  ├─ landmarks/
-│  │  └─ landmarkLoader.js    # 地标数据加载、模型摆放、道路曲线生成
+│  │  └─ theme.js                    # 场景主题色
+│  ├─ data/
+│  │  ├─ landmarks.js                # 地标与道路数据
+│  │  ├─ terrain.js                  # DEM 风格地形加载
+│  │  └─ travelGuide.js              # 首页文案 / 坐标 / 地图元数据
+│  ├─ hooks/
+│  │  ├─ useKeyboardDrive.js
+│  │  ├─ useLandmarkReviews.js
+│  │  ├─ useLandmarksQuery.js
+│  │  └─ useTerrainData.js
+│  ├─ legacy/                        # 原生 Three.js 旧实现（迁移参考）
+│  │  ├─ camera/
+│  │  ├─ car/
+│  │  ├─ core/
+│  │  ├─ landmarks/
+│  │  ├─ ui/
+│  │  ├─ CarRigPlaceholder.jsx
+│  │  ├─ LandmarksCloud.jsx
+│  │  └─ main.js
+│  ├─ state/
+│  │  └─ useAppStore.js              # 全局 UI / 车辆状态
 │  ├─ styles/
-│  │  ├─ base.css             # 全局变量、字体、基础样式
-│  │  ├─ intro.css            # 开场页与转场
-│  │  ├─ hud.css              # HUD 与交互提示
-│  │  ├─ panels.css           # POI/Focus/ModelViewer 卡片
-│  │  └─ decorations.css      # 指南针等装饰
-│  ├─ ui/
-│  │  ├─ introScreen.js       # 开场动画、加载条、进入场景
-│  │  ├─ modelViewer.js       # 模型预览弹层逻辑
-│  │  └─ popup.js             # POI 卡片与 Focus 面板逻辑
-│  ├─ main.js                 # 应用入口：初始化、事件注册、主循环
-│  └─ style.css               # 样式聚合入口（import styles/*）
-├─ index.html                 # 页面结构与 HUD/弹层 DOM
-├─ package.json               # 前端依赖与脚本
-└─ package-lock.json
+│  │  ├─ base.css
+│  │  ├─ decorations.css
+│  │  ├─ home.css                    # 首页旅游站样式
+│  │  ├─ hud.css
+│  │  ├─ intro.css
+│  │  └─ panels.css
+│  ├─ App.jsx                        # 应用根组件：首页 + 3D explorer 管理
+│  ├─ index.css                      # 顶层样式入口
+│  ├─ main.jsx                       # React 挂载入口
+│  └─ style.css                      # 分模块样式聚合入口
+├─ index.html
+├─ package.json
+├─ postcss.config.js
+└─ vite.config.js
 ```
 
 ---
 
-## 运行方式
+## 启动方式
 
-## 1) 前端开发
+### 1) 前端
+在项目根目录运行：
 
 ```bash
+conda activate web3d-backend
 npm install
 npm run dev
 ```
 
-默认启动 Vite 本地服务（端口可能自动调整，如 5173/5174）。
+默认地址通常为：
 
-## 2) 后端（可选）
+```text
+http://127.0.0.1:5173
+```
 
-在 `backend/` 下安装依赖并启动：
+若端口被占用，Vite 会自动切换到其他端口，请以终端输出为准。
+
+### 2) 后端
+新开一个终端：
 
 ```bash
+conda activate web3d-backend
+cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-如果后端未启动，前端会回退到内嵌地标数据。
+### 3) Playwright 模板（可选）
+如需测试评论抓取模板：
+
+```bash
+cd backend
+pip install -r requirements.txt
+playwright install
+python playwright_reviews.py
+```
 
 ---
 
-## 核心交互
+## 当前交互
 
+### 首页
+- 点击 `Open 3D Drive`：进入 3D explorer
+- 点击坐标区或地图 pin：进入 3D explorer
+
+### 3D Explorer
+- `Enter`：从 3D 开屏页进入场景
 - `W / A / S / D`：驾驶
 - `Shift`：加速
 - `V`：地图视角 / 驾驶视角切换
-- `C`：跟随视角 / 第一人称切换
-- `F`：探索地标（进入焦点）
-- `R`：自动驾驶开关（再次按下可退出）
-- `Esc`：退出焦点或从地图返回驾驶
+- `R`：自动驾驶开关
+- `F`：进入附近 landmark 交互
+- `Esc`：退出当前 landmark / 面板 / 预览
+- 鼠标拖拽：在模型预览中旋转模型
+- 滚轮：在模型预览中缩放
+- `Back to Travel Guide`：返回首页
+
+---
+
+## 环境变量
+
+如果你要继续调试 3D Tiles，可在前端环境中提供：
+
+```bash
+VITE_GOOGLE_3DTILES_URL=你的_tileset_url
+```
+
+当前项目在未提供该变量时会显示降级提示，并继续使用 DEM 地形。
 
 ---
 
 ## 开发说明
 
-- 样式已模块化拆分在 `src/styles/*`，建议按模块维护，不再回到单文件堆叠。
-- 新增地标时，优先在后端接口中添加，经纬度会映射到 3D 世界坐标。
-- 当前项目为轻量模块化结构，适合继续扩展：天气系统、镜头语言、更多地标与路线。
+### 当前默认入口
+当前运行入口为：
+
+```text
+src/main.jsx -> src/App.jsx
+```
+
+其中：
+- `HomePage.jsx` 负责主网站首页
+- `AppShell.jsx` 负责 3D explorer 壳层
+- `VehicleController.jsx` 负责当前车辆控制
+
+### 关于 `src/legacy/`
+`src/legacy/` 保存的是迁移前的原生 Three.js 实现，主要用途：
+- 对照旧逻辑
+- 回溯旧交互
+- 为继续迁移提供参考
+
+它不是当前默认运行入口。
+
+### 当前视觉方向
+当前项目风格分成两层：
+- **首页**：旅游网站 / 杂志感 / 地图坐标导览
+- **3D explorer**：雾蓝、金色、玻璃质感 HUD 的沉浸式路线浏览
+
+---
+
+## 后续待完成事项
+
+- 首页点击具体 landmark 后，3D explorer 直达该景点
+- 更真实的车辆物理（进一步接近 raycast vehicle）
+- 更稳定的 landmark 交互判定
+- 3D Tiles 真正联调完成
+- PostgreSQL + PostGIS 真库接入
+- 更大规模地标时的性能优化（如 InstancedMesh）

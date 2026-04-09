@@ -1,0 +1,138 @@
+@import "tailwindcss";
+@import "./style.css";
+
+:root {
+  color-scheme: light;
+}
+
+html, body, #root {
+  width: 100%;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+body:not(.drive-open) {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.landmark-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(22, 42, 68, 0.14);
+  background: rgba(255, 255, 255, 0.54);
+  padding: 6px 12px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--c-ink-mid);
+  box-shadow: 0 10px 24px rgba(108, 146, 184, 0.12);
+  backdrop-filter: blur(14px);
+}
+
+.drive-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+}
+
+.drive-overlay__close {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 220;
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(22, 42, 68, 0.16);
+  background: rgba(255,255,255,0.62);
+  color: var(--c-ink);
+  font: 600 11px/1 var(--font-ui);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.app-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-shell__scene {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.app-shell__glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app-shell__glow--left {
+  background: radial-gradient(1200px 740px at 12% -8%, rgba(162, 205, 244, 0.72) 0%, transparent 62%);
+}
+
+.app-shell__glow--right {
+  background: radial-gradient(900px 560px at 88% 8%, rgba(255, 245, 224, 0.62) 0%, transparent 60%);
+}
+
+.focus-reviews {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 42vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.focus-review-card {
+  border-radius: 14px;
+  padding: 16px 16px 14px;
+  background: rgba(255,255,255,0.42);
+  border: 1px solid rgba(22, 42, 68, 0.12);
+  box-shadow: 0 18px 42px rgba(108, 146, 184, 0.1);
+}
+
+.focus-review-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--c-gold);
+}
+
+.focus-review-card__body {
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--c-ink-mid);
+}
+
+.focus-review-card__source,
+.focus-review-empty {
+  margin-top: 8px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--c-ink-dim);
+}
+
+@media (max-width: 720px) {
+  .drive-overlay__close {
+    top: 14px;
+    left: 14px;
+  }
+}
