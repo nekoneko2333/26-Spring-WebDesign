@@ -8,16 +8,16 @@ export function RoadRibbon() {
   const terrain = useTerrainData();
 
   const { roadGeometry, lineGeometry } = useMemo(() => {
-    const ROAD_WIDTH = 1.8;
-    const LINE_WIDTH = 0.18;
-    const SEGMENTS = 200;
+    const ROAD_WIDTH = 0.82;
+    const LINE_WIDTH = 0.07;
+    const SEGMENTS = 220;
     const points = roadCurve.getPoints(SEGMENTS);
 
     const buildStrip = (width, yOffset) => {
       const positions = [];
       const indices = [];
 
-      for (let i = 0; i < points.length; i++) {
+      for (let i = 0; i < points.length; i += 1) {
         const curr = points[i];
         const next = points[Math.min(i + 1, points.length - 1)];
         const prev = points[Math.max(i - 1, 0)];
@@ -33,7 +33,7 @@ export function RoadRibbon() {
         positions.push(rightX, worldPosToHeight(rightX, rightZ) + yOffset, rightZ);
       }
 
-      for (let i = 0; i < points.length - 1; i++) {
+      for (let i = 0; i < points.length - 1; i += 1) {
         const a = i * 2;
         const b = a + 1;
         const c = a + 2;
@@ -49,8 +49,8 @@ export function RoadRibbon() {
     };
 
     return {
-      roadGeometry: buildStrip(ROAD_WIDTH, 0.08),
-      lineGeometry: buildStrip(LINE_WIDTH, 0.11),
+      roadGeometry: buildStrip(ROAD_WIDTH, 0.05),
+      lineGeometry: buildStrip(LINE_WIDTH, 0.072),
     };
   }, [terrain.version]);
 
@@ -59,10 +59,10 @@ export function RoadRibbon() {
   return (
     <group>
       <mesh geometry={roadGeometry} receiveShadow>
-        <meshStandardMaterial color="#677285" roughness={0.58} />
+        <meshStandardMaterial color="#6d7584" roughness={0.66} />
       </mesh>
       <mesh geometry={lineGeometry} receiveShadow>
-        <meshStandardMaterial color="#f0d18a" roughness={0.4} />
+        <meshStandardMaterial color="#e8cb85" roughness={0.42} />
       </mesh>
     </group>
   );

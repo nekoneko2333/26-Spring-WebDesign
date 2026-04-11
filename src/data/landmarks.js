@@ -42,11 +42,17 @@ export const landmarks = [
   },
 ];
 
-export const roadPoints = [
-  new THREE.Vector3(-30, 0.12, 30),
-  ...landmarks.map((landmark) => new THREE.Vector3(landmark.position[0], 0.12, landmark.position[2])),
-  new THREE.Vector3(-45, 0.12, -10),
+export const mockRoutePoints = [
+  [-52, 0, 46],
+  [-34, 0, 34],
+  [landmarks[0].position[0] - 10, 0, landmarks[0].position[2] + 18],
+  [landmarks[0].position[0], 0, landmarks[0].position[2] + 2],
+  [-8, 0, 0],
+  [landmarks[1].position[0] + 10, 0, landmarks[1].position[2] + 12],
+  [landmarks[1].position[0], 0, landmarks[1].position[2] + 1],
+  [-42, 0, -36],
 ];
 
+export const roadPoints = mockRoutePoints.map(([x, y, z]) => new THREE.Vector3(x, y, z));
 export const roadCurve = new THREE.CatmullRomCurve3(roadPoints, false, 'catmullrom', 0.2);
 export const WORLD_SIZE_UNITS = WORLD_SIZE;

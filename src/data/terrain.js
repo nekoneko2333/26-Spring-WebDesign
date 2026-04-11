@@ -9,7 +9,7 @@ const MAP_BOUNDS = {
   worldSize: WORLD_SIZE_UNITS,
 };
 
-const HEIGHT_SCALE = 0.0022;
+const HEIGHT_SCALE = 0.0011;
 const listeners = new Set();
 let terrainState = {
   status: 'idle',
@@ -24,10 +24,6 @@ let loadPromise = null;
 
 function emit() {
   for (const listener of listeners) listener(terrainState);
-}
-
-function mercY(lat) {
-  return Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
 }
 
 function lonLatToTile(lon, lat, zoom) {
@@ -58,6 +54,31 @@ function sampleHeight(u, v) {
   const h01 = heightMap[y1 * hmWidth + x0];
   const h11 = heightMap[y1 * hmWidth + x1];
   return h00 * (1 - fx) * (1 - fy) + h10 * fx * (1 - fy) + h01 * (1 - fx) * fy + h11 * fx * fy;
+}
+
+function smoothHeightMap(source, width, height, passes = 2) {
+  let input = source;
+  for (let pass = 0; pass < passes; pass += 1) {
+    const output = new Float32Array(input.length);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        let total = 0;
+        let weightTotal = 0;
+        for (let oy = -1; oy <= 1; oy += 1) {
+          for (let ox = -1; ox <= 1; ox += 1) {
+            const sx = THREE.MathUtils.clamp(x + ox, 0, width - 1);
+            const sy = THREE.MathUtils.clamp(y + oy, 0, height - 1);
+            const weight = ox === 0 && oy === 0 ? 4 : (ox === 0 || oy === 0 ? 2 : 1);
+            total += input[sy * width + sx] * weight;
+            weightTotal += weight;
+          }
+        }
+        output[y * width + x] = total / weightTotal;
+      }
+    }
+    input = output;
+  }
+  return input;
 }
 
 function loadDemTile(z, tx, ty) {
@@ -92,29 +113,36 @@ function buildStylizedTexture(heightData, width, height) {
   const ctx = canvas.getContext('2d');
 
   const ocean = ctx.createLinearGradient(0, 0, 0, height);
-  ocean.addColorStop(0, '#d9ecfb');
-  ocean.addColorStop(0.52, '#c3ddf4');
-  ocean.addColorStop(1, '#eaf4fb');
+  ocean.addColorStop(0, '#94cae8');
+  ocean.addColorStop(0.45, '#6eafd4');
+  ocean.addColorStop(1, '#4f89b8');
   ctx.fillStyle = ocean;
   ctx.fillRect(0, 0, width, height);
 
   let maxH = 1;
-  for (let i = 0; i < heightData.length; i++) maxH = Math.max(maxH, heightData[i]);
+  for (let i = 0; i < heightData.length; i += 1) maxH = Math.max(maxH, heightData[i]);
 
   const image = ctx.getImageData(0, 0, width, height);
   const data = image.data;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
       const i = y * width + x;
       const h = heightData[i] / maxH;
-      if (h <= 0.02) continue;
-
-      const contour = Math.abs(((h * 30) % 1) - 0.5);
-      const contourBand = contour < 0.04 ? 1 : 0;
       const p = i * 4;
-      data[p] = Math.min(255, 96 + h * 68 + contourBand * 32);
-      data[p + 1] = Math.min(255, 162 + h * 58 + contourBand * 18);
-      data[p + 2] = Math.min(255, 104 + h * 34);
+
+      if (h <= 0.012) {
+        data[p] = 104;
+        data[p + 1] = 162;
+        data[p + 2] = 198;
+        data[p + 3] = 255;
+        continue;
+      }
+
+      const contour = Math.abs(((h * 20) % 1) - 0.5);
+      const contourBand = contour < 0.05 ? 1 : 0;
+      data[p] = Math.min(255, 92 + h * 54 + contourBand * 18);
+      data[p + 1] = Math.min(255, 150 + h * 44 + contourBand * 12);
+      data[p + 2] = Math.min(255, 102 + h * 26);
       data[p + 3] = 255;
     }
   }
@@ -126,12 +154,12 @@ function buildStylizedTexture(heightData, width, height) {
 }
 
 function buildGeometry() {
-  const segments = 180;
+  const segments = 120;
   const geometry = new THREE.PlaneGeometry(MAP_BOUNDS.worldSize, MAP_BOUNDS.worldSize, segments, segments);
   geometry.rotateX(-Math.PI / 2);
   const positions = geometry.attributes.position;
   const width = segments + 1;
-  for (let i = 0; i < positions.count; i++) {
+  for (let i = 0; i < positions.count; i += 1) {
     const col = i % width;
     const row = Math.floor(i / width);
     const u = col / segments;
@@ -163,7 +191,7 @@ export function loadTerrainData() {
         const tx = tileMin.x + (index % tcX);
         const ty = tileMin.y + Math.floor(index / tcX);
         return loadDemTile(zoom, tx, ty);
-      })
+      }),
     );
 
     hmWidth = tcX * tilePx;
@@ -174,17 +202,18 @@ export function loadTerrainData() {
       if (!result) continue;
       const offX = (result.tx - tileMin.x) * tilePx;
       const offY = (result.ty - tileMin.y) * tilePx;
-      for (let row = 0; row < result.height; row++) {
-        for (let col = 0; col < result.width; col++) {
+      for (let row = 0; row < result.height; row += 1) {
+        for (let col = 0; col < result.width; col += 1) {
           raw[(offY + row) * hmWidth + (offX + col)] = result.data[row * result.width + col];
         }
       }
     }
 
     heightMap = new Float32Array(raw.length);
-    for (let i = 0; i < raw.length; i++) {
+    for (let i = 0; i < raw.length; i += 1) {
       heightMap[i] = Math.max(0, raw[i]) * HEIGHT_SCALE;
     }
+    heightMap = smoothHeightMap(heightMap, hmWidth, hmHeight, 3);
 
     terrainState = {
       status: 'ready',

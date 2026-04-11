@@ -9,6 +9,9 @@ const tempOffset = new THREE.Vector3();
 const tempLook = new THREE.Vector3();
 const mapTarget = new THREE.Vector3(0, 66, 14);
 const mapLookAt = new THREE.Vector3(0, 0, 8);
+const targetWorldPosition = new THREE.Vector3();
+const targetWorldQuaternion = new THREE.Quaternion();
+const cameraTarget = new THREE.Vector3();
 
 export function FollowCamera({ targetRef }) {
   const camera = useThree((state) => state.camera);
@@ -18,9 +21,8 @@ export function FollowCamera({ targetRef }) {
   useFrame(() => {
     if (!targetRef.current) return;
 
-    const target = targetRef.current.translation();
-    const rotation = targetRef.current.rotation();
-    const quat = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
+    targetRef.current.getWorldPosition(targetWorldPosition);
+    targetRef.current.getWorldQuaternion(targetWorldQuaternion);
 
     if (cameraMode === 'map') {
       camera.position.lerp(mapTarget, 0.06);
@@ -38,9 +40,10 @@ export function FollowCamera({ targetRef }) {
       }
     }
 
-    tempOffset.copy(followOffset).applyQuaternion(quat);
-    tempLook.copy(lookOffset).add(new THREE.Vector3(target.x, target.y, target.z));
-    camera.position.lerp(new THREE.Vector3(target.x, target.y, target.z).add(tempOffset), 0.08);
+    tempOffset.copy(followOffset).applyQuaternion(targetWorldQuaternion);
+    tempLook.copy(lookOffset).add(targetWorldPosition);
+    cameraTarget.copy(targetWorldPosition).add(tempOffset);
+    camera.position.lerp(cameraTarget, 0.08);
     camera.lookAt(tempLook);
   });
 

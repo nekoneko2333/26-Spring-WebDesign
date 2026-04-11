@@ -8,6 +8,10 @@
     linear-gradient(180deg, #eff5fb 0%, #e5eff8 100%);
 }
 
+.travel-home.is-zh {
+  --travel-title-max: 11ch;
+}
+
 .travel-hero {
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
@@ -31,6 +35,36 @@
   padding: clamp(28px, 4vw, 54px);
 }
 
+.travel-lang-switch {
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  margin-bottom: 24px;
+  border-radius: 999px;
+  background: rgba(243, 248, 253, 0.78);
+  border: 1px solid rgba(22, 42, 68, 0.1);
+}
+
+.travel-lang-switch__btn {
+  min-width: 72px;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--c-ink-mid);
+  font: 600 11px/1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.travel-lang-switch__btn.is-active {
+  background: linear-gradient(135deg, #b98152, #8f6747);
+  color: #fff7ee;
+}
+
 .travel-kicker,
 .travel-panel__eyebrow,
 .travel-map-card__header p,
@@ -43,13 +77,38 @@
 }
 
 .travel-title {
-  max-width: 12ch;
+  max-width: var(--travel-title-max, 12ch);
   margin-bottom: 20px;
   font-family: var(--font-display);
   font-size: clamp(52px, 6vw, 92px);
   line-height: 0.94;
   letter-spacing: -0.03em;
   color: var(--c-ink);
+}
+
+.travel-home.is-zh .travel-title,
+.travel-home.is-zh .travel-panel h2,
+.travel-home.is-zh .travel-journal__intro h2,
+.travel-home.is-zh .travel-destination-card h2,
+.travel-home.is-zh .travel-coordinate-card h3,
+.travel-home.is-zh .travel-journal-card h3,
+.travel-home.is-zh .travel-itinerary__item h3 {
+  font-family: var(--font-display-zh);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.18;
+}
+
+.travel-home.is-zh .travel-kicker,
+.travel-home.is-zh .travel-panel__eyebrow,
+.travel-home.is-zh .travel-map-card__header p,
+.travel-home.is-zh .travel-destination-card__head p,
+.travel-home.is-zh .travel-btn,
+.travel-home.is-zh .travel-map__pin-label,
+.travel-home.is-zh .travel-coordinate-card dt,
+.travel-home.is-zh .travel-itinerary__item span,
+.travel-home.is-zh .travel-stats span {
+  letter-spacing: 0.12em;
 }
 
 .travel-summary,
@@ -61,6 +120,16 @@
   color: var(--c-ink-mid);
   font-size: 15px;
   line-height: 1.85;
+}
+
+.travel-home.is-zh .travel-summary,
+.travel-home.is-zh .travel-panel p,
+.travel-home.is-zh .travel-coordinate-card p,
+.travel-home.is-zh .travel-destination-card p,
+.travel-home.is-zh .travel-itinerary__item p,
+.travel-home.is-zh .travel-journal-card p {
+  font-size: 16px;
+  line-height: 1.95;
 }
 
 .travel-actions {

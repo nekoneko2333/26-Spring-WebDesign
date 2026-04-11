@@ -2,7 +2,7 @@ import math
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from db import get_connection, get_database_url
+from db import get_connection, get_database_url, get_reviews_for_landmark
 from postgis_queries import POSTGIS_NEARBY_REVIEWS_SQL
 
 app = FastAPI(title='Web3D Landmarks API', version='1.0.0')
@@ -65,41 +65,6 @@ LANDMARKS = [
     for item in _RAW
 ]
 
-MOCK_REVIEWS = {
-    'colosseum': [
-        {'id': 'col-1', 'author': 'Giulia', 'score': 4.9, 'comment': '光影和历史氛围非常震撼，傍晚时段尤其适合停留观赏。', 'source': 'mock-google'},
-        {'id': 'col-2', 'author': 'Luca', 'score': 4.7, 'comment': '如果能在周边街区慢慢步行，会比只拍照更有体验感。', 'source': 'mock-tripadvisor'},
-        {'id': 'col-3', 'author': 'Emma', 'score': 4.8, 'comment': '非常适合作为路线中的重点停靠点，建筑细节很有层次。', 'source': 'mock-editorial'},
-    ],
-    'pisa': [
-        {'id': 'pis-1', 'author': 'Marco', 'score': 4.6, 'comment': '广场空间开阔，白色石材在晴天里非常上镜。', 'source': 'mock-google'},
-        {'id': 'pis-2', 'author': 'Sofia', 'score': 4.5, 'comment': '比想象中更优雅，适合搭配周边教堂群一起浏览。', 'source': 'mock-tripadvisor'},
-        {'id': 'pis-3', 'author': 'Noah', 'score': 4.7, 'comment': '如果作为 3D 场景中的第二站，节奏会非常舒服。', 'source': 'mock-editorial'},
-    ],
-}
-
-
-def _fallback_nearby_reviews(lon: float, lat: float, radius_km: float):
-    nearby_landmarks = []
-    for landmark in LANDMARKS:
-        dx = (landmark['lon'] - lon) * 85
-        dy = (landmark['lat'] - lat) * 111
-        distance_km = math.sqrt(dx * dx + dy * dy)
-        if distance_km <= radius_km:
-            reviews = MOCK_REVIEWS.get(landmark['id'], [])
-            nearby_landmarks.append(
-                {
-                    'landmark_id': landmark['id'],
-                    'landmark_name': landmark['name'],
-                    'distance_km': round(distance_km, 2),
-                    'average_score': round(sum(item['score'] for item in reviews) / len(reviews), 2) if reviews else None,
-                    'review_count': len(reviews),
-                    'source': 'mock-fallback',
-                }
-            )
-    nearby_landmarks.sort(key=lambda item: item['distance_km'])
-    return nearby_landmarks
-
 
 @app.get('/api/health')
 def health():
@@ -115,10 +80,10 @@ def get_landmarks():
 def get_landmark_reviews(landmark_id: str):
     landmark = next((item for item in LANDMARKS if item['id'] == landmark_id), None)
     if not landmark:
-        return {'landmark_id': landmark_id, 'reviews': [], 'average_score': None}
+        return {'landmark_id': landmark_id, 'reviews': [], 'average_score': None, 'review_count': 0}
 
-    reviews = MOCK_REVIEWS.get(landmark_id, [])
-    average_score = round(sum(item['score'] for item in reviews) / len(reviews), 2) if reviews else None
+    reviews = get_reviews_for_landmark(landmark_id)
+    average_score = round(sum(item['score'] for item in reviews if item['score'] is not None) / len(reviews), 2) if reviews else None
     return {
         'landmark_id': landmark_id,
         'landmark_name': landmark['name'],
@@ -136,7 +101,7 @@ def get_nearby_reviews(
 ):
     connection = get_connection()
     if connection is None:
-        return {'items': _fallback_nearby_reviews(lon, lat, radius_km), 'mode': 'mock'}
+        return {'items': [], 'mode': 'database_unavailable'}
 
     try:
         with connection, connection.cursor() as cursor:
@@ -159,8 +124,8 @@ def get_nearby_reviews(
             return {'items': items, 'mode': 'postgis'}
     except Exception as exc:
         return {
-            'items': _fallback_nearby_reviews(lon, lat, radius_km),
-            'mode': 'mock',
+            'items': [],
+            'mode': 'postgis_error',
             'warning': f'PostGIS query failed: {exc}',
         }
     finally:

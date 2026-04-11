@@ -1,71 +1,99 @@
 # Web3D Italy Drive
 
-`Web3D Italy Drive` 现在是一个 **旅游网站首页 + 3D 沉浸式子功能** 的混合项目：
-用户先进入旅游站风格首页，浏览意大利路线、坐标和景点简介；然后可进入 3D `Drive Explorer` 模块，进行驾驶、自动驾驶、地标交互、评论查看与模型预览。
+`Web3D Italy Drive` 是一个 **旅游专题首页 + 3D 沉浸式路线导览模块** 的混合项目。
+用户先在首页浏览意大利地标、路线、坐标与旅行内容，再进入 3D `Drive Explorer`，沿着样条路线进行导览、聚焦地标、查看评论侧栏与模型预览。
 
 ---
 
-## 当前产品结构
-
-### 1. 主网站：首页
-当前默认首屏是一个旅游网站风格首页，包含：
-- Hero 主视觉
-- stylized Italy map
-- landmark coordinate cards
-- route / itinerary 内容区
-- travel journal 风格内容区
-- 进入 3D explorer 的 CTA
-
-### 2. 子功能：3D Drive Explorer
-原本的 3D Italy Drive 页面现在被封装成主站里的一个沉浸式功能模块：
-- 从首页进入
-- 以覆盖层方式打开
-- 可返回主站首页
-- 保留原有 driving / landmark / focus / model viewer 能力
-
----
-
-## 当前完成的能力
+## 项目现状概览
 
 ### 首页层
-- 旅游网站风格主视觉
-- 地图与坐标展示
-- 地标卡片
-- itinerary / journal 内容块
-- 从首页进入 3D explorer
+当前首页已经不是单一 landing page，而是一个可切换中英语言的旅行专题页面，包含：
+- Hero 主视觉与语言切换
+- stylized Italy map
+- 地标坐标卡片
+- route / itinerary 内容区
+- travel journal 内容区
+- 进入 3D explorer 的 CTA
 
 ### 3D Explorer 层
-- React 18 + R3F 场景容器
-- 开屏页 / HUD / Landmark Popup / Focus Panel / Model Viewer
-- `WASD` 驾驶、`V` 视角切换、`F` 地标交互、`R` 自动驾驶
-- DEM 风格地形加载与高度采样
-- 3D Tiles 接入层与加载提示
+3D 模块通过覆盖层方式打开，保留沉浸式交互体验：
+- 地图 / 跟随 / 聚焦三种视角
+- 基于 `THREE.CatmullRomCurve3` 的车辆导览
+- `W / S` 手动推进、`R` 自动巡航
+- `F` 地标交互与左右侧沉浸信息栏
+- 模型预览弹层
+- 可从 3D 返回首页
 
 ### 后端层
-- FastAPI 评论接口（含 mock 数据）
-- PostGIS-ready 查询模板
-- Playwright 评论抓取脚本模板
+后端当前主要提供评论读取与后续空间查询准备：
+- FastAPI 评论接口
+- PostgreSQL / `psycopg` 读取
+- PostGIS 查询模板
+- Playwright 评论抓取脚本
+
+---
+
+## 当前能力
+
+### 首页
+- 中英双语切换
+- 中文排版与英文风格统一的 serif 方向
+- 旅游站风格地图与坐标展示
+- 从首页打开 3D explorer
+- 点击地标直接进入对应 3D 导览入口
+
+### 3D Explorer
+- React 18 + R3F 场景容器
+- 地形表面、海洋底色、道路条带
+- 基于 mock route points 的平滑样条路径运动
+- 地标模型加载与聚焦
+- 左右侧沉浸式信息栏
+- 模型预览弹层
+- 评论内容按当前语言显示为全英 / 全中
+
+### 后端
+- `FastAPI` API
+- 数据库连接壳与 landmark review 查询
+- PostGIS nearby reviews 查询模板
+- Playwright 抓取脚本
 
 ---
 
 ## 技术栈
 
-### 前端
+### 前端核心
 - **Vite 8**
 - **React 18**
+- **Three.js**
 - **@react-three/fiber**
 - **@react-three/drei**
-- **@react-three/rapier**
 - **Zustand**
 - **@tanstack/react-query**
+
+### 3D / 可视化相关
+- **three-stdlib**
 - **3d-tiles-renderer**
-- **Tailwind CSS**（局部样式基础能力）
+- 自定义 DEM 高度图读取与 terrain sampling
+- `THREE.CatmullRomCurve3` 路径导览动画
+
+### 样式与 UI
+- **Tailwind CSS 4**（当前仅作为基础能力接入）
+- 以自定义 CSS 模块为主：`base / home / hud / panels / intro / decorations`
+- Google Fonts：
+  - `Bodoni Moda`
+  - `Manrope`
+  - `Noto Serif SC`
 
 ### 后端
 - **FastAPI**
 - **Uvicorn**
-- **psycopg**
+- **psycopg[binary]**
 - **Playwright**
+
+### 当前说明
+- `@react-three/rapier` 仍然保留在 `package.json` 中，但**当前运行主链已不再使用**。
+- 当前车辆系统是 **kinematic curve drive**，不是物理车方案。
 
 ---
 
@@ -74,10 +102,10 @@
 ```text
 web3d-project/
 ├─ backend/
-│  ├─ db.py                          # 数据库连接壳
-│  ├─ main.py                        # FastAPI 服务入口
-│  ├─ postgis_queries.py             # PostGIS 查询模板
-│  ├─ playwright_reviews.py          # 评论抓取模板
+│  ├─ db.py
+│  ├─ main.py
+│  ├─ postgis_queries.py
+│  ├─ playwright_reviews.py
 │  └─ requirements.txt
 ├─ public/
 │  ├─ models/
@@ -89,36 +117,36 @@ web3d-project/
 ├─ src/
 │  ├─ components/
 │  │  ├─ camera/
-│  │  │  └─ FollowCamera.jsx         # map / follow / focus 相机
+│  │  │  └─ FollowCamera.jsx
 │  │  ├─ home/
-│  │  │  └─ HomePage.jsx             # 主网站首页
+│  │  │  └─ HomePage.jsx
 │  │  ├─ landmarks/
-│  │  │  └─ LandmarkModels.jsx       # 地标模型与点击交互
+│  │  │  └─ LandmarkModels.jsx
 │  │  ├─ layout/
-│  │  │  └─ AppShell.jsx             # 3D explorer 外壳与开屏
+│  │  │  └─ AppShell.jsx
 │  │  ├─ scene/
-│  │  │  ├─ GroundPlane.jsx          # 物理支撑平面
-│  │  │  ├─ MapSurface.jsx           # DEM 地形表面
-│  │  │  ├─ RoadRibbon.jsx           # 路网条带
-│  │  │  ├─ SceneLights.jsx          # 场景灯光
-│  │  │  └─ TilesLayer.jsx           # 3D Tiles 加载层
+│  │  │  ├─ GroundPlane.jsx
+│  │  │  ├─ MapSurface.jsx
+│  │  │  ├─ RoadRibbon.jsx
+│  │  │  ├─ SceneLights.jsx
+│  │  │  └─ TilesLayer.jsx
 │  │  ├─ ui/
-│  │  │  ├─ ModelViewerOverlay.jsx   # 模型预览弹层
-│  │  │  └─ UIOverlay.jsx            # HUD / Popup / Focus / 评论 UI
+│  │  │  ├─ ModelViewerOverlay.jsx
+│  │  │  └─ UIOverlay.jsx
 │  │  └─ vehicle/
-│  │     └─ VehicleController.jsx    # 当前车辆控制与视觉车体
+│  │     └─ VehicleController.jsx
 │  ├─ config/
-│  │  └─ theme.js                    # 场景主题色
+│  │  └─ theme.js
 │  ├─ data/
-│  │  ├─ landmarks.js                # 地标与道路数据
-│  │  ├─ terrain.js                  # DEM 风格地形加载
-│  │  └─ travelGuide.js              # 首页文案 / 坐标 / 地图元数据
+│  │  ├─ landmarks.js
+│  │  ├─ reviewLocales.js
+│  │  ├─ terrain.js
+│  │  └─ travelGuide.js
 │  ├─ hooks/
 │  │  ├─ useKeyboardDrive.js
 │  │  ├─ useLandmarkReviews.js
-│  │  ├─ useLandmarksQuery.js
 │  │  └─ useTerrainData.js
-│  ├─ legacy/                        # 原生 Three.js 旧实现（迁移参考）
+│  ├─ legacy/
 │  │  ├─ camera/
 │  │  ├─ car/
 │  │  ├─ core/
@@ -128,18 +156,18 @@ web3d-project/
 │  │  ├─ LandmarksCloud.jsx
 │  │  └─ main.js
 │  ├─ state/
-│  │  └─ useAppStore.js              # 全局 UI / 车辆状态
+│  │  └─ useAppStore.js
 │  ├─ styles/
 │  │  ├─ base.css
 │  │  ├─ decorations.css
-│  │  ├─ home.css                    # 首页旅游站样式
+│  │  ├─ home.css
 │  │  ├─ hud.css
 │  │  ├─ intro.css
 │  │  └─ panels.css
-│  ├─ App.jsx                        # 应用根组件：首页 + 3D explorer 管理
-│  ├─ index.css                      # 顶层样式入口
-│  ├─ main.jsx                       # React 挂载入口
-│  └─ style.css                      # 分模块样式聚合入口
+│  ├─ App.jsx
+│  ├─ index.css
+│  ├─ main.jsx
+│  └─ style.css
 ├─ index.html
 ├─ package.json
 ├─ postcss.config.js
@@ -154,31 +182,26 @@ web3d-project/
 在项目根目录运行：
 
 ```bash
-conda activate web3d-backend
 npm install
 npm run dev
 ```
 
-默认地址通常为：
+默认地址：
 
 ```text
 http://127.0.0.1:5173
 ```
 
-若端口被占用，Vite 会自动切换到其他端口，请以终端输出为准。
-
 ### 2) 后端
-新开一个终端：
+在新终端中运行：
 
 ```bash
-conda activate web3d-backend
 cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-### 3) Playwright 模板（可选）
-如需测试评论抓取模板：
+### 3) Playwright 抓取脚本（可选）
 
 ```bash
 cd backend
@@ -192,69 +215,85 @@ python playwright_reviews.py
 ## 当前交互
 
 ### 首页
-- 点击 `Open 3D Drive`：进入 3D explorer
-- 点击坐标区或地图 pin：进入 3D explorer
+- 切换 `EN / 中文`
+- 点击 `Open 3D Drive / 进入 3D 导览`
+- 点击地图 pin 或地标卡片，直接打开 3D explorer
 
 ### 3D Explorer
-- `Enter`：从 3D 开屏页进入场景
-- `W / A / S / D`：驾驶
-- `Shift`：加速
-- `V`：地图视角 / 驾驶视角切换
-- `R`：自动驾驶开关
-- `F`：进入附近 landmark 交互
-- `Esc`：退出当前 landmark / 面板 / 预览
-- 鼠标拖拽：在模型预览中旋转模型
-- 滚轮：在模型预览中缩放
+- `Enter`：从开屏进入场景
+- `W / S`：沿样条路线前进 / 后退
+- `Shift`：加速推进
+- `V`：地图 / 跟随视角切换
+- `R`：自动巡航开关
+- `F`：打开附近地标的侧边导览
+- `Esc`：关闭模型预览 / 地标聚焦 / 返回路线
+- 鼠标拖拽：模型预览中旋转模型
+- 滚轮：模型预览中缩放
 - `Back to Travel Guide`：返回首页
+
+### 交互锁定说明
+当聚焦侧栏或模型预览打开时：
+- 后方 3D pointer interaction 会被锁住
+- 自动巡航会被关闭
+- 场景不再继续接收驾驶类交互
 
 ---
 
 ## 环境变量
 
-如果你要继续调试 3D Tiles，可在前端环境中提供：
+如果需要接入真实 `3D Tiles` 地址，可在前端环境中提供：
 
 ```bash
-VITE_GOOGLE_3DTILES_URL=你的_tileset_url
+VITE_GOOGLE_3DTILES_URL=your_tileset_url
 ```
 
-当前项目在未提供该变量时会显示降级提示，并继续使用 DEM 地形。
+未提供时，项目仍可继续使用当前 terrain + mock route 方案运行。
 
 ---
 
 ## 开发说明
 
-### 当前默认入口
-当前运行入口为：
+### 当前运行入口
 
 ```text
 src/main.jsx -> src/App.jsx
 ```
 
 其中：
-- `HomePage.jsx` 负责主网站首页
-- `AppShell.jsx` 负责 3D explorer 壳层
-- `VehicleController.jsx` 负责当前车辆控制
+- `HomePage.jsx`：旅游专题首页
+- `AppShell.jsx`：3D explorer 外壳与开屏
+- `VehicleController.jsx`：当前曲线路径导览逻辑
+- `UIOverlay.jsx`：HUD、侧栏、模型预览与交互层
 
 ### 关于 `src/legacy/`
-`src/legacy/` 保存的是迁移前的原生 Three.js 实现，主要用途：
-- 对照旧逻辑
-- 回溯旧交互
-- 为继续迁移提供参考
+`src/legacy/` 保存旧版原生 Three.js / 迁移过程代码，当前默认运行不会进入这些文件。
+保留它们的目的是：
+- 参考旧实现
+- 回溯交互逻辑
+- 为后续迁移或比较提供资料
 
-它不是当前默认运行入口。
-
-### 当前视觉方向
-当前项目风格分成两层：
-- **首页**：旅游网站 / 杂志感 / 地图坐标导览
-- **3D explorer**：雾蓝、金色、玻璃质感 HUD 的沉浸式路线浏览
+### 当前文件整理说明
+本次整理做了最小且明确的清理：
+- 删除了未使用的 `src/hooks/useLandmarksQuery.js`
+- 保留 `src/legacy/` 作为历史参考
+- README 中的技术栈、目录结构、交互说明已和当前实现对齐
 
 ---
 
-## 后续待完成事项
+## 当前已知技术现状
 
-- 首页点击具体 landmark 后，3D explorer 直达该景点
-- 更真实的车辆物理（进一步接近 raycast vehicle）
-- 更稳定的 landmark 交互判定
-- 3D Tiles 真正联调完成
-- PostgreSQL + PostGIS 真库接入
-- 更大规模地标时的性能优化（如 InstancedMesh）
+- 当前车辆不是物理车，而是 **CatmullRomCurve3 + progress** 的 kinematic 导览方案
+- terrain 已做高度平滑与海洋底色处理
+- road ribbon 已做更细、更贴地的几何生成
+- 语言系统当前已接入：首页与 3D HUD 共用同一语言状态
+- 评论面板当前通过前端本地化数据保证全英 / 全中显示
+
+---
+
+## 后续建议
+
+- 将 landmark `name / description` 也改成严格双语字段，彻底消除混合文本
+- 把语言系统继续扩展到模型预览标题与更多 3D 文案
+- 继续收敛 terrain 的地图化视觉表现
+- 若后续重新启用物理车，再评估是否真正移除 `@react-three/rapier`
+- 接入真实 PostgreSQL / PostGIS 数据流
