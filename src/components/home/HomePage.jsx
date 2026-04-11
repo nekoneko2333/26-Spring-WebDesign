@@ -1,13 +1,46 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppStore } from '../../state/useAppStore.js';
 import { landmarks } from '../../data/landmarks.js';
 import { travelGuide, travelLandmarkMeta, travelMapPoints } from '../../data/travelGuide.js';
+import { reviewLocales } from '../../data/reviewLocales.js';
 
 export function HomePage({ onOpenDrive }) {
   const language = useAppStore((state) => state.language);
   const setLanguage = useAppStore((state) => state.setLanguage);
   const copy = useMemo(() => travelGuide[language], [language]);
+  const reviewsCopy = useMemo(() => reviewLocales[language], [language]);
+  const [activeTab, setActiveTab] = useState('guide');
+  const [searchQuery, setSearchQuery] = useState('');
   const isZh = language === 'zh';
+
+  const tabs = useMemo(
+    () => (language === 'zh'
+      ? [
+          { id: 'guide', label: '路线指南' },
+          { id: 'search', label: '查找景点' },
+          { id: 'reviews', label: '评论区' },
+        ]
+      : [
+          { id: 'guide', label: 'Route Guide' },
+          { id: 'search', label: 'Find Landmark' },
+          { id: 'reviews', label: 'Reviews' },
+        ]),
+    [language],
+  );
+
+  const activeIndex = Math.max(0, tabs.findIndex((tab) => tab.id === activeTab));
+
+  const filteredLandmarks = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase();
+    if (!keyword) return landmarks;
+    return landmarks.filter((landmark) => {
+      const meta = travelLandmarkMeta[landmark.id];
+      const city = meta.city[language].toLowerCase();
+      const region = meta.region[language].toLowerCase();
+      const name = landmark.name.toLowerCase();
+      return city.includes(keyword) || region.includes(keyword) || name.includes(keyword);
+    });
+  }, [language, searchQuery]);
 
   return (
     <main className={`travel-home ${isZh ? 'is-zh' : 'is-en'}`} lang={language}>
@@ -83,50 +116,134 @@ export function HomePage({ onOpenDrive }) {
         </div>
       </section>
 
-      <section className="travel-showcase">
-        {landmarks.map((landmark) => {
-          const meta = travelLandmarkMeta[landmark.id];
-          return (
-            <article key={landmark.id} className="travel-destination-card">
-              <div className="travel-destination-card__head">
-                <p>{meta.region[language]}</p>
-                <span>{meta.type[language]}</span>
-              </div>
-              <h2>{landmark.name}</h2>
-              <p>{meta.blurb[language]}</p>
-              <div className="travel-destination-card__meta">
-                <span>{meta.season[language]}</span>
-                <button className="travel-btn travel-btn--ghost travel-btn--compact" type="button" onClick={() => onOpenDrive(landmark.id)}>{copy.hero.previewIn3D}</button>
-              </div>
-            </article>
-          );
-        })}
-      </section>
+      <section className="travel-workspace">
+        <div className="travel-tabs" style={{ '--tab-index': activeIndex, '--tab-count': tabs.length }}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`travel-tabs__btn ${activeTab === tab.id ? 'is-active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+          <span className="travel-tabs__indicator" aria-hidden="true" />
+        </div>
 
-      <section className="travel-grid">
-        <article className="travel-panel travel-panel--route">
-          <p className="travel-panel__eyebrow">{copy.routePanel.eyebrow}</p>
-          <h2>{copy.routePanel.title}</h2>
-          <p>{copy.routePanel.body}</p>
-          <div className="travel-itinerary">
-            {copy.itinerary.map((item) => (
-              <div key={item.day} className="travel-itinerary__item">
-                <span>{item.day}</span>
-                <div>
-                  <h3>{item.title}</h3>
-                  <p>{item.detail}</p>
+        {activeTab === 'guide' && (
+          <div className="travel-workspace__panel">
+            <section className="travel-showcase">
+              {landmarks.map((landmark) => {
+                const meta = travelLandmarkMeta[landmark.id];
+                return (
+                  <article key={landmark.id} className="travel-destination-card">
+                    <div className="travel-destination-card__head">
+                      <p>{meta.region[language]}</p>
+                      <span>{meta.type[language]}</span>
+                    </div>
+                    <h2>{landmark.name}</h2>
+                    <p>{meta.blurb[language]}</p>
+                    <div className="travel-destination-card__meta">
+                      <span>{meta.season[language]}</span>
+                      <button className="travel-btn travel-btn--ghost travel-btn--compact" type="button" onClick={() => onOpenDrive(landmark.id)}>{copy.hero.previewIn3D}</button>
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
+
+            <section className="travel-grid">
+              <article className="travel-panel travel-panel--route">
+                <p className="travel-panel__eyebrow">{copy.routePanel.eyebrow}</p>
+                <h2>{copy.routePanel.title}</h2>
+                <p>{copy.routePanel.body}</p>
+                <div className="travel-itinerary">
+                  {copy.itinerary.map((item) => (
+                    <div key={item.day} className="travel-itinerary__item">
+                      <span>{item.day}</span>
+                      <div>
+                        <h3>{item.title}</h3>
+                        <p>{item.detail}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))}
-          </div>
-        </article>
+              </article>
 
-        <article className="travel-panel travel-panel--feature">
-          <p className="travel-panel__eyebrow">{copy.featurePanel.eyebrow}</p>
-          <h2>{copy.featurePanel.title}</h2>
-          <p>{copy.featurePanel.body}</p>
-          <button className="travel-btn travel-btn--primary travel-btn--compact" type="button" onClick={() => onOpenDrive()}>{copy.hero.enterExplorer}</button>
-        </article>
+              <article className="travel-panel travel-panel--feature">
+                <p className="travel-panel__eyebrow">{copy.featurePanel.eyebrow}</p>
+                <h2>{copy.featurePanel.title}</h2>
+                <p>{copy.featurePanel.body}</p>
+                <button className="travel-btn travel-btn--primary travel-btn--compact" type="button" onClick={() => onOpenDrive()}>{copy.hero.enterExplorer}</button>
+              </article>
+            </section>
+          </div>
+        )}
+
+        {activeTab === 'search' && (
+          <section className="travel-workspace__panel travel-search-panel">
+            <div className="travel-search-panel__head">
+              <input
+                className="travel-search-input"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder={language === 'zh' ? '输入城市 / 地标名称（如 罗马、Pisa）' : 'Search city or landmark (e.g. Rome, Pisa)'}
+              />
+            </div>
+            <div className="travel-search-grid">
+              {filteredLandmarks.map((landmark) => {
+                const meta = travelLandmarkMeta[landmark.id];
+                return (
+                  <article key={landmark.id} className="travel-search-card">
+                    <p>{meta.region[language]} · {meta.city[language]}</p>
+                    <h3>{landmark.name}</h3>
+                    <p>{meta.blurb[language]}</p>
+                    <div className="travel-search-card__meta">
+                      <span>LAT {meta.lat.toFixed(4)}</span>
+                      <span>LON {meta.lon.toFixed(4)}</span>
+                    </div>
+                    <button className="travel-btn travel-btn--ghost travel-btn--compact" type="button" onClick={() => onOpenDrive(landmark.id)}>
+                      {copy.hero.jumpToLandmark}
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'reviews' && (
+          <section className="travel-workspace__panel travel-reviews-panel">
+            <div className="travel-reviews-grid">
+              {landmarks.map((landmark) => {
+                const localeReviews = reviewsCopy.landmarks[landmark.id] ?? [];
+                return (
+                  <article key={landmark.id} className="travel-reviews-block">
+                    <div className="travel-reviews-block__head">
+                      <h3>{landmark.name}</h3>
+                      <button className="travel-btn travel-btn--ghost travel-btn--compact" type="button" onClick={() => onOpenDrive(landmark.id)}>
+                        {copy.hero.previewIn3D}
+                      </button>
+                    </div>
+                    <div className="travel-reviews-block__list">
+                      {localeReviews.map((item) => (
+                        <article key={`${landmark.id}-${item.author}-${item.score}`} className="travel-review-card">
+                          <div className="travel-review-card__meta">
+                            <span>{item.author}</span>
+                            <span>{item.score}</span>
+                          </div>
+                          <p>{item.comment}</p>
+                          <small>{item.source}</small>
+                        </article>
+                      ))}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </section>
 
       <section className="travel-journal">

@@ -27,7 +27,7 @@ export const travelGuide = {
     },
     journalIntro: {
       eyebrow: 'Travel journal',
-      title: 'Designed like a destination microsite, not just a demo scene.',
+      title: 'A complete travel guide paired with interactive 3D exploration.',
     },
     stats: [
       { value: '02', label: 'Featured stops' },
@@ -94,7 +94,7 @@ export const travelGuide = {
     },
     journalIntro: {
       eyebrow: '旅行札记',
-      title: '它更像一页目的地专题，而不只是一个 3D Demo。',
+      title: '完整的旅行专题内容，配合可交互的 3D 空间探索。',
     },
     stats: [
       { value: '02', label: '精选停靠点' },
