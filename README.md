@@ -1,101 +1,82 @@
 # Web3D Italy Drive
 
-`Web3D Italy Drive` 是一个 **旅游专题首页 + 3D 沉浸式路线导览模块** 的混合项目。
-用户先在首页浏览意大利地标、路线、坐标与旅行内容，再进入 3D `Drive Explorer`，沿着样条路线进行导览、聚焦地标、查看评论侧栏与模型预览。
+Web3D Italy Drive 是一个将旅游图文导览、路线规划和 3D 地图驾驶体验结合起来的网页应用原型。
 
----
+当前阶段以 mock 数据为主：前端可以浏览意大利景点、查看模拟评价、规划路线，并进入 3D Drive Explorer 沿路线沉浸式导览。后续可以逐步替换为真实景点、真实道路、真实评价和交通数据。
 
-## 项目现状概览
+## 当前目标
 
-### 首页层
-当前首页已经不是单一 landing page，而是一个可切换中英语言的旅行专题页面，包含：
-- Hero 主视觉与语言切换
-- stylized Italy map
-- 地标坐标卡片
-- route / itinerary 内容区
-- travel journal 内容区
-- 进入 3D explorer 的 CTA
+项目目标是做一个 Web3D 旅游导览系统：
 
-### 3D Explorer 层
-3D 模块通过覆盖层方式打开，保留沉浸式交互体验：
-- 地图 / 跟随 / 聚焦三种视角
-- 基于 `THREE.CatmullRomCurve3` 的车辆导览
-- `W / S` 手动推进、`R` 自动巡航
-- `F` 地标交互与左右侧沉浸信息栏
-- 模型预览弹层
-- 可从 3D 返回首页
+- 通过名称、地点、距离等方式检索景点。
+- 展示景点评分、评价、旅行说明和 3D 模型。
+- 支持路线规划，当前使用 mock route，后续可接入 OSM / OSRM / PostGIS / 大模型推荐。
+- 将路线转成沉浸式 3D 导览，小车沿道路行驶，结合地形、道路语义和视觉特效表现旅途体验。
 
-### 后端层
-后端当前主要提供评论读取与后续空间查询准备：
-- FastAPI 评论接口
-- PostgreSQL / `psycopg` 读取
-- PostGIS 查询模板
-- Playwright 评论抓取脚本
-
----
-
-## 当前能力
+## 当前实现
 
 ### 首页
-- 中英双语切换
-- 中文排版与英文风格统一的 serif 方向
-- 旅游站风格地图与坐标展示
-- 从首页打开 3D explorer
-- 点击地标直接进入对应 3D 导览入口
 
-### 3D Explorer
-- React 18 + R3F 场景容器
-- 地形表面、海洋底色、道路条带
-- 基于 mock route points 的平滑样条路径运动
-- 地标模型加载与聚焦
-- 左右侧沉浸式信息栏
-- 模型预览弹层
-- 评论内容按当前语言显示为全英 / 全中
+- 旅游网站风格首页，不再是单一 landing page。
+- 顶部页面切换：目的地、路线规划、评价、3D 导览。
+- 中英文切换。
+- 目的地卡片、路线地图、路线语义标签、模拟评价展示。
+- 加入动态网格背景、扫描光、路线脉冲、卡片 hover 和流光效果。
+
+### 3D Drive Explorer
+
+- React Three Fiber 场景。
+- DEM 地形加载与低多边形风格地图渲染。
+- mock 真实感路线中心线。
+- 语义路线体验层：城市道路、高速、景观路、山路、桥、隧道、环路等。
+- 车辆沿 `THREE.CatmullRomCurve3` 运动，不使用真实物理车。
+- 车辆速度、车身晃动、转向倾斜、HUD 信息由当前语义路段驱动。
+- 道路走廊削坡，减少路线穿山问题。
+- 地标聚焦、侧边信息面板、模型预览弹层。
 
 ### 后端
-- `FastAPI` API
-- 数据库连接壳与 landmark review 查询
-- PostGIS nearby reviews 查询模板
-- Playwright 抓取脚本
 
----
+- FastAPI mock API。
+- 提供 mock landmarks、reviews、nearby reviews、current route。
+- 保留 PostgreSQL / PostGIS / Playwright 相关文件，作为后续真实数据接入基础。
 
 ## 技术栈
 
-### 前端核心
-- **Vite 8**
-- **React 18**
-- **Three.js**
-- **@react-three/fiber**
-- **@react-three/drei**
-- **Zustand**
-- **@tanstack/react-query**
+### 前端
 
-### 3D / 可视化相关
-- **three-stdlib**
-- **3d-tiles-renderer**
-- 自定义 DEM 高度图读取与 terrain sampling
-- `THREE.CatmullRomCurve3` 路径导览动画
+- Vite 8
+- React 18
+- Three.js
+- @react-three/fiber
+- @react-three/drei
+- Zustand
+- @tanstack/react-query
+- Tailwind CSS 4
+- 自定义 CSS 模块
 
-### 样式与 UI
-- **Tailwind CSS 4**（当前仅作为基础能力接入）
-- 以自定义 CSS 模块为主：`base / home / hud / panels / intro / decorations`
-- Google Fonts：
-  - `Bodoni Moda`
-  - `Manrope`
-  - `Noto Serif SC`
+### 3D / 地图
+
+- Three.js
+- three-stdlib
+- 3d-tiles-renderer
+- DEM terrain sampling
+- `THREE.CatmullRomCurve3` 路径动画
+- 语义路线体验层
+- 道路走廊削坡
 
 ### 后端
-- **FastAPI**
-- **Uvicorn**
-- **psycopg[binary]**
-- **Playwright**
+
+- FastAPI
+- Uvicorn
+- psycopg[binary]
+- Playwright
 
 ### 当前说明
-- `@react-three/rapier` 仍然保留在 `package.json` 中，但**当前运行主链已不再使用**。
-- 当前车辆系统是 **kinematic curve drive**，不是物理车方案。
 
----
+- 当前数据默认使用本地 mock 数据。
+- `@react-three/rapier` 仍在依赖中，但当前主链路没有使用物理车辆。
+- 当前车辆方案是 kinematic curve drive，不是真实物理车。
+- 未配置 `VITE_API_BASE_URL` 时，前端评价优先使用本地 mock 数据。
 
 ## 目录结构
 
@@ -140,21 +121,13 @@ web3d-project/
 │  ├─ data/
 │  │  ├─ landmarks.js
 │  │  ├─ reviewLocales.js
+│  │  ├─ routes.js
 │  │  ├─ terrain.js
 │  │  └─ travelGuide.js
 │  ├─ hooks/
 │  │  ├─ useKeyboardDrive.js
 │  │  ├─ useLandmarkReviews.js
 │  │  └─ useTerrainData.js
-│  ├─ legacy/
-│  │  ├─ camera/
-│  │  ├─ car/
-│  │  ├─ core/
-│  │  ├─ landmarks/
-│  │  ├─ ui/
-│  │  ├─ CarRigPlaceholder.jsx
-│  │  ├─ LandmarksCloud.jsx
-│  │  └─ main.js
 │  ├─ state/
 │  │  └─ useAppStore.js
 │  ├─ styles/
@@ -171,15 +144,60 @@ web3d-project/
 ├─ index.html
 ├─ package.json
 ├─ postcss.config.js
-└─ vite.config.js
+├─ vite.config.js
+└─ README.md
 ```
 
----
+## 关键模块
+
+### `src/data/routes.js`
+
+路线数据层。
+
+- `currentRoute`：mock 路线点，结构模拟未来真实道路数据。
+- `roadCurve`：路线中心线曲线。
+- `routeSegments`：语义路线体验层。
+- `getRouteSegmentAtProgress`：根据车辆进度获取当前路段。
+- `getRouteProfile`：返回速度、粗糙度、转向倾斜、路面标签等体验参数。
+
+### `src/data/terrain.js`
+
+地形数据层。
+
+- 加载 DEM tile。
+- 生成 terrain geometry 和 stylized texture。
+- 提供地形采样函数。
+- 生成语义化道路高度曲线。
+- 在地形网格生成时执行道路走廊削坡，减少道路穿山。
+
+### `src/components/vehicle/VehicleController.jsx`
+
+车辆控制层。
+
+- 沿 `roadCurve` 推进车辆。
+- 支持手动驾驶和自动巡航。
+- 使用当前语义路段控制速度、车身晃动和转向反馈。
+- 更新 HUD 所需的 `routeContext`。
+
+### `src/components/scene/RoadRibbon.jsx`
+
+道路渲染层。
+
+- 按语义路段拆分道路 mesh。
+- 根据交通状态和路段类型着色。
+- 使用语义道路高度曲线保持道路连续和平滑。
+
+### `src/components/home/HomePage.jsx`
+
+首页体验层。
+
+- 多页面切换。
+- 目的地、路线规划、评价、3D 导览入口。
+- 读取 `routeSegments` 展示路线体验信息。
 
 ## 启动方式
 
-### 1) 前端
-在项目根目录运行：
+### 前端
 
 ```bash
 npm install
@@ -192,8 +210,7 @@ npm run dev
 http://127.0.0.1:5173
 ```
 
-### 2) 后端
-在新终端中运行：
+### 后端
 
 ```bash
 cd backend
@@ -201,99 +218,61 @@ pip install -r requirements.txt
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-### 3) Playwright 抓取脚本（可选）
-
-```bash
-cd backend
-pip install -r requirements.txt
-playwright install
-python playwright_reviews.py
-```
-
----
-
-## 当前交互
+## 交互说明
 
 ### 首页
+
 - 切换 `EN / 中文`
-- 点击 `Open 3D Drive / 进入 3D 导览`
-- 点击地图 pin 或地标卡片，直接打开 3D explorer
+- 切换目的地、路线规划、评价、3D 导览页面
+- 点击目的地卡片进入对应 3D 导览
+- 点击主按钮进入 3D Drive Explorer
 
 ### 3D Explorer
-- `Enter`：从开屏进入场景
-- `W / S`：沿样条路线前进 / 后退
-- `Shift`：加速推进
+
+- `Enter`：进入 3D 场景
+- `W / S`：沿路线前进 / 后退
+- `Shift`：加速
+- `R`：自动巡航
 - `V`：地图 / 跟随视角切换
-- `R`：自动巡航开关
-- `F`：打开附近地标的侧边导览
-- `Esc`：关闭模型预览 / 地标聚焦 / 返回路线
+- `F`：打开附近地标侧边导览
+- `Esc`：关闭模型预览或地标聚焦
 - 鼠标拖拽：模型预览中旋转模型
-- 滚轮：模型预览中缩放
-- `Back to Travel Guide`：返回首页
-
-### 交互锁定说明
-当聚焦侧栏或模型预览打开时：
-- 后方 3D pointer interaction 会被锁住
-- 自动巡航会被关闭
-- 场景不再继续接收驾驶类交互
-
----
+- 鼠标滚轮：模型预览中缩放模型
 
 ## 环境变量
 
-如果需要接入真实 `3D Tiles` 地址，可在前端环境中提供：
+默认不需要环境变量即可运行。
+
+如需请求后端 mock API：
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+如需启用 Google 3D Tiles 或其他 3D Tiles 数据源：
 
 ```bash
 VITE_GOOGLE_3DTILES_URL=your_tileset_url
 ```
 
-未提供时，项目仍可继续使用当前 terrain + mock route 方案运行。
-
----
-
-## 开发说明
-
-### 当前运行入口
+后端 CORS 默认允许：
 
 ```text
-src/main.jsx -> src/App.jsx
+http://127.0.0.1:5173
+http://localhost:5173
 ```
 
-其中：
-- `HomePage.jsx`：旅游专题首页
-- `AppShell.jsx`：3D explorer 外壳与开屏
-- `VehicleController.jsx`：当前曲线路径导览逻辑
-- `UIOverlay.jsx`：HUD、侧栏、模型预览与交互层
+可通过环境变量覆盖：
 
-### 关于 `src/legacy/`
-`src/legacy/` 保存旧版原生 Three.js / 迁移过程代码，当前默认运行不会进入这些文件。
-保留它们的目的是：
-- 参考旧实现
-- 回溯交互逻辑
-- 为后续迁移或比较提供资料
+```bash
+CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+```
 
-### 当前文件整理说明
-本次整理做了最小且明确的清理：
-- 删除了未使用的 `src/hooks/useLandmarksQuery.js`
-- 保留 `src/legacy/` 作为历史参考
-- README 中的技术栈、目录结构、交互说明已和当前实现对齐
+## 后续方向
 
----
-
-## 当前已知技术现状
-
-- 当前车辆不是物理车，而是 **CatmullRomCurve3 + progress** 的 kinematic 导览方案
-- terrain 已做高度平滑与海洋底色处理
-- road ribbon 已做更细、更贴地的几何生成
-- 语言系统当前已接入：首页与 3D HUD 共用同一语言状态
-- 评论面板当前通过前端本地化数据保证全英 / 全中显示
-
----
-
-## 后续建议
-
-- 将 landmark `name / description` 也改成严格双语字段，彻底消除混合文本
-- 把语言系统继续扩展到模型预览标题与更多 3D 文案
-- 继续收敛 terrain 的地图化视觉表现
-- 若后续重新启用物理车，再评估是否真正移除 `@react-three/rapier`
-- 接入真实 PostgreSQL / PostGIS 数据流
+- 用 OSM / OSRM / GraphHopper / Valhalla 替换 mock route geometry。
+- 用 PostGIS 管理景点、路线、空间查询和附近搜索。
+- 接入真实评论数据爬取、清洗和归一化。
+- 扩展路线语义层，让大模型或规则系统生成更自然的旅行路线。
+- 继续优化隧道、桥梁、山路的 3D 表现。
+- 评估是否移除未使用的 `@react-three/rapier` 依赖。

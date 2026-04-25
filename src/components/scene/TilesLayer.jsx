@@ -24,7 +24,7 @@ export function TilesLayer() {
       {!tilesLoaded && !tilesError && (
         <Html fullscreen>
           <div style={statusStyleWrap}>
-            <div style={statusStyle}>Loading streamed 3D tiles…</div>
+            <div style={statusStyle}>Loading streamed 3D tiles...</div>
           </div>
         </Html>
       )}

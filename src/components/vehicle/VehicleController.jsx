@@ -2,16 +2,18 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useKeyboardDrive } from '../../hooks/useKeyboardDrive.js';
+import { useTerrainData } from '../../hooks/useTerrainData.js';
 import { useAppStore } from '../../state/useAppStore.js';
-import { landmarks, mockRoutePoints } from '../../data/landmarks.js';
-import { worldPosToHeight } from '../../data/terrain.js';
+import { landmarks } from '../../data/landmarks.js';
+import { getRoutePointAtProgress, getRouteProfile, getRouteSegmentAtProgress, roadCurve } from '../../data/routes.js';
+import { buildSemanticRouteHeightProfile, worldPosToRouteHeight } from '../../data/terrain.js';
 
 const START_PROGRESS = 0;
 const BASE_CLEARANCE = 0.62;
-const MANUAL_SPEED = 0.2;
-const AUTO_SPEED = 0.12;
-const ACCEL = 1.2;
-const DECEL = 1.8;
+const MANUAL_SPEED = 0.105;
+const AUTO_SPEED = 0.055;
+const ACCEL = 0.72;
+const DECEL = 1.18;
 const wheelOffsets = [
   [-0.82, 0.2, 1.22],
   [0.82, 0.2, 1.22],
@@ -31,6 +33,7 @@ const landmarkPoint = new THREE.Vector3();
 
 export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }) {
   const controls = useKeyboardDrive();
+  const terrain = useTerrainData();
   const setCameraMode = useAppStore((state) => state.setCameraMode);
   const setNearbyLandmarkId = useAppStore((state) => state.setNearbyLandmarkId);
   const setVehicleState = useAppStore((state) => state.setVehicleState);
@@ -45,27 +48,31 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
   const initializedTargetRef = useRef(null);
 
   const routeCurve = useMemo(() => {
-    const terrainAwarePoints = mockRoutePoints.map(([x, y, z]) => new THREE.Vector3(
-      x,
-      worldPosToHeight(x, z) + BASE_CLEARANCE + y,
-      z,
+    const sampledPoints = roadCurve.getPoints(160);
+    const roadProfile = buildSemanticRouteHeightProfile(sampledPoints, getRouteSegmentAtProgress, { clearance: 0.18 });
+
+    const terrainAwarePoints = sampledPoints.map((point, index) => new THREE.Vector3(
+      point.x,
+      roadProfile[index] + BASE_CLEARANCE,
+      point.z,
     ));
-    return new THREE.CatmullRomCurve3(terrainAwarePoints, false, 'catmullrom', 0.2);
-  }, []);
+    return new THREE.CatmullRomCurve3(terrainAwarePoints, false, 'centripetal', 0.08);
+  }, [terrain.version]);
 
   useFrame((_, delta) => {
     const vehicle = bodyRef.current;
     if (!vehicle) return;
 
-    if (initializedTargetRef.current !== initialLandmarkId) {
+    const routeInitKey = `${initialLandmarkId ?? 'start'}-${terrain.version}`;
+    if (initializedTargetRef.current !== routeInitKey) {
       progressRef.current = getInitialProgress(initialLandmarkId, routeCurve);
       speedRef.current = 0;
       targetSpeedRef.current = 0;
       steerRef.current = 0;
-      initializedTargetRef.current = initialLandmarkId;
+      initializedTargetRef.current = routeInitKey;
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0);
       setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
-      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0 });
+      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current) });
     }
 
     if (!drivingEnabled) {
@@ -75,12 +82,14 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       steerRef.current = 0;
       setAutoDrive(false);
       setNearbyLandmarkId(initialLandmarkId ?? null);
-      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0 });
+      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current) });
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0);
       return;
     }
 
     const routeLocked = focusPanelOpen || modelViewerOpen;
+    const routeContext = getRouteContext(progressRef.current);
+    const routeSpeedFactor = THREE.MathUtils.clamp(routeContext.profile.speedFactor, 0.24, 1.24);
     const input = controls.current;
     const hasManualInput = input.forward || input.backward;
     if (routeLocked || (hasManualInput && autoDrive)) {
@@ -90,11 +99,11 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     if (routeLocked) {
       targetSpeedRef.current = 0;
     } else if (autoDrive) {
-      targetSpeedRef.current = AUTO_SPEED;
+      targetSpeedRef.current = AUTO_SPEED * routeSpeedFactor;
     } else {
       let inputSpeed = 0;
-      if (input.forward) inputSpeed += MANUAL_SPEED * (input.boost ? 1.35 : 1);
-      if (input.backward) inputSpeed -= MANUAL_SPEED * 0.82;
+      if (input.forward) inputSpeed += MANUAL_SPEED * routeSpeedFactor * (input.boost ? 1.18 : 1);
+      if (input.backward) inputSpeed -= MANUAL_SPEED * routeSpeedFactor * 0.72;
       targetSpeedRef.current = inputSpeed;
     }
 
@@ -113,12 +122,23 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     setVehicleState({
       vehicleSpeed: Math.abs(speedRef.current) * 100,
       vehicleSteer: steerRef.current,
+      routeContext,
     });
 
     if (speedRef.current !== 0 && !routeLocked) setCameraMode('follow');
   });
 
   return null;
+}
+
+function getRouteContext(progress) {
+  const point = getRoutePointAtProgress(progress);
+  const segment = getRouteSegmentAtProgress(progress);
+  return {
+    point,
+    segment,
+    profile: getRouteProfile(segment),
+  };
 }
 
 function getInitialProgress(initialLandmarkId, curve) {
@@ -128,7 +148,7 @@ function getInitialProgress(initialLandmarkId, curve) {
 
   landmarkPoint.set(
     landmark.position[0],
-    worldPosToHeight(landmark.position[0], landmark.position[2]) + BASE_CLEARANCE,
+    worldPosToRouteHeight(landmark.position[0], landmark.position[2]) + BASE_CLEARANCE,
     landmark.position[2],
   );
 
@@ -152,19 +172,21 @@ function applyCurvePose(vehicle, curve, progress, speed) {
   curve.getTangentAt(progress, tangentPoint);
   curve.getTangentAt(Math.min((progress + 0.012) % 1, 0.9999), aheadTangent);
 
+  flatTangent.copy(tangentPoint).setY(0).normalize();
+  if (flatTangent.lengthSq() === 0) return 0;
+
   if (speed >= 0) {
-    lookTarget.copy(currentPoint).add(tangentPoint);
+    lookTarget.copy(currentPoint).add(flatTangent);
   } else {
-    reverseTangent.copy(tangentPoint).multiplyScalar(-1);
+    reverseTangent.copy(flatTangent).multiplyScalar(-1);
     lookTarget.copy(currentPoint).add(reverseTangent);
   }
 
   vehicle.position.copy(currentPoint);
   vehicle.lookAt(lookTarget);
 
-  flatTangent.copy(tangentPoint).setY(0).normalize();
   flatAheadTangent.copy(aheadTangent).setY(0).normalize();
-  if (flatTangent.lengthSq() === 0 || flatAheadTangent.lengthSq() === 0) return 0;
+  if (flatAheadTangent.lengthSq() === 0) return 0;
 
   const turnAngle = flatTangent.angleTo(flatAheadTangent);
   const turnSign = Math.sign(flatTangent.clone().cross(flatAheadTangent).dot(upAxis)) || 0;
@@ -194,19 +216,26 @@ export function VehicleChassis({ bodyRef }) {
   const rearRightRef = useRef();
   const vehicleSpeed = useAppStore((state) => state.vehicleSpeed);
   const vehicleSteer = useAppStore((state) => state.vehicleSteer);
+  const routeContext = useAppStore((state) => state.routeContext);
   const autoDrive = useAppStore((state) => state.autoDrive);
   const wheelSpin = useRef(0);
 
   useFrame((_, delta) => {
     wheelSpin.current += vehicleSpeed * delta * 0.08;
-    const speedRatio = Math.min(vehicleSpeed / (MANUAL_SPEED * 100 * 1.35), 1);
-    const bodyLean = -vehicleSteer * Math.min(0.22 + speedRatio * 0.14, 0.34);
+    const speedRatio = Math.min(vehicleSpeed / (MANUAL_SPEED * 100 * 1.18), 1);
+    const roughness = routeContext?.profile?.roughness ?? 0.08;
+    const turnLean = routeContext?.profile?.turnLean ?? 1;
+    const bodyLean = -vehicleSteer * turnLean * Math.min(0.22 + speedRatio * 0.14, 0.34);
     const bodyPitch = -speedRatio * 0.03 + (autoDrive ? -0.005 : 0);
 
     if (rootRef.current) {
       rootRef.current.rotation.z += (bodyLean - rootRef.current.rotation.z) * 0.12;
       rootRef.current.rotation.x += (bodyPitch - rootRef.current.rotation.x) * 0.08;
-      rootRef.current.position.y += ((Math.sin(wheelSpin.current * 0.32) * Math.min(speedRatio * 0.035, 0.018)) - rootRef.current.position.y) * 0.08;
+      const roadBuzz = (
+        Math.sin(wheelSpin.current * 0.44) * 0.018
+        + Math.sin(wheelSpin.current * 0.91 + 1.7) * 0.009
+      ) * roughness * Math.min(speedRatio + 0.2, 1);
+      rootRef.current.position.y += (roadBuzz - rootRef.current.position.y) * 0.1;
     }
 
     for (const wheel of [rearLeftRef.current, rearRightRef.current]) {

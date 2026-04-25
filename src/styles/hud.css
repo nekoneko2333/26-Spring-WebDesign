@@ -64,6 +64,73 @@
   color: var(--c-ink-dim); text-transform: uppercase;
 }
 
+.hud-road {
+  position: fixed;
+  right: 112px;
+  bottom: 26px;
+  z-index: 20;
+  min-width: 210px;
+  max-width: min(310px, calc(100vw - 150px));
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(22, 42, 68, 0.14);
+  background: rgba(255,255,255,0.48);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 14px 34px rgba(56, 84, 118, 0.14);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+.hud-road.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.hud-road::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 4px;
+  border-radius: 999px;
+  background: #75b88a;
+}
+
+.hud-road--slow::before { background: #d8a84f; }
+.hud-road--traffic_jam::before { background: #b75a50; }
+
+.hud-road div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: baseline;
+  margin-bottom: 7px;
+}
+
+.hud-road span {
+  color: var(--c-ink);
+  font: 700 11px/1 var(--font-ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.hud-road strong {
+  color: var(--c-gold);
+  font: 800 13px/1 var(--font-ui);
+  white-space: nowrap;
+}
+
+.hud-road p {
+  color: var(--c-ink-mid);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
 /* ============================================================
    HUD - MODE LABEL
    ============================================================ */
@@ -156,4 +223,13 @@ body:not(.ui-awake) .hud-mode {
 body.ui-awake .hud-title,
 body.ui-awake .hud-mode {
   transition: opacity 0.5s ease;
+}
+
+@media (max-width: 780px) {
+  .hud-road {
+    left: 14px;
+    right: auto;
+    bottom: 104px;
+    max-width: calc(100vw - 28px);
+  }
 }

@@ -11,6 +11,7 @@ export function UIOverlay({ isStarted }) {
     cameraMode,
     nearbyLandmarkId,
     selectedLandmarkId,
+    routeContext,
     focusPanelOpen,
     modelViewerOpen,
     autoDrive,
@@ -27,15 +28,18 @@ export function UIOverlay({ isStarted }) {
   const nearbyLandmark = landmarks.find((item) => item.id === nearbyLandmarkId);
   const selectedLandmark = landmarks.find((item) => item.id === selectedLandmarkId);
   const displayLandmark = selectedLandmark ?? nearbyLandmark;
-  const { data: reviewPayload, isLoading } = useLandmarkReviews(selectedLandmarkId);
+  const { data: reviewPayload, isLoading } = useLandmarkReviews(selectedLandmarkId, language);
   const locale = reviewLocales[language];
   const localizedReviews = useMemo(() => {
     if (!selectedLandmarkId) return [];
     return locale.landmarks[selectedLandmarkId] ?? [];
   }, [language, locale.landmarks, selectedLandmarkId]);
-  const comments = localizedReviews.length > 0 ? localizedReviews : [];
+  const comments = localizedReviews.length > 0 ? localizedReviews : reviewPayload?.reviews ?? [];
   const scoreLabel = localizedReviews[0]?.score ?? reviewPayload?.average_score ?? '0';
   const routeLocked = focusPanelOpen || modelViewerOpen;
+  const routePoint = routeContext?.point;
+  const routeSegment = routeContext?.segment;
+  const routeProfile = routeContext?.profile;
 
   useEffect(() => {
     if (!isStarted) return undefined;
@@ -133,6 +137,21 @@ export function UIOverlay({ isStarted }) {
         <span className={`hud-speed__val ${autoDrive ? 'is-boosting' : ''}`}>{scoreLabel}</span>
         <span className="hud-speed__unit">{locale.ui.score}</span>
       </div>
+
+      {routeSegment && (
+        <div className={`hud-road is-visible hud-road--${routeSegment.trafficState}`}>
+          <div>
+            <span>{routeProfile?.roadLabel ?? routeSegment.type}</span>
+            <strong>{routeSegment.speedLimit} km/h</strong>
+          </div>
+          <p>
+            {routeProfile?.trafficLabel ?? routeSegment.trafficState}
+            {routeProfile?.surfaceLabel ? ` / ${routeProfile.surfaceLabel}` : ''}
+            {routeSegment.description ? ` / ${routeSegment.description}` : ''}
+            {routePoint?.landmarkId ? ' / waypoint nearby' : ''}
+          </p>
+        </div>
+      )}
 
       <div className={`interact-prompt ${nearbyLandmarkId && cameraMode !== 'map' && !routeLocked ? 'is-visible' : ''}`} aria-live="polite">
         <span className="interact-prompt__key">F</span>

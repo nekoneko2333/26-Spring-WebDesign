@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { WORLD_SIZE_UNITS } from './landmarks.js';
+import { getRouteSegmentAtProgress, roadCurve } from './routes.js';
 
 const MAP_BOUNDS = {
   lonMin: 6.6,
@@ -159,16 +160,56 @@ function buildGeometry() {
   geometry.rotateX(-Math.PI / 2);
   const positions = geometry.attributes.position;
   const width = segments + 1;
+  const routeCorridor = buildRouteCorridorProfile();
   for (let i = 0; i < positions.count; i += 1) {
     const col = i % width;
     const row = Math.floor(i / width);
     const u = col / segments;
     const v = row / segments;
-    positions.setY(i, sampleHeight(u, v));
+    const x = (u - 0.5) * MAP_BOUNDS.worldSize;
+    const z = (v - 0.5) * MAP_BOUNDS.worldSize;
+    positions.setY(i, applyRouteCorridorCut(x, z, sampleHeight(u, v), routeCorridor));
   }
   positions.needsUpdate = true;
   geometry.computeVertexNormals();
   return geometry;
+}
+
+function buildRouteCorridorProfile() {
+  const samples = roadCurve.getPoints(220);
+  const heights = buildSemanticRouteHeightProfile(samples, getRouteSegmentAtProgress, { clearance: 0.12 });
+  return samples.map((point, index) => ({
+    x: point.x,
+    z: point.z,
+    height: heights[index],
+    segment: getRouteSegmentAtProgress(index / Math.max(samples.length - 1, 1)),
+  }));
+}
+
+function applyRouteCorridorCut(worldX, worldZ, terrainHeight, corridor) {
+  let nearest = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const sample of corridor) {
+    const distance = Math.hypot(worldX - sample.x, worldZ - sample.z);
+    if (distance < nearestDistance) {
+      nearest = sample;
+      nearestDistance = distance;
+    }
+  }
+
+  if (!nearest) return terrainHeight;
+
+  const isTunnel = nearest.segment?.type === 'tunnel';
+  const innerWidth = isTunnel ? 1.45 : 2.25;
+  const outerWidth = isTunnel ? 3.2 : 5.2;
+  if (nearestDistance >= outerWidth) return terrainHeight;
+
+  const cutTarget = nearest.height - (isTunnel ? 0.2 : 0.16);
+  if (terrainHeight <= cutTarget) return terrainHeight;
+
+  const edgeBlend = THREE.MathUtils.smoothstep(nearestDistance, outerWidth, innerWidth);
+  return THREE.MathUtils.lerp(terrainHeight, cutTarget, edgeBlend);
 }
 
 export function loadTerrainData() {
@@ -242,4 +283,154 @@ export function worldPosToHeight(worldX, worldZ) {
   const u = THREE.MathUtils.clamp(worldX / MAP_BOUNDS.worldSize + 0.5, 0, 1);
   const v = THREE.MathUtils.clamp(worldZ / MAP_BOUNDS.worldSize + 0.5, 0, 1);
   return sampleHeight(u, v);
+}
+
+export function worldPosToRouteHeight(worldX, worldZ, footprint = 4.5) {
+  const offsets = [
+    [0, 0, 4],
+    [footprint, 0, 2],
+    [-footprint, 0, 2],
+    [0, footprint, 2],
+    [0, -footprint, 2],
+    [footprint * 0.7, footprint * 0.7, 1],
+    [-footprint * 0.7, footprint * 0.7, 1],
+    [footprint * 0.7, -footprint * 0.7, 1],
+    [-footprint * 0.7, -footprint * 0.7, 1],
+  ];
+
+  let total = 0;
+  let weightTotal = 0;
+  for (const [offsetX, offsetZ, weight] of offsets) {
+    total += worldPosToHeight(worldX + offsetX, worldZ + offsetZ) * weight;
+    weightTotal += weight;
+  }
+  return total / weightTotal;
+}
+
+export function worldPosToRouteSafeHeight(worldX, worldZ, footprint = 4.5) {
+  const offsets = [
+    [0, 0],
+    [footprint, 0],
+    [-footprint, 0],
+    [0, footprint],
+    [0, -footprint],
+    [footprint * 0.7, footprint * 0.7],
+    [-footprint * 0.7, footprint * 0.7],
+    [footprint * 0.7, -footprint * 0.7],
+    [-footprint * 0.7, -footprint * 0.7],
+  ];
+
+  let maxHeight = worldPosToHeight(worldX, worldZ);
+  for (const [offsetX, offsetZ] of offsets) {
+    maxHeight = Math.max(maxHeight, worldPosToHeight(worldX + offsetX, worldZ + offsetZ));
+  }
+
+  return Math.max(worldPosToRouteHeight(worldX, worldZ, footprint), maxHeight);
+}
+
+export function buildRouteHeightProfile(points, {
+  footprint = 4.5,
+  clearance = 0.28,
+  maxGrade = 0.018,
+  smoothPasses = 3,
+} = {}) {
+  if (points.length === 0) return [];
+
+  const safeHeights = points.map((point) => worldPosToRouteSafeHeight(point.x, point.z, footprint) + clearance);
+  let profile = smoothHeightSamples(safeHeights, 10, smoothPasses)
+    .map((height, index) => Math.max(height, safeHeights[index]));
+
+  // Build a road deck profile instead of a terrain-following line. Peaks become
+  // long ramps while smaller terrain noise is absorbed by embankment/viaduct.
+  for (let iteration = 0; iteration < 4; iteration += 1) {
+    for (let index = profile.length - 2; index >= 0; index -= 1) {
+      const maxDelta = horizontalDistance(points[index], points[index + 1]) * maxGrade;
+      profile[index] = Math.max(profile[index], profile[index + 1] - maxDelta, safeHeights[index]);
+    }
+
+    for (let index = 1; index < profile.length; index += 1) {
+      const maxDelta = horizontalDistance(points[index - 1], points[index]) * maxGrade;
+      profile[index] = Math.max(profile[index], profile[index - 1] - maxDelta, safeHeights[index]);
+    }
+
+    profile = smoothHeightSamples(profile, 8, 1)
+      .map((height, index) => Math.max(height, safeHeights[index]));
+  }
+
+  return profile;
+}
+
+export function buildSemanticRouteHeightProfile(points, getSegmentAtProgress, {
+  footprint = 5.5,
+  clearance = 0.16,
+} = {}) {
+  if (points.length === 0) return [];
+
+  const terrainTrend = smoothHeightSamples(
+    points.map((point) => worldPosToRouteHeight(point.x, point.z, footprint)),
+    22,
+    4,
+  );
+
+  const phaseByStyle = {
+    flat: 0.2,
+    rolling: 1.4,
+    mountainPass: 2.8,
+    elevated: 0.6,
+    tunnel: 3.3,
+  };
+
+  const heights = points.map((point, index) => {
+    const progress = points.length <= 1 ? 0 : index / (points.length - 1);
+    const segment = getSegmentAtProgress(progress);
+    const style = segment?.profile?.elevationStyle ?? 'rolling';
+    const segmentStart = segment?.startProgress ?? 0;
+    const segmentEnd = segment?.endProgress ?? 1;
+    const segmentRange = Math.max(segmentEnd - segmentStart, 0.001);
+    const localProgress = THREE.MathUtils.clamp((progress - segmentStart) / segmentRange, 0, 1);
+    const ramp = Math.sin(localProgress * Math.PI);
+    const longWave = Math.sin((progress * Math.PI * 5.5) + (phaseByStyle[style] ?? 0));
+
+    if (style === 'elevated') {
+      return terrainTrend[index] + clearance + 0.72 * ramp;
+    }
+
+    if (style === 'mountainPass') {
+      return terrainTrend[index] + clearance + 0.22 * ramp + longWave * 0.08;
+    }
+
+    if (style === 'tunnel') {
+      return terrainTrend[index] + clearance * 0.72 + longWave * 0.025;
+    }
+
+    if (style === 'flat') {
+      return terrainTrend[index] + clearance + longWave * 0.025;
+    }
+
+    return terrainTrend[index] + clearance + longWave * 0.09;
+  });
+
+  return smoothHeightSamples(heights, 6, 2);
+}
+
+function horizontalDistance(a, b) {
+  return Math.hypot(a.x - b.x, a.z - b.z);
+}
+
+function smoothHeightSamples(source, radius, passes) {
+  let heights = source;
+  for (let pass = 0; pass < passes; pass += 1) {
+    heights = heights.map((_, index) => {
+      let total = 0;
+      let weightTotal = 0;
+      for (let offset = -radius; offset <= radius; offset += 1) {
+        const sampleIndex = THREE.MathUtils.clamp(index + offset, 0, heights.length - 1);
+        const weight = radius + 1 - Math.abs(offset);
+        total += heights[sampleIndex] * weight;
+        weightTotal += weight;
+      }
+      return total / weightTotal;
+    });
+  }
+  return heights;
 }

@@ -1,15 +1,20 @@
 import math
-from fastapi import FastAPI, Query
+import os
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from db import get_connection, get_database_url, get_reviews_for_landmark
-from postgis_queries import POSTGIS_NEARBY_REVIEWS_SQL
+app = FastAPI(title='Web3D Mock Landmarks API', version='1.1.0')
 
-app = FastAPI(title='Web3D Landmarks API', version='1.0.0')
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv('CORS_ORIGINS', 'http://127.0.0.1:5173,http://localhost:5173').split(',')
+    if origin.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],
@@ -36,56 +41,149 @@ def _lnglat_to_world(lon, lat):
     return [round(x, 2), 0, round(z, 2)]
 
 
-_RAW = [
+def _distance_km(a_lon, a_lat, b_lon, b_lat):
+    radius = 6371.0
+    d_lat = math.radians(b_lat - a_lat)
+    d_lon = math.radians(b_lon - a_lon)
+    lat1 = math.radians(a_lat)
+    lat2 = math.radians(b_lat)
+    h = math.sin(d_lat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(d_lon / 2) ** 2
+    return radius * 2 * math.atan2(math.sqrt(h), math.sqrt(1 - h))
+
+
+_RAW_LANDMARKS = [
     {
         'id': 'colosseum',
-        'name': 'Colosseum · 罗马斗兽场',
-        'description': '古罗马时代最宏伟的圆形竞技场之一，是罗马文明象征。',
+        'name': 'Colosseum / 罗马斗兽场',
+        'description': '古罗马时期最具代表性的圆形竞技场之一，也是罗马城市记忆和帝国建筑尺度的象征。',
         'model_path': '/models/colosseum.glb',
         'lon': 12.4922,
         'lat': 41.8902,
     },
     {
         'id': 'pisa',
-        'name': 'Leaning Tower of Pisa · 比萨斜塔',
-        'description': '始建于 1173 年，以独特倾斜结构闻名世界。',
+        'name': 'Leaning Tower of Pisa / 比萨斜塔',
+        'description': '始建于 1173 年的中世纪钟楼，以独特的倾斜结构和广场空间闻名。',
         'model_path': '/models/leaning_tower_of_pisa.glb',
         'lon': 10.3963,
         'lat': 43.7230,
     },
 ]
 
+MOCK_ROUTE = {
+    'id': 'mock_italy_north_to_south',
+    'name': 'Milan to Pompeii mock heritage drive',
+    'source': 'mock',
+    'distance_km': 920,
+    'duration_hours': 10.8,
+    'notes': 'Schema prepared for OSM, DEM, PostGIS and traffic-aware routing data.',
+    'stops': ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'],
+    'points': [
+        {'id': 'milan_entry', 'lon': 9.13, 'lat': 45.49, 'road_type': 'urban', 'speed_limit': 50, 'traffic_state': 'slow', 'surface': 'asphalt', 'bridge': False, 'tunnel': False, 'layer': 0},
+        {'id': 'milan_duomo', 'lon': 9.1919, 'lat': 45.4642, 'landmark_id': 'milan_duomo', 'road_type': 'urban', 'speed_limit': 30, 'traffic_state': 'slow', 'surface': 'asphalt', 'bridge': False, 'tunnel': False, 'layer': 0},
+        {'id': 'venice_rialto', 'lon': 12.3359, 'lat': 45.438, 'landmark_id': 'venice_rialto', 'road_type': 'pedestrian_context', 'speed_limit': 20, 'traffic_state': 'slow', 'surface': 'stone', 'bridge': True, 'tunnel': False, 'layer': 1},
+        {'id': 'florence_duomo', 'lon': 11.2558, 'lat': 43.7731, 'landmark_id': 'florence_duomo', 'road_type': 'urban', 'speed_limit': 30, 'traffic_state': 'slow', 'surface': 'stone', 'bridge': False, 'tunnel': False, 'layer': 0},
+        {'id': 'pisa', 'lon': 10.3963, 'lat': 43.723, 'landmark_id': 'pisa', 'road_type': 'urban', 'speed_limit': 30, 'traffic_state': 'slow', 'surface': 'asphalt', 'bridge': False, 'tunnel': False, 'layer': 0},
+        {'id': 'colosseum', 'lon': 12.4922, 'lat': 41.8902, 'landmark_id': 'colosseum', 'road_type': 'urban', 'speed_limit': 30, 'traffic_state': 'slow', 'surface': 'stone', 'bridge': False, 'tunnel': False, 'layer': 0},
+        {'id': 'pompeii', 'lon': 14.487, 'lat': 40.748, 'landmark_id': 'pompeii', 'road_type': 'urban', 'speed_limit': 30, 'traffic_state': 'normal', 'surface': 'stone', 'bridge': False, 'tunnel': False, 'layer': 0},
+    ],
+}
+
 LANDMARKS = [
     {
-        **{k: v for k, v in item.items() if k not in ('lon', 'lat')},
+        **{key: value for key, value in item.items() if key not in ('lon', 'lat')},
         'coordinates': _lnglat_to_world(item['lon'], item['lat']),
         'lon': item['lon'],
         'lat': item['lat'],
+        'data_source': 'mock',
     }
-    for item in _RAW
+    for item in _RAW_LANDMARKS
 ]
 
+MOCK_REVIEWS = {
+    'en': {
+        'colosseum': [
+            {
+                'id': 'mock-colosseum-en-1',
+                'author': 'Marta H.',
+                'score': 4.9,
+                'comment': 'The arena reads beautifully from the outer ring. Even a short stop gives you a strong sense of imperial scale.',
+                'source': 'Mock editorial note',
+            },
+            {
+                'id': 'mock-colosseum-en-2',
+                'author': 'Jonas V.',
+                'score': 4.8,
+                'comment': 'Best approached slowly. The arches stack into a clear silhouette at golden hour.',
+                'source': 'Mock field review',
+            },
+        ],
+        'pisa': [
+            {
+                'id': 'mock-pisa-en-1',
+                'author': 'Elena R.',
+                'score': 4.7,
+                'comment': 'The square feels calmer than expected, and the tower works best when viewed with the surrounding lawn and cathedral axis.',
+                'source': 'Mock editorial note',
+            },
+            {
+                'id': 'mock-pisa-en-2',
+                'author': 'Marco T.',
+                'score': 4.6,
+                'comment': 'Compact, bright, and easy to read spatially. A good final stop for a short route study.',
+                'source': 'Mock field review',
+            },
+        ],
+    },
+    'zh': {
+        'colosseum': [
+            {
+                'id': 'mock-colosseum-zh-1',
+                'author': '玛尔塔',
+                'score': 4.9,
+                'comment': '从外围拱廊看过去最能感受到斗兽场的尺度感。即使只是短暂停留，也能迅速建立对古罗马空间秩序的印象。',
+                'source': '模拟专题笔记',
+            },
+            {
+                'id': 'mock-colosseum-zh-2',
+                'author': '约纳斯',
+                'score': 4.8,
+                'comment': '适合放慢速度接近。黄昏时分，层层叠起的拱券会形成很强的轮廓感。',
+                'source': '模拟现场观察',
+            },
+        ],
+        'pisa': [
+            {
+                'id': 'mock-pisa-zh-1',
+                'author': '埃琳娜',
+                'score': 4.7,
+                'comment': '广场比想象中更安静。如果把草坪、主教堂与斜塔一起看，空间关系会变得非常清晰。',
+                'source': '模拟专题笔记',
+            },
+            {
+                'id': 'mock-pisa-zh-2',
+                'author': '马可',
+                'score': 4.6,
+                'comment': '尺度紧凑、光线明亮，作为一条短路线的终点非常合适。',
+                'source': '模拟现场观察',
+            },
+        ],
+    },
+}
 
-@app.get('/api/health')
-def health():
-    return {'status': 'ok', 'database_configured': bool(get_database_url())}
+
+def _find_landmark(landmark_id):
+    return next((item for item in LANDMARKS if item['id'] == landmark_id), None)
 
 
-@app.get('/api/landmarks')
-def get_landmarks():
-    return LANDMARKS
-
-
-@app.get('/api/landmarks/{landmark_id}/reviews')
-def get_landmark_reviews(landmark_id: str):
-    landmark = next((item for item in LANDMARKS if item['id'] == landmark_id), None)
-    if not landmark:
-        return {'landmark_id': landmark_id, 'reviews': [], 'average_score': None, 'review_count': 0}
-
-    reviews = get_reviews_for_landmark(landmark_id)
-    average_score = round(sum(item['score'] for item in reviews if item['score'] is not None) / len(reviews), 2) if reviews else None
+def _review_payload(landmark, language):
+    reviews_by_language = MOCK_REVIEWS.get(language, MOCK_REVIEWS['en'])
+    reviews = reviews_by_language.get(landmark['id'], [])
+    scored_reviews = [item['score'] for item in reviews if item.get('score') is not None]
+    average_score = round(sum(scored_reviews) / len(scored_reviews), 2) if scored_reviews else None
     return {
-        'landmark_id': landmark_id,
+        'mode': 'mock',
+        'landmark_id': landmark['id'],
         'landmark_name': landmark['name'],
         'average_score': average_score,
         'review_count': len(reviews),
@@ -93,40 +191,68 @@ def get_landmark_reviews(landmark_id: str):
     }
 
 
+@app.get('/api/health')
+def health():
+    return {
+        'status': 'ok',
+        'mode': 'mock',
+        'database_configured': False,
+    }
+
+
+@app.get('/api/landmarks')
+def get_landmarks():
+    return {
+        'mode': 'mock',
+        'items': LANDMARKS,
+    }
+
+
+@app.get('/api/routes/current')
+def get_current_route():
+    return {
+        'mode': 'mock',
+        'route': MOCK_ROUTE,
+    }
+
+
+@app.get('/api/landmarks/{landmark_id}/reviews')
+def get_landmark_reviews(
+    landmark_id: str,
+    language: str = Query('en', pattern='^(en|zh)$'),
+):
+    landmark = _find_landmark(landmark_id)
+    if not landmark:
+        raise HTTPException(status_code=404, detail=f'Unknown landmark: {landmark_id}')
+
+    return _review_payload(landmark, language)
+
+
 @app.get('/api/reviews/nearby')
 def get_nearby_reviews(
     lon: float = Query(...),
     lat: float = Query(...),
     radius_km: float = Query(50, ge=1, le=500),
+    language: str = Query('en', pattern='^(en|zh)$'),
 ):
-    connection = get_connection()
-    if connection is None:
-        return {'items': [], 'mode': 'database_unavailable'}
+    items = []
+    for landmark in LANDMARKS:
+        distance = _distance_km(lon, lat, landmark['lon'], landmark['lat'])
+        if distance > radius_km:
+            continue
 
-    try:
-        with connection, connection.cursor() as cursor:
-            cursor.execute(
-                POSTGIS_NEARBY_REVIEWS_SQL,
-                {'lon': lon, 'lat': lat, 'radius_m': radius_km * 1000},
-            )
-            rows = cursor.fetchall()
-            items = [
-                {
-                    'landmark_id': row[0],
-                    'landmark_name': row[1],
-                    'distance_km': float(row[2]),
-                    'average_score': float(row[3]) if row[3] is not None else None,
-                    'review_count': int(row[4]),
-                    'source': 'postgis',
-                }
-                for row in rows
-            ]
-            return {'items': items, 'mode': 'postgis'}
-    except Exception as exc:
-        return {
-            'items': [],
-            'mode': 'postgis_error',
-            'warning': f'PostGIS query failed: {exc}',
-        }
-    finally:
-        connection.close()
+        review_payload = _review_payload(landmark, language)
+        items.append({
+            'landmark_id': landmark['id'],
+            'landmark_name': landmark['name'],
+            'distance_km': round(distance, 2),
+            'average_score': review_payload['average_score'],
+            'review_count': review_payload['review_count'],
+            'source': 'mock',
+        })
+
+    items.sort(key=lambda item: item['distance_km'])
+    return {
+        'mode': 'mock',
+        'items': items,
+    }

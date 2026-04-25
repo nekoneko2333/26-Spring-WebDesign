@@ -1,23 +1,24 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { roadCurve } from '../../data/landmarks.js';
-import { worldPosToHeight } from '../../data/terrain.js';
+import { getRouteSegmentAtProgress, roadCurve, routeSegments, routeTrafficColors } from '../../data/routes.js';
+import { buildSemanticRouteHeightProfile } from '../../data/terrain.js';
 import { useTerrainData } from '../../hooks/useTerrainData.js';
 
 export function RoadRibbon() {
   const terrain = useTerrainData();
 
-  const { roadGeometry, lineGeometry } = useMemo(() => {
-    const ROAD_WIDTH = 0.82;
+  const { roadSegments, lineGeometry } = useMemo(() => {
+    const ROAD_WIDTH = 1.18;
     const LINE_WIDTH = 0.07;
-    const SEGMENTS = 220;
+    const SEGMENTS = 180;
     const points = roadCurve.getPoints(SEGMENTS);
+    const heights = buildSemanticRouteHeightProfile(points, getRouteSegmentAtProgress, { clearance: 0.12 });
 
-    const buildStrip = (width, yOffset) => {
+    const buildStrip = (width, yOffset, startIndex = 0, endIndex = points.length - 1) => {
       const positions = [];
       const indices = [];
 
-      for (let i = 0; i < points.length; i += 1) {
+      for (let i = startIndex; i <= endIndex; i += 1) {
         const curr = points[i];
         const next = points[Math.min(i + 1, points.length - 1)];
         const prev = points[Math.max(i - 1, 0)];
@@ -28,12 +29,13 @@ export function RoadRibbon() {
         const leftZ = curr.z - normal.z * halfW;
         const rightX = curr.x + normal.x * halfW;
         const rightZ = curr.z + normal.z * halfW;
+        const deckY = heights[i] + yOffset;
 
-        positions.push(leftX, worldPosToHeight(leftX, leftZ) + yOffset, leftZ);
-        positions.push(rightX, worldPosToHeight(rightX, rightZ) + yOffset, rightZ);
+        positions.push(leftX, deckY, leftZ);
+        positions.push(rightX, deckY, rightZ);
       }
 
-      for (let i = 0; i < points.length - 1; i += 1) {
+      for (let i = 0; i < endIndex - startIndex; i += 1) {
         const a = i * 2;
         const b = a + 1;
         const c = a + 2;
@@ -48,8 +50,24 @@ export function RoadRibbon() {
       return geo;
     };
 
+    const progressToIndex = (progress) => THREE.MathUtils.clamp(
+      Math.round(progress * (points.length - 1)),
+      0,
+      points.length - 1,
+    );
+
+    const roadSegments = routeSegments.map((segment) => {
+      const startIndex = Math.min(progressToIndex(segment.startProgress), points.length - 2);
+      const endIndex = Math.max(progressToIndex(segment.endProgress), startIndex + 1);
+      return {
+        id: segment.id,
+        segment,
+        geometry: buildStrip(ROAD_WIDTH, segment.type === 'bridge' ? 0.12 : 0.05, startIndex, endIndex),
+      };
+    });
+
     return {
-      roadGeometry: buildStrip(ROAD_WIDTH, 0.05),
+      roadSegments,
       lineGeometry: buildStrip(LINE_WIDTH, 0.072),
     };
   }, [terrain.version]);
@@ -58,12 +76,27 @@ export function RoadRibbon() {
 
   return (
     <group>
-      <mesh geometry={roadGeometry} receiveShadow>
-        <meshStandardMaterial color="#6d7584" roughness={0.66} />
-      </mesh>
+      {roadSegments.map((segment) => (
+        <mesh key={segment.id} geometry={segment.geometry} receiveShadow>
+          <meshStandardMaterial
+            color={getRoadColor(segment.segment)}
+            roughness={segment.segment.type === 'city' ? 0.78 : 0.62}
+            emissive={segment.segment.type === 'tunnel' ? '#111827' : '#000000'}
+            emissiveIntensity={segment.segment.type === 'tunnel' ? 0.22 : 0}
+          />
+        </mesh>
+      ))}
       <mesh geometry={lineGeometry} receiveShadow>
         <meshStandardMaterial color="#e8cb85" roughness={0.42} />
       </mesh>
     </group>
   );
+}
+
+function getRoadColor(segment) {
+  if (segment.type === 'tunnel' || segment.type === 'bridge') return segment.profile.color;
+  if (segment.trafficState === 'slow' || segment.trafficState === 'traffic_jam') {
+    return routeTrafficColors[segment.trafficState];
+  }
+  return segment.profile.color ?? '#6d7584';
 }
