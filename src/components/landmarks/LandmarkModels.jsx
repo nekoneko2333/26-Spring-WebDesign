@@ -5,6 +5,7 @@ import { landmarks } from '../../data/landmarks.js';
 import { worldPosToHeight } from '../../data/terrain.js';
 import { useTerrainData } from '../../hooks/useTerrainData.js';
 import { useAppStore } from '../../state/useAppStore.js';
+import { travelLandmarkMeta } from '../../data/travelGuide.js';
 
 function LoadedLandmarkModel({ landmark }) {
   const { scene } = useGLTF(landmark.modelPath);
@@ -71,18 +72,29 @@ function PlaceholderLandmarkModel({ landmark }) {
 
 function LandmarkModel({ landmark }) {
   const selectLandmark = useAppStore((state) => state.selectLandmark);
+  const language = useAppStore((state) => state.language);
   useTerrainData();
   const baseY = worldPosToHeight(landmark.position[0], landmark.position[2]);
+  const displayName = travelLandmarkMeta[landmark.id]?.name?.[language] ?? landmark.name;
 
   return (
     <group position={[landmark.position[0], baseY, landmark.position[2]]} rotation={landmark.rotation} onClick={() => selectLandmark(landmark.id)}>
+      <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[landmark.triggerRadius * 0.28, landmark.triggerRadius * 0.42, 64]} />
+        <meshBasicMaterial color="#7ed0e4" transparent opacity={0.28} depthWrite={false} blending={THREE.AdditiveBlending} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[landmark.triggerRadius * 0.24, 48]} />
+        <meshBasicMaterial color="#f0d490" transparent opacity={0.08} depthWrite={false} />
+      </mesh>
       {landmark.modelPath ? <LoadedLandmarkModel landmark={landmark} /> : <PlaceholderLandmarkModel landmark={landmark} />}
+      <pointLight position={[0, 4.8, 0]} color="#f0d490" distance={18} intensity={0.42} />
       <mesh position={[0, 2.8, 0]} visible={false} onClick={() => selectLandmark(landmark.id)}>
         <cylinderGeometry args={[landmark.triggerRadius * 0.45, landmark.triggerRadius * 0.45, 6, 20]} />
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
-      <Html position={[0, 5.5, 0]} center distanceFactor={18}>
-        <div className="landmark-chip">{landmark.name}</div>
+      <Html position={[0, 4.2, 0]} center distanceFactor={28} transform={false} sprite>
+        <div className="landmark-chip">{displayName}</div>
       </Html>
     </group>
   );

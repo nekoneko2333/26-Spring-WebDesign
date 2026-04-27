@@ -5,15 +5,18 @@ import { useKeyboardDrive } from '../../hooks/useKeyboardDrive.js';
 import { useTerrainData } from '../../hooks/useTerrainData.js';
 import { useAppStore } from '../../state/useAppStore.js';
 import { landmarks } from '../../data/landmarks.js';
-import { getRoutePointAtProgress, getRouteProfile, getRouteSegmentAtProgress, roadCurve } from '../../data/routes.js';
+import { currentRoute, getRoutePointAtProgress, getRouteProfile, getRouteSegmentAtProgress, roadCurve } from '../../data/routes.js';
 import { buildSemanticRouteHeightProfile, worldPosToRouteHeight } from '../../data/terrain.js';
 
 const START_PROGRESS = 0;
-const BASE_CLEARANCE = 0.62;
-const MANUAL_SPEED = 0.105;
-const AUTO_SPEED = 0.055;
-const ACCEL = 0.72;
-const DECEL = 1.18;
+const BASE_CLEARANCE = 0.22;
+const SIMULATION_TIME_SCALE = 1680;
+const DISPLAY_SPEED_MULTIPLIER = 4.2;
+const EXHIBITION_TARGET_MULTIPLIER = 1.34;
+const MAX_REVERSE_KMH = 24;
+const ACCEL_KMH_PER_SEC = 82;
+const DECEL_KMH_PER_SEC = 66;
+const SIMULATED_DAYS = 3;
 const wheelOffsets = [
   [-0.82, 0.2, 1.22],
   [0.82, 0.2, 1.22],
@@ -49,7 +52,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
 
   const routeCurve = useMemo(() => {
     const sampledPoints = roadCurve.getPoints(160);
-    const roadProfile = buildSemanticRouteHeightProfile(sampledPoints, getRouteSegmentAtProgress, { clearance: 0.18 });
+    const roadProfile = buildSemanticRouteHeightProfile(sampledPoints, getRouteSegmentAtProgress, { clearance: 0.055 });
 
     const terrainAwarePoints = sampledPoints.map((point, index) => new THREE.Vector3(
       point.x,
@@ -72,7 +75,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       initializedTargetRef.current = routeInitKey;
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0);
       setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
-      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current) });
+      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
     }
 
     if (!drivingEnabled) {
@@ -82,14 +85,14 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       steerRef.current = 0;
       setAutoDrive(false);
       setNearbyLandmarkId(initialLandmarkId ?? null);
-      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current) });
+      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0);
       return;
     }
 
     const routeLocked = focusPanelOpen || modelViewerOpen;
     const routeContext = getRouteContext(progressRef.current);
-    const routeSpeedFactor = THREE.MathUtils.clamp(routeContext.profile.speedFactor, 0.24, 1.24);
+    const routeSpeedFactor = THREE.MathUtils.clamp(routeContext.profile.speedFactor, 0.2, 1.08);
     const input = controls.current;
     const hasManualInput = input.forward || input.backward;
     if (routeLocked || (hasManualInput && autoDrive)) {
@@ -99,36 +102,51 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     if (routeLocked) {
       targetSpeedRef.current = 0;
     } else if (autoDrive) {
-      targetSpeedRef.current = AUTO_SPEED * routeSpeedFactor;
+      targetSpeedRef.current = routeContext.segment.speedLimit * routeSpeedFactor * EXHIBITION_TARGET_MULTIPLIER;
     } else {
-      let inputSpeed = 0;
-      if (input.forward) inputSpeed += MANUAL_SPEED * routeSpeedFactor * (input.boost ? 1.18 : 1);
-      if (input.backward) inputSpeed -= MANUAL_SPEED * routeSpeedFactor * 0.72;
-      targetSpeedRef.current = inputSpeed;
+      let targetKmh = 0;
+      if (input.forward) targetKmh += routeContext.segment.speedLimit * routeSpeedFactor * EXHIBITION_TARGET_MULTIPLIER * (input.boost ? 1.35 : 1);
+      if (input.backward) targetKmh -= MAX_REVERSE_KMH;
+      targetSpeedRef.current = targetKmh;
     }
 
-    const smoothing = Math.abs(targetSpeedRef.current) > Math.abs(speedRef.current) ? ACCEL : DECEL;
-    speedRef.current = THREE.MathUtils.lerp(speedRef.current, targetSpeedRef.current, 1 - Math.exp(-smoothing * delta * 4));
-    if (Math.abs(speedRef.current) < 0.00002) speedRef.current = 0;
+    const maxDelta = (Math.abs(targetSpeedRef.current) > Math.abs(speedRef.current) ? ACCEL_KMH_PER_SEC : DECEL_KMH_PER_SEC) * delta;
+    speedRef.current = THREE.MathUtils.clamp(targetSpeedRef.current, speedRef.current - maxDelta, speedRef.current + maxDelta);
+    if (Math.abs(speedRef.current) < 0.05) speedRef.current = 0;
+
+    const progressDelta = (speedRef.current / Math.max(currentRoute.distanceKm, 1) / 3600) * SIMULATION_TIME_SCALE * delta;
 
     if (autoDrive && !routeLocked) {
-      progressRef.current = (progressRef.current + speedRef.current * delta) % 1;
+      progressRef.current = (progressRef.current + progressDelta) % 1;
     } else {
-      progressRef.current = THREE.MathUtils.clamp(progressRef.current + speedRef.current * delta, 0, 0.9995);
+      progressRef.current = THREE.MathUtils.clamp(progressRef.current + progressDelta, 0, 0.9995);
     }
 
     steerRef.current = applyCurvePose(vehicle, routeCurve, progressRef.current, speedRef.current);
     setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
     setVehicleState({
-      vehicleSpeed: Math.abs(speedRef.current) * 100,
+      vehicleSpeed: Math.abs(speedRef.current) * DISPLAY_SPEED_MULTIPLIER,
       vehicleSteer: steerRef.current,
       routeContext,
+      routeProgress: progressRef.current,
+      ...getRouteTimeline(progressRef.current),
     });
 
     if (speedRef.current !== 0 && !routeLocked) setCameraMode('follow');
   });
 
   return null;
+}
+
+function getRouteTimeline(progress) {
+  const dayProgress = THREE.MathUtils.clamp(progress, 0, 0.9999) * SIMULATED_DAYS;
+  const routeDay = Math.floor(dayProgress) + 1;
+  const localDayProgress = dayProgress % 1;
+  return {
+    routeProgress: progress,
+    routeDay,
+    routeHour: 7 + localDayProgress * 12,
+  };
 }
 
 function getRouteContext(progress) {
@@ -210,6 +228,8 @@ function getNearbyLandmarkId(x, z) {
 
 export function VehicleChassis({ bodyRef }) {
   const rootRef = useRef();
+  const trailRef = useRef();
+  const headLightRef = useRef();
   const frontLeftRef = useRef();
   const frontRightRef = useRef();
   const rearLeftRef = useRef();
@@ -222,7 +242,7 @@ export function VehicleChassis({ bodyRef }) {
 
   useFrame((_, delta) => {
     wheelSpin.current += vehicleSpeed * delta * 0.08;
-    const speedRatio = Math.min(vehicleSpeed / (MANUAL_SPEED * 100 * 1.18), 1);
+    const speedRatio = Math.min(vehicleSpeed / 130, 1);
     const roughness = routeContext?.profile?.roughness ?? 0.08;
     const turnLean = routeContext?.profile?.turnLean ?? 1;
     const bodyLean = -vehicleSteer * turnLean * Math.min(0.22 + speedRatio * 0.14, 0.34);
@@ -232,10 +252,21 @@ export function VehicleChassis({ bodyRef }) {
       rootRef.current.rotation.z += (bodyLean - rootRef.current.rotation.z) * 0.12;
       rootRef.current.rotation.x += (bodyPitch - rootRef.current.rotation.x) * 0.08;
       const roadBuzz = (
-        Math.sin(wheelSpin.current * 0.44) * 0.018
-        + Math.sin(wheelSpin.current * 0.91 + 1.7) * 0.009
+        Math.sin(wheelSpin.current * 0.36) * 0.006
+        + Math.sin(wheelSpin.current * 0.74 + 1.7) * 0.003
       ) * roughness * Math.min(speedRatio + 0.2, 1);
-      rootRef.current.position.y += (roadBuzz - rootRef.current.position.y) * 0.1;
+      rootRef.current.position.y += (roadBuzz - rootRef.current.position.y) * 0.055;
+    }
+
+    if (trailRef.current) {
+      const trailScale = 0.35 + speedRatio * 1.35;
+      trailRef.current.scale.z += (trailScale - trailRef.current.scale.z) * 0.12;
+      trailRef.current.position.z += ((-2.35 - speedRatio * 1.1) - trailRef.current.position.z) * 0.12;
+      trailRef.current.material.opacity += ((vehicleSpeed > 0.6 ? 0.34 : 0.08) - trailRef.current.material.opacity) * 0.08;
+    }
+
+    if (headLightRef.current) {
+      headLightRef.current.intensity += ((vehicleSpeed > 0.4 ? 1.35 : 0.62) - headLightRef.current.intensity) * 0.1;
     }
 
     for (const wheel of [rearLeftRef.current, rearRightRef.current]) {
@@ -254,7 +285,7 @@ export function VehicleChassis({ bodyRef }) {
       <group ref={rootRef}>
         <mesh castShadow position={[0, 0.58, -0.02]}>
           <boxGeometry args={[2.16, 0.46, 4.12]} />
-          <meshStandardMaterial color={autoDrive ? '#c08958' : '#b87452'} roughness={0.58} metalness={0.08} />
+          <meshStandardMaterial color={autoDrive ? '#d29b62' : '#b87452'} roughness={0.48} metalness={0.16} />
         </mesh>
         <mesh castShadow position={[0, 1.06, -0.16]}>
           <boxGeometry args={[1.62, 0.54, 2.02]} />
@@ -266,7 +297,16 @@ export function VehicleChassis({ bodyRef }) {
         </mesh>
         <mesh castShadow position={[0, 0.32, 1.82]}>
           <boxGeometry args={[1.68, 0.16, 0.12]} />
-          <meshStandardMaterial color="#fff0c9" emissive="#f8dc9b" emissiveIntensity={0.12} />
+          <meshStandardMaterial color="#fff0c9" emissive="#f8dc9b" emissiveIntensity={0.42} />
+        </mesh>
+        <pointLight ref={headLightRef} position={[0, 0.55, 2.35]} color="#ffe6a8" distance={13} intensity={0.8} />
+        <mesh position={[0, 0.3, -2.18]}>
+          <boxGeometry args={[1.45, 0.1, 0.08]} />
+          <meshStandardMaterial color="#d35b52" emissive="#d35b52" emissiveIntensity={0.55} />
+        </mesh>
+        <mesh ref={trailRef} position={[0, 0.16, -2.35]}>
+          <planeGeometry args={[1.8, 2.8]} />
+          <meshBasicMaterial color="#78bdd0" transparent opacity={0.08} depthWrite={false} blending={THREE.AdditiveBlending} side={THREE.DoubleSide} />
         </mesh>
         {wheelOffsets.map((offset, index) => {
           const ref = [frontLeftRef, frontRightRef, rearLeftRef, rearRightRef][index];

@@ -27,7 +27,7 @@ const reviewsEn = {
 
 const reviewsZh = {
   colosseum: [
-    { author: '玛尔塔', score: '4.9', comment: '从外围拱廊看过去最能感受到斗兽场的尺度感。即使只是短暂停留，也能迅速建立对古罗马空间秩序的印象。', source: '模拟专题笔记' },
+    { author: '玛尔塔', score: '4.9', comment: '从外圈拱廊看过去最能感受到斗兽场的尺度感。即使只是短暂停留，也能迅速建立对古罗马空间秩序的印象。', source: '模拟专题笔记' },
     { author: '约纳斯', score: '4.8', comment: '适合放慢速度接近。黄昏时分，层层叠起的拱券会形成很强的轮廓感。', source: '模拟现场观察' },
   ],
   pisa: [
@@ -39,7 +39,7 @@ const reviewsZh = {
     { author: '尼科', score: '4.7', comment: '教堂周边街巷密集，但从狭窄街道转入广场的一刻很有空间冲击力。', source: '模拟现场观察' },
   ],
   venice_rialto: [
-    { author: '伊雷娜', score: '4.6', comment: '里亚托桥像一个空间铰链，市场、水上交通和步行流线都在这里交汇。', source: '模拟专题笔记' },
+    { author: '伊莲娜', score: '4.6', comment: '里亚托桥像一个空间枢纽，市场、水上交通和步行流线都在这里交汇。', source: '模拟专题笔记' },
     { author: '保罗', score: '4.5', comment: '建议清晨前往。人流变多前，更容易看清桥、运河和两岸街区的关系。', source: '模拟现场观察' },
   ],
   milan_duomo: [

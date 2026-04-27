@@ -63,12 +63,13 @@ const statusStyleWrap = {
 };
 
 const statusStyle = {
-  padding: '8px 12px',
-  borderRadius: '999px',
-  background: 'rgba(18, 34, 52, 0.72)',
-  color: '#f3f7fb',
-  fontFamily: 'Manrope, sans-serif',
-  fontSize: '12px',
-  letterSpacing: '0.02em',
-  boxShadow: '0 8px 24px rgba(8, 18, 30, 0.18)',
+  padding: '0 0 8px',
+  borderBottom: '1px solid rgba(8, 24, 39, 0.18)',
+  background: 'transparent',
+  color: '#081827',
+  fontFamily: 'Manrope, Noto Sans SC, sans-serif',
+  fontSize: '11px',
+  fontWeight: 700,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
 };

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500;6..96,600&family=Manrope:wght@300;400;500;600&family=Noto+Serif+SC:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500;6..96,600&family=Manrope:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;500;600&display=swap');
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -12,9 +12,9 @@
   --c-gold:       #7f6748;
   --c-gold-light: #9e7f5c;
   --c-gold-dim:   rgba(127, 103, 72, 0.28);
-  --c-ink:        #10233b;
-  --c-ink-mid:    #3e5876;
-  --c-ink-dim:    #6b8198;
+  --c-ink:        #081827;
+  --c-ink-mid:    #2a425f;
+  --c-ink-dim:    #667b91;
   --c-accent:     #b98152;
   --c-green:      #4a7c65;
   --c-red:        #b05550;
@@ -22,9 +22,9 @@
   --radius-md:    12px;
   --radius-pill:  999px;
   --font-display: 'Bodoni Moda', 'Times New Roman', serif;
-  --font-display-zh: 'Noto Serif SC', 'Songti SC', serif;
+  --font-display-zh: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', serif;
   --font-ui:      'Manrope', 'Helvetica Neue', sans-serif;
-  --font-ui-zh:   'Noto Serif SC', 'Songti SC', serif;
+  --font-ui-zh:   'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
 }
 
 html, body {

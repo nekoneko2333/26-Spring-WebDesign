@@ -1,27 +1,38 @@
-const LON_MIN = 6.6;
-const LON_MAX = 18.5;
-const LAT_MIN = 36.6;
-const LAT_MAX = 47.1;
-const WORLD_SIZE = 170;
+export const MAP_BOUNDS = {
+  lonMin: 6.6,
+  lonMax: 18.5,
+  latMin: 36.6,
+  latMax: 47.1,
+  worldSize: 170,
+};
 
 function mercY(lat) {
   return Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
 }
 
-const MERC_Y_MIN = mercY(LAT_MIN);
-const MERC_Y_MAX = mercY(LAT_MAX);
+const MERC_Y_MIN = mercY(MAP_BOUNDS.latMin);
+const MERC_Y_MAX = mercY(MAP_BOUNDS.latMax);
 
 export function lngLatToWorld(lon, lat) {
-  const tx = (lon - LON_MIN) / (LON_MAX - LON_MIN);
+  const tx = (lon - MAP_BOUNDS.lonMin) / (MAP_BOUNDS.lonMax - MAP_BOUNDS.lonMin);
   const tz = 1 - (mercY(lat) - MERC_Y_MIN) / (MERC_Y_MAX - MERC_Y_MIN);
-  return [(tx - 0.5) * WORLD_SIZE, 0, (tz - 0.5) * WORLD_SIZE];
+  return [(tx - 0.5) * MAP_BOUNDS.worldSize, 0, (tz - 0.5) * MAP_BOUNDS.worldSize];
+}
+
+export function worldToLngLat(worldX, worldZ) {
+  const tx = worldX / MAP_BOUNDS.worldSize + 0.5;
+  const tz = worldZ / MAP_BOUNDS.worldSize + 0.5;
+  const lon = MAP_BOUNDS.lonMin + tx * (MAP_BOUNDS.lonMax - MAP_BOUNDS.lonMin);
+  const merc = MERC_Y_MIN + (1 - tz) * (MERC_Y_MAX - MERC_Y_MIN);
+  const lat = (Math.atan(Math.sinh(merc)) * 180) / Math.PI;
+  return { lon, lat };
 }
 
 export const landmarks = [
   {
     id: 'colosseum',
-    name: 'Colosseum / 罗马斗兽场',
-    description: '古罗马时期最具代表性的圆形竞技场之一，也是罗马城市记忆和帝国建筑尺度的象征。',
+    name: 'Colosseum',
+    description: 'Ancient Roman amphitheatre in the center of Rome.',
     modelPath: '/models/colosseum.glb',
     lon: 12.4922,
     lat: 41.8902,
@@ -33,12 +44,12 @@ export const landmarks = [
   },
   {
     id: 'pisa',
-    name: 'Leaning Tower of Pisa / 比萨斜塔',
-    description: '始建于 1173 年的中世纪钟楼，以独特的倾斜结构和广场空间闻名。',
+    name: 'Leaning Tower of Pisa',
+    description: 'Medieval bell tower in Pisa Cathedral Square.',
     modelPath: '/models/leaning_tower_of_pisa.glb',
-    lon: 10.3963,
+    lon: 10.3966,
     lat: 43.723,
-    position: lngLatToWorld(10.3963, 43.723),
+    position: lngLatToWorld(10.3966, 43.723),
     rotation: [0, -Math.PI * 0.2, 0],
     scale: 7.2,
     triggerRadius: 15,
@@ -46,12 +57,12 @@ export const landmarks = [
   },
   {
     id: 'florence_duomo',
-    name: 'Florence Duomo / 佛罗伦萨圣母百花大教堂',
-    description: '佛罗伦萨城市天际线的核心，由红色穹顶、钟楼与文艺复兴街区共同构成强烈的城市记忆。',
+    name: 'Florence Duomo',
+    description: 'Santa Maria del Fiore and Brunelleschi dome in Florence.',
     modelPath: null,
-    lon: 11.2558,
+    lon: 11.256,
     lat: 43.7731,
-    position: lngLatToWorld(11.2558, 43.7731),
+    position: lngLatToWorld(11.256, 43.7731),
     rotation: [0, Math.PI * 0.08, 0],
     scale: 6.8,
     triggerRadius: 14,
@@ -59,8 +70,8 @@ export const landmarks = [
   },
   {
     id: 'venice_rialto',
-    name: 'Rialto Bridge / 威尼斯里亚托桥',
-    description: '横跨大运河的经典桥梁节点，适合观察水上交通、窄巷和商业街区的空间关系。',
+    name: 'Rialto Bridge',
+    description: 'Historic bridge crossing Venice Grand Canal.',
     modelPath: null,
     lon: 12.3359,
     lat: 45.438,
@@ -72,8 +83,8 @@ export const landmarks = [
   },
   {
     id: 'milan_duomo',
-    name: 'Milan Cathedral / 米兰大教堂',
-    description: '哥特式立面、尖塔群与广场尺度共同构成米兰最具识别度的城市中心。',
+    name: 'Milan Cathedral',
+    description: 'Gothic cathedral and plaza in central Milan.',
     modelPath: null,
     lon: 9.1919,
     lat: 45.4642,
@@ -85,12 +96,12 @@ export const landmarks = [
   },
   {
     id: 'pompeii',
-    name: 'Pompeii Archaeological Park / 庞贝古城遗址',
-    description: '保存完整的古城街道、住宅与公共空间，适合作为理解古罗马日常城市结构的沉浸式停靠点。',
+    name: 'Pompeii Archaeological Park',
+    description: 'Archaeological park preserving the ancient Roman city of Pompeii.',
     modelPath: null,
-    lon: 14.487,
-    lat: 40.748,
-    position: lngLatToWorld(14.487, 40.748),
+    lon: 14.4869,
+    lat: 40.7497,
+    position: lngLatToWorld(14.4869, 40.7497),
     rotation: [0, -Math.PI * 0.18, 0],
     scale: 6.4,
     triggerRadius: 15,
@@ -98,4 +109,4 @@ export const landmarks = [
   },
 ];
 
-export const WORLD_SIZE_UNITS = WORLD_SIZE;
+export const WORLD_SIZE_UNITS = MAP_BOUNDS.worldSize;

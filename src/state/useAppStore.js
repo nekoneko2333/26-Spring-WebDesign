@@ -1,13 +1,16 @@
 import { create } from 'zustand';
 
 export const useAppStore = create((set, get) => ({
-  language: 'en',
+  language: 'zh',
   cameraMode: 'map',
   nearbyLandmarkId: null,
   selectedLandmarkId: null,
   vehicleSpeed: 0,
   vehicleSteer: 0,
   routeContext: null,
+  routeProgress: 0,
+  routeDay: 1,
+  routeHour: 7,
   autoDrive: false,
   sidebarOpen: true,
   focusPanelOpen: false,
@@ -30,10 +33,13 @@ export const useAppStore = create((set, get) => ({
   },
   setAutoDrive: (autoDrive) => set({ autoDrive }),
   setNearbyLandmarkId: (nearbyLandmarkId) => set({ nearbyLandmarkId }),
-  setVehicleState: ({ vehicleSpeed, vehicleSteer, routeContext }) => set((state) => ({
+  setVehicleState: ({ vehicleSpeed, vehicleSteer, routeContext, routeProgress, routeDay, routeHour }) => set((state) => ({
     vehicleSpeed,
     vehicleSteer,
     routeContext: routeContext ?? state.routeContext,
+    routeProgress: routeProgress ?? state.routeProgress,
+    routeDay: routeDay ?? state.routeDay,
+    routeHour: routeHour ?? state.routeHour,
   })),
   selectLandmark: (selectedLandmarkId) => set({ selectedLandmarkId, focusPanelOpen: false, modelViewerOpen: false, cameraMode: 'focus' }),
   openLandmarkFocus: (selectedLandmarkId) => set({ selectedLandmarkId, focusPanelOpen: true, modelViewerOpen: false, cameraMode: 'focus', autoDrive: false }),

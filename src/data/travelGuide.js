@@ -68,10 +68,10 @@ export const travelGuide = {
   },
   zh: {
     hero: {
-      kicker: '意大利路线规划 / 3D 旅游导览',
-      title: '检索意大利地标，规划路线，再用 3D 驾驶导览体验整段旅程。',
+      kicker: '意大利路线规划 / 3D 旅行导览',
+      title: '探索意大利地标，规划路线，再用 3D 驾驶体验整段旅程。',
       summary:
-        '先用 mock 数据浏览目的地、评分和评论，再生成一条清晰的旅行路线；需要空间预览时，可以进入沉浸式 3D 导览。',
+        '先用模拟数据浏览目的地、评分和评论，再生成一条清晰的旅行路线；需要空间预览时，可以进入沉浸式 3D 导览。',
       primaryCta: '进入 3D 导览',
       secondaryCta: '查看路线地图',
       enterExplorer: '进入探索器',
@@ -80,7 +80,7 @@ export const travelGuide = {
     },
     mapBoard: {
       title: '意大利路线地图',
-      summary: '从米兰、威尼斯到佛罗伦萨、比萨、罗马和庞贝的 6 个 mock 目的地。',
+      summary: '从米兰、威尼斯到佛罗伦萨、比萨、罗马和庞贝的 6 个模拟目的地。',
     },
     routePanel: {
       eyebrow: '推荐路线',
@@ -90,7 +90,7 @@ export const travelGuide = {
     featurePanel: {
       eyebrow: '沉浸导览',
       title: '3D 驾驶模式',
-      body: '3D 模块会把规划好的路线变成一次可驾驶的导览，配合地标聚焦、mock 评论和模型预览。',
+      body: '3D 模块会把规划好的路线变成一次可驾驶的导览，配合地标聚焦、模拟评论和模型预览。',
     },
     journalIntro: {
       eyebrow: '旅行笔记',
@@ -99,7 +99,7 @@ export const travelGuide = {
     stats: [
       { value: '06', label: '模拟目的地' },
       { value: '3D', label: '驾驶导览' },
-      { value: 'Mock', label: '检索与评论' },
+      { value: '模拟', label: '检索与评论' },
     ],
     itinerary: [
       {
@@ -125,7 +125,7 @@ export const travelGuide = {
       },
       {
         title: '路线规划',
-        body: '当前路线先硬编码，方便展示完整流程；后续可以替换为数据库和大模型辅助生成的推荐路线。',
+        body: '当前路线先硬编码，方便展示完整流程；后续可以替换为数据库和智能推荐生成的路线。',
       },
       {
         title: '3D 预览',
@@ -137,6 +137,7 @@ export const travelGuide = {
 
 export const travelLandmarkMeta = {
   colosseum: {
+    name: { en: 'Colosseum', zh: '罗马斗兽场' },
     city: { en: 'Rome', zh: '罗马' },
     region: { en: 'Lazio', zh: '拉齐奥' },
     lat: 41.8902,
@@ -149,6 +150,7 @@ export const travelLandmarkMeta = {
     type: { en: 'Imperial monument', zh: '帝国遗迹' },
   },
   pisa: {
+    name: { en: 'Leaning Tower of Pisa', zh: '比萨斜塔' },
     city: { en: 'Pisa', zh: '比萨' },
     region: { en: 'Tuscany', zh: '托斯卡纳' },
     lat: 43.723,
@@ -161,6 +163,7 @@ export const travelLandmarkMeta = {
     type: { en: 'Medieval bell tower', zh: '中世纪钟楼' },
   },
   florence_duomo: {
+    name: { en: 'Florence Duomo', zh: '佛罗伦萨圣母百花大教堂' },
     city: { en: 'Florence', zh: '佛罗伦萨' },
     region: { en: 'Tuscany', zh: '托斯卡纳' },
     lat: 43.7731,
@@ -173,6 +176,7 @@ export const travelLandmarkMeta = {
     type: { en: 'Renaissance cathedral', zh: '文艺复兴教堂' },
   },
   venice_rialto: {
+    name: { en: 'Rialto Bridge', zh: '威尼斯里亚托桥' },
     city: { en: 'Venice', zh: '威尼斯' },
     region: { en: 'Veneto', zh: '威尼托' },
     lat: 45.438,
@@ -185,6 +189,7 @@ export const travelLandmarkMeta = {
     type: { en: 'Canal bridge', zh: '运河桥梁' },
   },
   milan_duomo: {
+    name: { en: 'Milan Cathedral', zh: '米兰大教堂' },
     city: { en: 'Milan', zh: '米兰' },
     region: { en: 'Lombardy', zh: '伦巴第' },
     lat: 45.4642,
@@ -197,6 +202,7 @@ export const travelLandmarkMeta = {
     type: { en: 'Gothic cathedral', zh: '哥特式教堂' },
   },
   pompeii: {
+    name: { en: 'Pompeii Archaeological Park', zh: '庞贝古城遗址' },
     city: { en: 'Pompeii', zh: '庞贝' },
     region: { en: 'Campania', zh: '坎帕尼亚' },
     lat: 40.748,
