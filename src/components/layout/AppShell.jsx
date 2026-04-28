@@ -5,22 +5,22 @@ import { useAppStore } from '../../state/useAppStore.js';
 const shellCopy = {
   en: {
     close: 'Back to Travel Guide',
-    introEyebrow: 'Hand-drawn route / 3D atlas',
+    introEyebrow: 'Italy route / Interactive 3D',
     introTitleTop: 'Italy',
     introTitleBottom: 'Drive',
-    introSubtitle: 'Open a parchment route atlas, then follow the landmarks through a hand-drawn 3D travel map.',
-    ready: 'Route inked',
+    introSubtitle: 'Step into the immersive route explorer and drive between Italian landmarks.',
+    ready: 'Ready to explore',
     start: 'Start Driving',
     hintPrefix: 'Press',
     hintSuffix: 'or click to begin',
   },
   zh: {
     close: '返回旅行首页',
-    introEyebrow: '手绘路线 / 3D 地图册',
+    introEyebrow: '意大利路线 / 交互式 3D',
     introTitleTop: '意大利',
     introTitleBottom: '行车导览',
-    introSubtitle: '展开一张牛皮纸路线图，在手绘质感的 3D 旅行地图中穿行于各个地标。',
-    ready: '路线已描好',
+    introSubtitle: '进入沉浸式路线探索器，在意大利地标之间驾驶、聚焦和查看模型。',
+    ready: '准备开始',
     start: '开始驾驶',
     hintPrefix: '按下',
     hintSuffix: '或点击开始',
@@ -63,7 +63,6 @@ export function AppShell({ children, isStarted, onStart, onClose }) {
         <button className="drive-overlay__close" type="button" onClick={onClose}>
           {copy.close}
         </button>
-        <div className="app-shell__paper" aria-hidden="true" />
         <div className="app-shell__glow app-shell__glow--left" aria-hidden="true" />
         <div className="app-shell__glow app-shell__glow--right" aria-hidden="true" />
         <div className="intro-grain" aria-hidden="true" />
@@ -86,12 +85,40 @@ function IntroOverlay({ onStart, copy, isExiting }) {
 
   return (
     <div className={`intro-screen ${isExiting ? 'is-exiting' : ''}`} role="dialog" aria-modal="true" aria-label="Italy Drive opening screen">
-      <div className="intro-map-sheet" aria-hidden="true">
-        <span className="intro-map-sheet__route" />
-        <span className="intro-map-sheet__pin intro-map-sheet__pin--1" />
-        <span className="intro-map-sheet__pin intro-map-sheet__pin--2" />
-        <span className="intro-map-sheet__pin intro-map-sheet__pin--3" />
-        <span className="intro-map-sheet__pin intro-map-sheet__pin--4" />
+      <div className="intro-horizon" aria-hidden="true" />
+      <div className="intro-atlas" aria-hidden="true">
+        <span className="intro-atlas__route" />
+        <span className="intro-atlas__point intro-atlas__point--1" />
+        <span className="intro-atlas__point intro-atlas__point--2" />
+        <span className="intro-atlas__point intro-atlas__point--3" />
+        <span className="intro-atlas__point intro-atlas__point--4" />
+      </div>
+
+      <div className="intro-road">
+        <div className="intro-road__line intro-road__line--1" />
+        <div className="intro-road__line intro-road__line--2" />
+        <div className="intro-road__line intro-road__line--3" />
+      </div>
+
+      <div className="intro-car" aria-hidden="true">
+        <svg width="180" height="90" viewBox="0 0 180 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="90" cy="85" rx="68" ry="5" fill="rgba(0,0,0,0.32)" />
+          <rect x="12" y="44" width="156" height="34" rx="8" fill="#c7784a" />
+          <path d="M52 44 L68 18 H118 L136 44 Z" fill="#a85f38" />
+          <path d="M118 44 L108 24 H90 L76 44 Z" fill="#d4e8f0" opacity="0.7" />
+          <path d="M68 18 L78 44 H62 Z" fill="#d4e8f0" opacity="0.6" />
+          <rect x="145" y="60" width="18" height="10" rx="4" fill="#f0b86f" />
+          <rect x="17" y="60" width="18" height="10" rx="4" fill="#f0b86f" />
+          <rect x="153" y="51" width="10" height="6" rx="2" fill="#fff9e8" />
+          <rect x="17" y="51" width="10" height="6" rx="2" fill="#d26b64" opacity="0.9" />
+          <circle cx="48" cy="78" r="14" fill="#1c2233" />
+          <circle cx="48" cy="78" r="7" fill="#e8e0d0" />
+          <circle cx="48" cy="78" r="3" fill="#1c2233" />
+          <circle cx="132" cy="78" r="14" fill="#1c2233" />
+          <circle cx="132" cy="78" r="7" fill="#e8e0d0" />
+          <circle cx="132" cy="78" r="3" fill="#1c2233" />
+          <line x1="90" y1="44" x2="90" y2="74" stroke="#a05030" strokeWidth="2" opacity="0.45" />
+        </svg>
       </div>
 
       <div className="intro-card">

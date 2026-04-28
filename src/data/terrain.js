@@ -183,28 +183,17 @@ function loadDemTile(z, tx, ty) {
   });
 }
 
-function paperNoise(x, y) {
-  const value = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
-  return value - Math.floor(value);
-}
-
-function inkContour(heightValue, x, y) {
-  const wobble = Math.sin(x * 0.033) * 0.012 + Math.cos(y * 0.041) * 0.009;
-  const contour = Math.abs((((heightValue + wobble) * 18) % 1) - 0.5);
-  return contour < 0.025 ? 1 : 0;
-}
-
 function buildStylizedTexture(heightData, width, height) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
 
-  const paper = ctx.createLinearGradient(0, 0, width, height);
-  paper.addColorStop(0, '#ead6ad');
-  paper.addColorStop(0.48, '#d7bd8c');
-  paper.addColorStop(1, '#b99661');
-  ctx.fillStyle = paper;
+  const ocean = ctx.createLinearGradient(0, 0, 0, height);
+  ocean.addColorStop(0, '#94cae8');
+  ocean.addColorStop(0.45, '#6eafd4');
+  ocean.addColorStop(1, '#4f89b8');
+  ctx.fillStyle = ocean;
   ctx.fillRect(0, 0, width, height);
 
   let maxH = 1;
@@ -222,41 +211,23 @@ function buildStylizedTexture(heightData, width, height) {
       const v = y / Math.max(height - 1, 1);
       const land = isLikelyLand(lonAtU(u), latAtV(v));
 
-      const grain = (paperNoise(x, y) - 0.5) * 22;
-      const fiber = Math.sin(x * 0.16 + y * 0.018) * 4 + Math.cos(y * 0.13) * 3;
-      const contourBand = land ? inkContour(h, x, y) : 0;
-
       if (!land) {
-        data[p] = 190 + grain * 0.45;
-        data[p + 1] = 174 + grain * 0.42;
-        data[p + 2] = 137 + grain * 0.35;
+        data[p] = 104;
+        data[p + 1] = 162;
+        data[p + 2] = 198;
         data[p + 3] = 255;
         continue;
       }
 
-      const shade = h * 42;
-      const ink = contourBand * 58;
-      data[p] = Math.min(255, 214 - shade - ink + grain + fiber);
-      data[p + 1] = Math.min(255, 186 - shade * 0.78 - ink * 0.82 + grain * 0.8 + fiber);
-      data[p + 2] = Math.min(255, 132 - shade * 0.5 - ink * 0.65 + grain * 0.55);
+      const contour = Math.abs(((h * 20) % 1) - 0.5);
+      const contourBand = contour < 0.05 ? 1 : 0;
+      data[p] = Math.min(255, 76 + h * 62 + contourBand * 22);
+      data[p + 1] = Math.min(255, 132 + h * 54 + contourBand * 14);
+      data[p + 2] = Math.min(255, 94 + h * 34);
       data[p + 3] = 255;
     }
   }
   ctx.putImageData(image, 0, 0);
-
-  ctx.globalAlpha = 0.22;
-  ctx.strokeStyle = '#5b3f28';
-  ctx.lineWidth = 0.9;
-  for (let y = 28; y < height; y += 44) {
-    ctx.beginPath();
-    for (let x = 0; x <= width; x += 12) {
-      const offset = Math.sin(x * 0.028 + y * 0.021) * 3;
-      if (x === 0) ctx.moveTo(x, y + offset);
-      else ctx.lineTo(x, y + offset);
-    }
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;

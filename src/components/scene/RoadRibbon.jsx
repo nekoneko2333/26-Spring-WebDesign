@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { getRouteSegmentAtProgress, roadCurve, routeSegments } from '../../data/routes.js';
+import { getRouteSegmentAtProgress, roadCurve, routeSegments, routeTrafficColors } from '../../data/routes.js';
 import { buildSemanticRouteHeightProfile } from '../../data/terrain.js';
 import { useTerrainData } from '../../hooks/useTerrainData.js';
 
@@ -9,7 +9,7 @@ export function RoadRibbon() {
 
   const { roadSegments, lineGeometry } = useMemo(() => {
     const ROAD_WIDTH = 1.18;
-    const LINE_WIDTH = 0.12;
+    const LINE_WIDTH = 0.07;
     const SEGMENTS = 180;
     const points = roadCurve.getPoints(SEGMENTS);
     const heights = buildSemanticRouteHeightProfile(points, getRouteSegmentAtProgress, { clearance: 0.035 });
@@ -24,12 +24,11 @@ export function RoadRibbon() {
         const prev = points[Math.max(i - 1, 0)];
         const tangent = new THREE.Vector3().subVectors(next, prev).normalize();
         const normal = new THREE.Vector3(-tangent.z, 0, tangent.x);
-        const handOffset = Math.sin(i * 1.73) * 0.035 + Math.cos(i * 0.67) * 0.018;
         const halfW = width / 2;
-        const leftX = curr.x - normal.x * (halfW + handOffset);
-        const leftZ = curr.z - normal.z * (halfW + handOffset);
-        const rightX = curr.x + normal.x * (halfW - handOffset * 0.6);
-        const rightZ = curr.z + normal.z * (halfW - handOffset * 0.6);
+        const leftX = curr.x - normal.x * halfW;
+        const leftZ = curr.z - normal.z * halfW;
+        const rightX = curr.x + normal.x * halfW;
+        const rightZ = curr.z + normal.z * halfW;
         const deckY = heights[i] + yOffset;
 
         positions.push(leftX, deckY, leftZ);
@@ -82,41 +81,39 @@ export function RoadRibbon() {
           <mesh geometry={segment.geometry} receiveShadow>
             <meshStandardMaterial
               color={getRoadColor(segment.segment)}
-              roughness={0.92}
-              metalness={0}
-              emissive="#3f2b1d"
-              emissiveIntensity={segment.segment.type === 'tunnel' ? 0.08 : 0.025}
+              roughness={segment.segment.type === 'city' ? 0.78 : 0.62}
+              emissive={segment.segment.type === 'tunnel' ? '#111827' : '#000000'}
+              emissiveIntensity={segment.segment.type === 'tunnel' ? 0.22 : 0}
             />
           </mesh>
           <mesh geometry={segment.geometry}>
             <meshBasicMaterial
               color={getRoadGlowColor(segment.segment)}
               transparent
-              opacity={segment.segment.trafficState === 'traffic_jam' ? 0.16 : 0.09}
+              opacity={segment.segment.trafficState === 'traffic_jam' ? 0.22 : 0.13}
               depthWrite={false}
+              blending={THREE.AdditiveBlending}
             />
           </mesh>
         </group>
       ))}
       <mesh geometry={lineGeometry} receiveShadow>
-        <meshStandardMaterial color="#3b281b" emissive="#3b281b" emissiveIntensity={0.04} roughness={0.95} />
+        <meshStandardMaterial color="#f0d490" emissive="#c79245" emissiveIntensity={0.2} roughness={0.42} />
       </mesh>
     </group>
   );
 }
 
 function getRoadColor(segment) {
-  if (segment.type === 'tunnel') return '#2f2a24';
+  if (segment.type === 'tunnel') return segment.profile.color;
   if (segment.trafficState === 'slow' || segment.trafficState === 'traffic_jam') {
-    return segment.trafficState === 'slow' ? '#8d6b3e' : '#7b4638';
+    return routeTrafficColors[segment.trafficState];
   }
-  if (segment.type === 'coastal') return '#6f7059';
-  if (segment.type === 'city') return '#65523d';
-  return '#594633';
+  return segment.profile.color ?? '#6d7584';
 }
 
 function getRoadGlowColor(segment) {
-  if (segment.trafficState === 'traffic_jam') return '#9b4e3e';
-  if (segment.trafficState === 'slow') return '#a47c42';
-  return '#4a3524';
+  if (segment.trafficState === 'traffic_jam') return '#d35b52';
+  if (segment.trafficState === 'slow') return '#f0c36d';
+  return '#82c7d5';
 }

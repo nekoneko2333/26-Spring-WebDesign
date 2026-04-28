@@ -35,8 +35,8 @@ export function SceneLights() {
 
   return (
     <>
-      <ambientLight ref={ambientRef} intensity={0.52} color="#f3dfb6" />
-      <hemisphereLight ref={hemiRef} args={['#f5e8c8', '#7a5736', 0.82]} />
+      <ambientLight ref={ambientRef} intensity={0.48} color="#dceef8" />
+      <hemisphereLight ref={hemiRef} args={['#dceef8', '#163247', 0.9]} />
       <directionalLight
         ref={sunRef}
         castShadow
@@ -47,8 +47,8 @@ export function SceneLights() {
         shadow-mapSize-height={2048}
       />
       <Environment resolution={128}>
-        <Lightformer form="ring" intensity={1.05} color="#e0b87a" scale={12} position={[0, 10, -20]} />
-        <Lightformer form="rect" intensity={0.55} color="#d5bf91" scale={[20, 8]} position={[-12, 8, 10]} />
+        <Lightformer form="ring" intensity={1.4} color="#f5d99b" scale={12} position={[0, 10, -20]} />
+        <Lightformer form="rect" intensity={1.1} color="#8ed4e8" scale={[20, 8]} position={[-12, 8, 10]} />
       </Environment>
     </>
   );
