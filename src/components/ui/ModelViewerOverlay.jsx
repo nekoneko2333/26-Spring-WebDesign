@@ -2,6 +2,7 @@ import { Canvas } from '@react-three/fiber';
 import { Clone, OrbitControls, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { Suspense } from 'react';
 import { reviewLocales } from '../../data/reviewLocales.js';
+import { useWikipediaSummary } from '../../hooks/useWikipediaSummary.js';
 import { useAppStore } from '../../state/useAppStore.js';
 
 function ViewerModel({ modelPath }) {
@@ -59,8 +60,12 @@ function PlaceholderViewerModel({ kind }) {
 export function ModelViewerOverlay({ landmark, isOpen, onClose }) {
   const language = useAppStore((state) => state.language);
   const locale = reviewLocales[language];
+  const wiki = useWikipediaSummary(landmark?.id, language);
 
   if (!landmark) return null;
+
+  const desc = wiki.data?.extract || landmark.description;
+  const sourceUrl = wiki.data?.url || null;
 
   return (
     <div className={`mv-overlay ${isOpen ? 'is-visible' : ''}`} aria-hidden={!isOpen} onClick={(event) => event.target === event.currentTarget && onClose()}>
@@ -88,7 +93,12 @@ export function ModelViewerOverlay({ landmark, isOpen, onClose }) {
         </div>
 
         <p className="mv-hint">{locale.ui.modelHint}</p>
-        <p className="mv-desc">{landmark.description}</p>
+        <p className="mv-desc">{desc}</p>
+        {sourceUrl && (
+          <a className="mv-source" href={sourceUrl} target="_blank" rel="noreferrer">
+            Wikipedia
+          </a>
+        )}
       </div>
     </div>
   );
