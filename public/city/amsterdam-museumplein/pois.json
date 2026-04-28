@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rijksmuseum",
+    "name": "Rijksmuseum",
+    "type": "museum",
+    "category": "culture",
+    "lon": 4.88525,
+    "lat": 52.35999,
+    "priority": 10,
+    "visitDurationMin": 90,
+    "source": "curated",
+    "description": "National museum focused on Dutch art and history, located at the north edge of Museumplein."
+  },
+  {
+    "id": "van-gogh-museum",
+    "name": "Van Gogh Museum",
+    "type": "museum",
+    "category": "culture",
+    "lon": 4.8811,
+    "lat": 52.3584,
+    "priority": 9,
+    "visitDurationMin": 75,
+    "source": "curated",
+    "description": "Museum dedicated to Vincent van Gogh, placed on the west side of Museumplein."
+  },
+  {
+    "id": "stedelijk-museum",
+    "name": "Stedelijk Museum Amsterdam",
+    "type": "museum",
+    "category": "culture",
+    "lon": 4.8797,
+    "lat": 52.358,
+    "priority": 8,
+    "visitDurationMin": 60,
+    "source": "curated",
+    "description": "Modern and contemporary art museum anchoring the southwest side of Museumplein."
+  },
+  {
+    "id": "concertgebouw",
+    "name": "Royal Concertgebouw",
+    "type": "performance",
+    "category": "culture",
+    "lon": 4.8799,
+    "lat": 52.3562,
+    "priority": 8,
+    "visitDurationMin": 45,
+    "source": "curated",
+    "description": "Concert hall facing Museumplein, useful as a southern cultural anchor."
+  },
+  {
+    "id": "vondelpark-edge",
+    "name": "Vondelpark Entrance",
+    "type": "park",
+    "category": "public-space",
+    "lon": 4.8738,
+    "lat": 52.358,
+    "priority": 6,
+    "visitDurationMin": 30,
+    "source": "curated",
+    "description": "Green western edge that gives the test walk a softer public-space transition."
+  }
+]

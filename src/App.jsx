@@ -13,6 +13,7 @@ import { LandmarkModels } from './components/landmarks/LandmarkModels.jsx';
 import { VehicleController, VehicleChassis } from './components/vehicle/VehicleController.jsx';
 import { THEME } from './config/theme.js';
 import { useAppStore } from './state/useAppStore.js';
+import { AmsterdamVrLab } from './experiments/amsterdam-vr/AmsterdamVrLab.jsx';
 
 function Experience({ isStarted, initialLandmarkId }) {
   const vehicleRef = useRef(null);
@@ -65,8 +66,15 @@ function DriveExperience({ onClose, initialLandmarkId }) {
 }
 
 export default function App() {
+  const [hashRoute, setHashRoute] = useState(() => window.location.hash);
   const [driveOpen, setDriveOpen] = useState(false);
   const [initialLandmarkId, setInitialLandmarkId] = useState(null);
+
+  useEffect(() => {
+    const onHashChange = () => setHashRoute(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   const handleOpenDrive = useCallback((landmarkId = null) => {
     setInitialLandmarkId(landmarkId);
@@ -77,6 +85,10 @@ export default function App() {
     setDriveOpen(false);
     setInitialLandmarkId(null);
   }, []);
+
+  if (hashRoute === '#/amsterdam-vr') {
+    return <AmsterdamVrLab />;
+  }
 
   return (
     <>

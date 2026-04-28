@@ -1,0 +1,169 @@
+.amsterdam-vr {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  background:
+    linear-gradient(180deg, rgba(238,245,242,0.9), rgba(221,232,226,0.92)),
+    #eef5f2;
+  color: #1d2f37;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.amsterdam-vr__scene {
+  position: relative;
+  min-height: 100vh;
+}
+
+.amsterdam-vr__scene canvas {
+  display: block;
+}
+
+.amsterdam-vr__panel {
+  position: relative;
+  z-index: 2;
+  min-height: 100vh;
+  padding: 34px 28px;
+  border-left: 1px solid rgba(29, 47, 55, 0.12);
+  background: rgba(247, 250, 247, 0.82);
+  backdrop-filter: blur(14px);
+}
+
+.amsterdam-vr__back {
+  display: inline-flex;
+  margin-bottom: 34px;
+  color: #3c7a89;
+  font: 700 11px/1.3 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.amsterdam-vr__eyebrow {
+  margin: 0 0 12px;
+  color: #b45f38;
+  font: 700 11px/1.3 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.amsterdam-vr h1 {
+  margin: 0 0 18px;
+  max-width: 10ch;
+  font-size: clamp(42px, 5vw, 66px);
+  line-height: 0.95;
+  letter-spacing: 0;
+}
+
+.amsterdam-vr p {
+  color: rgba(29, 47, 55, 0.72);
+  font-size: 14px;
+  line-height: 1.85;
+}
+
+.amsterdam-vr code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.amsterdam-vr dl {
+  display: grid;
+  gap: 12px;
+  margin: 28px 0 0;
+}
+
+.amsterdam-vr dl div {
+  padding: 14px 0;
+  border-top: 1px solid rgba(29, 47, 55, 0.12);
+}
+
+.amsterdam-vr dt {
+  margin-bottom: 5px;
+  color: rgba(29, 47, 55, 0.48);
+  font: 700 10px/1.2 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.amsterdam-vr dd {
+  margin: 0;
+  font: 700 14px/1.35 ui-sans-serif, system-ui, sans-serif;
+}
+
+.amsterdam-vr-label {
+  min-width: 150px;
+  pointer-events: none;
+  text-align: center;
+  color: #fbf3e7;
+  text-shadow: 0 1px 8px rgba(19, 36, 43, 0.42);
+}
+
+.amsterdam-vr-label strong,
+.amsterdam-vr-label span {
+  display: block;
+}
+
+.amsterdam-vr-label strong {
+  padding: 0 8px;
+  font: 850 12px/1.2 ui-sans-serif, system-ui, sans-serif;
+}
+
+.amsterdam-vr-label span {
+  margin-top: 3px;
+  color: rgba(251, 243, 231, 0.72);
+  font: 700 10px/1.2 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.amsterdam-vr-scene-note {
+  width: 220px;
+  padding: 14px 16px;
+  border: 1px solid rgba(29, 47, 55, 0.14);
+  background: rgba(247, 250, 247, 0.82);
+  color: #1d2f37;
+  box-shadow: 0 18px 50px rgba(29, 47, 55, 0.14);
+}
+
+.amsterdam-vr-scene-note strong,
+.amsterdam-vr-scene-note span {
+  display: block;
+}
+
+.amsterdam-vr-scene-note strong {
+  margin-bottom: 6px;
+  font: 800 13px/1.25 ui-sans-serif, system-ui, sans-serif;
+}
+
+.amsterdam-vr-scene-note span {
+  color: rgba(29, 47, 55, 0.58);
+  font: 700 10px/1.2 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.amsterdam-vr__state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(29, 47, 55, 0.72);
+  font: 700 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 860px) {
+  .amsterdam-vr {
+    grid-template-columns: 1fr;
+  }
+
+  .amsterdam-vr__scene {
+    min-height: 62vh;
+  }
+
+  .amsterdam-vr__panel {
+    min-height: auto;
+    border-left: 0;
+    border-top: 1px solid rgba(29, 47, 55, 0.12);
+  }
+}

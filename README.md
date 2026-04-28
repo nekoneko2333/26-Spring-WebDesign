@@ -1,216 +1,187 @@
-# Web3D Italy Drive
+# Web3D Project
 
-Web3D Italy Drive 是一个将旅游图文导览、路线规划和 3D 地图驾驶体验结合起来的网页应用原型。
+本项目目前包含两个彼此隔离的体验：
 
-当前阶段以 mock 数据为主：前端可以浏览意大利景点、查看模拟评价、规划路线，并进入 3D Drive Explorer 沿路线沉浸式导览。后续可以逐步替换为真实景点、真实道路、真实评价和交通数据。
+- **Italy Drive Guide**：意大利旅游路线规划与 3D 驾驶导览。
+- **Amsterdam Museumplein VR Lab**：阿姆斯特丹 Museumplein 城市 VR 漫游实验区。
 
-## 当前目标
+Amsterdam 实验区通过独立 hash 路由进入，数据和代码都放在独立目录中，不影响原有意大利导览功能。
 
-项目目标是做一个 Web3D 旅游导览系统：
-
-- 通过名称、地点、距离等方式检索景点。
-- 展示景点评分、评价、旅行说明和 3D 模型。
-- 支持路线规划，当前使用 mock route，后续可接入 OSM / OSRM / PostGIS / 大模型推荐。
-- 将路线转成沉浸式 3D 导览，小车沿道路行驶，结合地形、道路语义和视觉特效表现旅途体验。
-
-## 当前实现
-
-### 首页
-
-- 旅游网站风格首页，不再是单一 landing page。
-- 顶部页面切换：目的地、路线规划、评价、3D 导览。
-- 中英文切换。
-- 目的地卡片、路线地图、路线语义标签、模拟评价展示。
-- 加入动态网格背景、扫描光、路线脉冲、卡片 hover 和流光效果。
-
-### 3D Drive Explorer
-
-- React Three Fiber 场景。
-- DEM 地形加载与低多边形风格地图渲染。
-- mock 真实感路线中心线。
-- 语义路线体验层：城市道路、高速、景观路、山路、桥、隧道、环路等。
-- 车辆沿 `THREE.CatmullRomCurve3` 运动，不使用真实物理车。
-- 车辆速度、车身晃动、转向倾斜、HUD 信息由当前语义路段驱动。
-- 道路走廊削坡，减少路线穿山问题。
-- 地标聚焦、侧边信息面板、模型预览弹层。
-
-### 后端
-
-- FastAPI mock API。
-- 提供 mock landmarks、reviews、nearby reviews、current route。
-- 保留 PostgreSQL / PostGIS / Playwright 相关文件，作为后续真实数据接入基础。
-
-## 技术栈
-
-### 前端
-
-- Vite 8
-- React 18
-- Three.js
-- @react-three/fiber
-- @react-three/drei
-- Zustand
-- @tanstack/react-query
-- Tailwind CSS 4
-- 自定义 CSS 模块
-
-### 3D / 地图
-
-- Three.js
-- three-stdlib
-- 3d-tiles-renderer
-- DEM terrain sampling
-- `THREE.CatmullRomCurve3` 路径动画
-- 语义路线体验层
-- 道路走廊削坡
-
-### 后端
-
-- FastAPI
-- Uvicorn
-- psycopg[binary]
-- Playwright
-
-### 当前说明
-
-- 当前数据默认使用本地 mock 数据。
-- `@react-three/rapier` 仍在依赖中，但当前主链路没有使用物理车辆。
-- 当前车辆方案是 kinematic curve drive，不是真实物理车。
-- 未配置 `VITE_API_BASE_URL` 时，前端评价优先使用本地 mock 数据。
-
-## 目录结构
-
-```text
-web3d-project/
-├─ backend/
-│  ├─ db.py
-│  ├─ main.py
-│  ├─ postgis_queries.py
-│  ├─ playwright_reviews.py
-│  └─ requirements.txt
-├─ public/
-│  ├─ models/
-│  │  ├─ colosseum.glb
-│  │  ├─ leaning_tower_of_pisa.glb
-│  │  └─ low-poly_truck_car_drifter.glb
-│  ├─ favicon.svg
-│  └─ icons.svg
-├─ src/
-│  ├─ components/
-│  │  ├─ camera/
-│  │  │  └─ FollowCamera.jsx
-│  │  ├─ home/
-│  │  │  └─ HomePage.jsx
-│  │  ├─ landmarks/
-│  │  │  └─ LandmarkModels.jsx
-│  │  ├─ layout/
-│  │  │  └─ AppShell.jsx
-│  │  ├─ scene/
-│  │  │  ├─ GroundPlane.jsx
-│  │  │  ├─ MapSurface.jsx
-│  │  │  ├─ RoadRibbon.jsx
-│  │  │  ├─ SceneLights.jsx
-│  │  │  └─ TilesLayer.jsx
-│  │  ├─ ui/
-│  │  │  ├─ ModelViewerOverlay.jsx
-│  │  │  └─ UIOverlay.jsx
-│  │  └─ vehicle/
-│  │     └─ VehicleController.jsx
-│  ├─ config/
-│  │  └─ theme.js
-│  ├─ data/
-│  │  ├─ landmarks.js
-│  │  ├─ reviewLocales.js
-│  │  ├─ routes.js
-│  │  ├─ terrain.js
-│  │  └─ travelGuide.js
-│  ├─ hooks/
-│  │  ├─ useKeyboardDrive.js
-│  │  ├─ useLandmarkReviews.js
-│  │  └─ useTerrainData.js
-│  ├─ state/
-│  │  └─ useAppStore.js
-│  ├─ styles/
-│  │  ├─ base.css
-│  │  ├─ decorations.css
-│  │  ├─ home.css
-│  │  ├─ hud.css
-│  │  ├─ intro.css
-│  │  └─ panels.css
-│  ├─ App.jsx
-│  ├─ index.css
-│  ├─ main.jsx
-│  └─ style.css
-├─ index.html
-├─ package.json
-├─ postcss.config.js
-├─ vite.config.js
-└─ README.md
-```
-
-## 关键模块
-
-### `src/data/routes.js`
-
-路线数据层。
-
-- `currentRoute`：mock 路线点，结构模拟未来真实道路数据。
-- `roadCurve`：路线中心线曲线。
-- `routeSegments`：语义路线体验层。
-- `getRouteSegmentAtProgress`：根据车辆进度获取当前路段。
-- `getRouteProfile`：返回速度、粗糙度、转向倾斜、路面标签等体验参数。
-
-### `src/data/terrain.js`
-
-地形数据层。
-
-- 加载 DEM tile。
-- 生成 terrain geometry 和 stylized texture。
-- 提供地形采样函数。
-- 生成语义化道路高度曲线。
-- 在地形网格生成时执行道路走廊削坡，减少道路穿山。
-
-### `src/components/vehicle/VehicleController.jsx`
-
-车辆控制层。
-
-- 沿 `roadCurve` 推进车辆。
-- 支持手动驾驶和自动巡航。
-- 使用当前语义路段控制速度、车身晃动和转向反馈。
-- 更新 HUD 所需的 `routeContext`。
-
-### `src/components/scene/RoadRibbon.jsx`
-
-道路渲染层。
-
-- 按语义路段拆分道路 mesh。
-- 根据交通状态和路段类型着色。
-- 使用语义道路高度曲线保持道路连续和平滑。
-
-### `src/components/home/HomePage.jsx`
-
-首页体验层。
-
-- 多页面切换。
-- 目的地、路线规划、评价、3D 导览入口。
-- 读取 `routeSegments` 展示路线体验信息。
-
-## 启动方式
-
-### 前端
+## 快速启动
 
 ```bash
 npm install
-npm run dev
+npm.cmd run dev
 ```
 
-默认地址：
+默认应用：
 
-```text
+```txt
 http://127.0.0.1:5173
 ```
 
-### 后端
+Amsterdam VR 实验区：
+
+```txt
+http://127.0.0.1:5173/#/amsterdam-vr
+```
+
+构建检查：
+
+```bash
+npm.cmd run build
+```
+
+## 功能概览
+
+### Italy Drive Guide
+
+- 旅游首页：目的地、路线规划、评价、3D 导览入口。
+- 目的地卡片：搜索、筛选、收藏、对比、加入路线。
+- 路线规划：本地持久化、OSRM 距离与时长。
+- 内容数据：Wikipedia summary 作为目的地背景资料来源。
+- 3D 导览：React Three Fiber / Three.js 场景、车辆沿路线曲线行驶、地标聚焦、模型预览。
+
+### Amsterdam Museumplein VR Lab
+
+- 独立入口：`#/amsterdam-vr`。
+- 本地静态数据：`public/city/amsterdam-museumplein/`。
+- 建筑数据：30 个由 3DBAG CityJSON 转换而来的 GLB tile。
+- 地面数据：OpenStreetMap 本地导出的道路、步道、公园、广场、水体。
+- POI：Rijksmuseum、Van Gogh Museum、Stedelijk Museum、Concertgebouw、Vondelpark edge。
+- 场景渲染：建筑、地面图层、POI 标牌、路线线、城市导览面板。
+
+## 目录结构
+
+```txt
+web3d-project/
+├── backend/                              # FastAPI 后端，保留 mock API、PostGIS 预留代码
+│   ├── main.py                           # FastAPI 入口
+│   ├── db.py                             # 数据库连接预留
+│   ├── postgis_queries.py                # PostGIS 查询预留
+│   └── requirements.txt                  # 后端依赖
+│
+├── public/                               # 前端运行时静态资源
+│   ├── city/                             # 城市 VR 实验区本地数据
+│   │   └── amsterdam-museumplein/        # Amsterdam Museumplein 数据包
+│   │       ├── manifest.json             # 城市数据入口、中心点、文件索引、坐标系说明
+│   │       ├── pois.json                 # 人工整理的景点 / POI
+│   │       ├── layers/                   # 地面图层数据
+│   │       │   └── ground-layers.geojson # OSM 转换后的道路、绿地、水体、广场
+│   │       ├── routes/                   # 本地漫游路线
+│   │       │   └── museumplein-loop.geojson
+│   │       └── tiles/                    # 3D 建筑 tile
+│   │           ├── building-tiles.json   # GLB tile 清单
+│   │           └── *.glb                 # 3DBAG CityJSON 转换后的建筑模型
+│   │
+│   └── models/                           # Italy 3D 导览使用的模型资源
+│       ├── colosseum.glb
+│       ├── leaning_tower_of_pisa.glb
+│       └── low-poly_truck_car_drifter.glb
+│
+├── src/                                  # 前端源码
+│   ├── components/                       # Italy Guide 的主要 UI 和 3D 组件
+│   │   ├── home/                         # 首页、路线规划、评价页
+│   │   ├── scene/                        # 地图表面、道路、灯光、地面等 3D 场景层
+│   │   ├── vehicle/                      # 车辆控制与车辆模型
+│   │   ├── landmarks/                    # 意大利地标模型渲染
+│   │   └── ui/                           # HUD、弹层、模型预览等 UI
+│   │
+│   ├── data/                             # Italy Guide 的路线、地标、文案、地形数据
+│   ├── hooks/                            # OSRM、Wikipedia、天气、评价等数据 hook
+│   ├── state/                            # Zustand 全局状态
+│   ├── styles/                           # Italy Guide 样式文件
+│   │
+│   ├── experiments/                      # 独立实验区，不耦合主功能
+│   │   └── amsterdam-vr/                 # Amsterdam Museumplein VR Lab
+│   │       ├── AmsterdamVrLab.jsx        # 实验区主页面和 Three.js 场景
+│   │       ├── amsterdam-vr.css          # 实验区独立样式
+│   │       └── README.md                 # 实验区说明
+│   │
+│   ├── App.jsx                           # 应用入口，按 hash 路由切换 Amsterdam 实验区
+│   └── main.jsx                          # React 挂载入口
+│
+├── tools/                                # 本地数据准备脚本
+│   └── amsterdam-vr/                     # Amsterdam 数据下载和转换工具
+│       ├── README.md                     # 数据准备说明
+│       ├── download-3dbag-museumplein.ps1# 下载 3DBAG CityJSON
+│       ├── tile_download.py              # 本地化 3DBAG tile 下载器
+│       ├── convert_cityjson_to_glb.py    # CityJSON -> GLB 转换
+│       └── fetch_osm_ground_layers.py    # OSM XML -> ground-layers.geojson
+│
+├── data/                                 # 原始下载数据目录，已 gitignore
+├── package.json                          # 前端依赖和 npm scripts
+├── vite.config.js                        # Vite 配置
+└── README.md                             # 项目说明
+```
+
+## Amsterdam 数据流程
+
+Amsterdam 实验区运行时不依赖在线 API。所有网络访问只发生在数据准备阶段，最终浏览器只读取本地静态文件。
+
+### 建筑数据
+
+数据源：
+
+```txt
+3DBAG CityJSON
+```
+
+原始下载目录：
+
+```txt
+data/raw/3dbag/museumplein/cityjson/
+```
+
+运行时文件：
+
+```txt
+public/city/amsterdam-museumplein/tiles/*.glb
+public/city/amsterdam-museumplein/tiles/building-tiles.json
+```
+
+转换命令：
+
+```powershell
+C:\Users\33549\.conda\envs\web3d-backend\python.exe .\tools\amsterdam-vr\convert_cityjson_to_glb.py
+```
+
+坐标对齐：
+
+- 3DBAG 建筑源数据使用 `EPSG:28992`。
+- 转换脚本读取 `manifest.json` 中的中心点。
+- 脚本通过 `pyproj` 将中心点从 `EPSG:4326` 投影到 `EPSG:28992`。
+- GLB 顶点会被转换到以 Museumplein 中心为原点的本地米制坐标。
+
+### 地面数据
+
+数据源：
+
+```txt
+OpenStreetMap XML extract
+```
+
+原始下载文件：
+
+```txt
+data/raw/osm/amsterdam-museumplein/osm-map.xml
+```
+
+运行时文件：
+
+```txt
+public/city/amsterdam-museumplein/layers/ground-layers.geojson
+```
+
+重新生成地面图层：
+
+```powershell
+$env:HTTP_PROXY='http://127.0.0.1:7890'
+$env:HTTPS_PROXY='http://127.0.0.1:7890'
+C:\Users\33549\.conda\envs\web3d-backend\python.exe .\tools\amsterdam-vr\fetch_osm_ground_layers.py
+```
+
+## 后端启动
 
 ```bash
 cd backend
@@ -218,61 +189,24 @@ pip install -r requirements.txt
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-## 交互说明
-
-### 首页
-
-- 切换 `EN / 中文`
-- 切换目的地、路线规划、评价、3D 导览页面
-- 点击目的地卡片进入对应 3D 导览
-- 点击主按钮进入 3D Drive Explorer
-
-### 3D Explorer
-
-- `Enter`：进入 3D 场景
-- `W / S`：沿路线前进 / 后退
-- `Shift`：加速
-- `R`：自动巡航
-- `V`：地图 / 跟随视角切换
-- `F`：打开附近地标侧边导览
-- `Esc`：关闭模型预览或地标聚焦
-- 鼠标拖拽：模型预览中旋转模型
-- 鼠标滚轮：模型预览中缩放模型
-
-## 环境变量
-
-默认不需要环境变量即可运行。
-
-如需请求后端 mock API：
+如果前端需要访问后端：
 
 ```bash
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-如需启用 Google 3D Tiles 或其他 3D Tiles 数据源：
+## 已知限制
 
-```bash
-VITE_GOOGLE_3DTILES_URL=your_tileset_url
-```
-
-后端 CORS 默认允许：
-
-```text
-http://127.0.0.1:5173
-http://localhost:5173
-```
-
-可通过环境变量覆盖：
-
-```bash
-CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
-```
+- Italy Drive Guide 的车辆路线仍然是曲线驱动，不是真实道路网络驾驶物理。
+- Amsterdam 的 GLB 转换脚本是预览级流程：使用 CityJSON LoD1.2 外环扇形三角化，暂时忽略洞、多语义表面和更精细材质。
+- Amsterdam 地面层已经来自真实 OSM 数据，但渲染方式仍是简化视觉层。
+- Amsterdam 漫游路线目前仍是手写 GeoJSON，不是从本地步行网络自动生成。
+- `data/raw/` 已加入 `.gitignore`，原始下载数据不进入版本管理。可运行的静态资源放在 `public/city/`。
 
 ## 后续方向
 
-- 用 OSM / OSRM / GraphHopper / Valhalla 替换 mock route geometry。
-- 用 PostGIS 管理景点、路线、空间查询和附近搜索。
-- 接入真实评论数据爬取、清洗和归一化。
-- 扩展路线语义层，让大模型或规则系统生成更自然的旅行路线。
-- 继续优化隧道、桥梁、山路的 3D 表现。
-- 评估是否移除未使用的 `@react-three/rapier` 依赖。
+- 给 Amsterdam 建筑增加轮廓线，让体块和屋顶更清楚。
+- 将 POI 与建筑 footprint 做空间关联，高亮真正的重点建筑。
+- 用本地 OSM 步行网络替换当前手写路线。
+- 增加第一人称步行和自动导览模式。
+- 当城市数据扩大后，按距离加载 / 卸载 GLB tile。

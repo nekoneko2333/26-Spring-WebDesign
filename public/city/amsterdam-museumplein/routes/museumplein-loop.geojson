@@ -1,0 +1,28 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "museumplein-loop",
+        "name": "Museumplein Culture Walk",
+        "mode": "walk",
+        "source": "hand-authored local route"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [4.88525, 52.35999],
+          [4.8835, 52.3594],
+          [4.8811, 52.3584],
+          [4.8797, 52.358],
+          [4.8799, 52.3562],
+          [4.883, 52.3561],
+          [4.8867, 52.3571],
+          [4.8873, 52.3587],
+          [4.88525, 52.35999]
+        ]
+      }
+    }
+  ]
+}

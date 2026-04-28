@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+data/raw/
+tools/amsterdam-vr/.cache/
 
 # Editor directories and files
 .vscode/*

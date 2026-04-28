@@ -1,0 +1,30 @@
+{
+  "id": "amsterdam-museumplein",
+  "name": "Amsterdam Museumplein VR Lab",
+  "center": {
+    "lon": 4.88525,
+    "lat": 52.35842
+  },
+  "bounds": {
+    "west": 4.875,
+    "south": 52.353,
+    "east": 4.897,
+    "north": 52.365
+  },
+  "source": {
+    "cityModel": "3DBAG CityJSON tiles converted locally to GLB",
+    "groundLayers": "OpenStreetMap XML extract converted locally to GeoJSON",
+    "pois": "Curated local POI list using public coordinates",
+    "routes": "Hand-authored local GeoJSON route for the first POC",
+    "crs": {
+      "buildings": "EPSG:28992 source, converted to local meters around center",
+      "ground": "EPSG:4326 source, projected to local meters in the frontend"
+    }
+  },
+  "files": {
+    "pois": "/city/amsterdam-museumplein/pois.json",
+    "route": "/city/amsterdam-museumplein/routes/museumplein-loop.geojson",
+    "buildingTiles": "/city/amsterdam-museumplein/tiles/building-tiles.json",
+    "groundLayers": "/city/amsterdam-museumplein/layers/ground-layers.geojson"
+  }
+}

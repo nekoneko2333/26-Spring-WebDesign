@@ -1,0 +1,455 @@
+{
+  "source": "3DBAG CityJSON converted locally at LoD 1.2",
+  "tiles": [
+    {
+      "id": "10-422-712",
+      "url": "/city/amsterdam-museumplein/tiles/10-422-712.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-422-714",
+      "url": "/city/amsterdam-museumplein/tiles/10-422-714.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-422-716",
+      "url": "/city/amsterdam-museumplein/tiles/10-422-716.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-422-718",
+      "url": "/city/amsterdam-museumplein/tiles/10-422-718.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-424-712",
+      "url": "/city/amsterdam-museumplein/tiles/10-424-712.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-424-714",
+      "url": "/city/amsterdam-museumplein/tiles/10-424-714.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-424-716",
+      "url": "/city/amsterdam-museumplein/tiles/10-424-716.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-424-718",
+      "url": "/city/amsterdam-museumplein/tiles/10-424-718.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-424-720",
+      "url": "/city/amsterdam-museumplein/tiles/10-424-720.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-426-712",
+      "url": "/city/amsterdam-museumplein/tiles/10-426-712.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-426-714",
+      "url": "/city/amsterdam-museumplein/tiles/10-426-714.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-426-716",
+      "url": "/city/amsterdam-museumplein/tiles/10-426-716.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-426-718",
+      "url": "/city/amsterdam-museumplein/tiles/10-426-718.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-426-720",
+      "url": "/city/amsterdam-museumplein/tiles/10-426-720.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-428-712",
+      "url": "/city/amsterdam-museumplein/tiles/10-428-712.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-428-714",
+      "url": "/city/amsterdam-museumplein/tiles/10-428-714.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-428-716",
+      "url": "/city/amsterdam-museumplein/tiles/10-428-716.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-428-718",
+      "url": "/city/amsterdam-museumplein/tiles/10-428-718.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-428-720",
+      "url": "/city/amsterdam-museumplein/tiles/10-428-720.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-430-712",
+      "url": "/city/amsterdam-museumplein/tiles/10-430-712.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-430-714",
+      "url": "/city/amsterdam-museumplein/tiles/10-430-714.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-430-716",
+      "url": "/city/amsterdam-museumplein/tiles/10-430-716.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-430-718",
+      "url": "/city/amsterdam-museumplein/tiles/10-430-718.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-430-720",
+      "url": "/city/amsterdam-museumplein/tiles/10-430-720.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-432-712",
+      "url": "/city/amsterdam-museumplein/tiles/10-432-712.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-432-714",
+      "url": "/city/amsterdam-museumplein/tiles/10-432-714.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-432-716",
+      "url": "/city/amsterdam-museumplein/tiles/10-432-716.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-432-718",
+      "url": "/city/amsterdam-museumplein/tiles/10-432-718.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "10-432-720",
+      "url": "/city/amsterdam-museumplein/tiles/10-432-720.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    {
+      "id": "9-420-720",
+      "url": "/city/amsterdam-museumplein/tiles/9-420-720.glb",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1
+    }
+  ]
+}
