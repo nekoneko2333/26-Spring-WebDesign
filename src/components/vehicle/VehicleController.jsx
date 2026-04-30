@@ -14,9 +14,15 @@ const VEHICLE_TUNING = {
   simulationTimeScale: 1680,
   displaySpeedMultiplier: 4.2,
   exhibitionTargetMultiplier: 1.34,
+  maxSpeed: 132,
   maxReverseKmh: 24,
-  accelKmhPerSec: 82,
-  decelKmhPerSec: 66,
+  acceleration: 82,
+  brakeDeceleration: 66,
+  turnSpeedFactor: 2.8,
+  lookAheadDistance: 0.012,
+  stopDistance: 22,
+  poiApproachDistance: 72,
+  poiCruiseFactor: 0.7,
   maxSteerRatePerSec: 2.6,
   maxSteerAngle: 0.42,
 };
@@ -79,7 +85,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       steerRef.current = 0;
       poseYawRef.current = 0;
       initializedTargetRef.current = routeInitKey;
-      applyCurvePose(vehicle, routeCurve, progressRef.current, 0);
+      applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, delta);
       setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
       setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
     }
@@ -93,7 +99,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       setAutoDrive(false);
       setNearbyLandmarkId(initialLandmarkId ?? null);
       setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
-      applyCurvePose(vehicle, routeCurve, progressRef.current, 0);
+      applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, delta);
       return;
     }
 
@@ -106,6 +112,8 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       setAutoDrive(false);
     }
 
+    const nearbyLandmark = getNearbyLandmarkInfo(currentPoint.x, currentPoint.z);
+
     if (routeLocked) {
       targetSpeedRef.current = 0;
     } else if (autoDrive) {
@@ -117,9 +125,28 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       targetSpeedRef.current = targetKmh;
     }
 
+    if (nearbyLandmark) {
+      if (nearbyLandmark.distance <= VEHICLE_TUNING.stopDistance) {
+        targetSpeedRef.current = 0;
+      } else if (nearbyLandmark.distance <= VEHICLE_TUNING.poiApproachDistance) {
+        const poiSlowdown = THREE.MathUtils.clamp(
+          (nearbyLandmark.distance - VEHICLE_TUNING.stopDistance) / (VEHICLE_TUNING.poiApproachDistance - VEHICLE_TUNING.stopDistance),
+          0.16,
+          1,
+        );
+        targetSpeedRef.current *= VEHICLE_TUNING.poiCruiseFactor * poiSlowdown;
+      }
+    }
+
+    targetSpeedRef.current = THREE.MathUtils.clamp(
+      targetSpeedRef.current,
+      -VEHICLE_TUNING.maxReverseKmh,
+      VEHICLE_TUNING.maxSpeed,
+    );
+
     const maxDelta = (Math.abs(targetSpeedRef.current) > Math.abs(speedRef.current)
-      ? VEHICLE_TUNING.accelKmhPerSec
-      : VEHICLE_TUNING.decelKmhPerSec) * delta;
+      ? VEHICLE_TUNING.acceleration
+      : VEHICLE_TUNING.brakeDeceleration) * delta;
     speedRef.current = THREE.MathUtils.clamp(targetSpeedRef.current, speedRef.current - maxDelta, speedRef.current + maxDelta);
     if (Math.abs(speedRef.current) < 0.05) speedRef.current = 0;
 
@@ -135,7 +162,8 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     const targetSteer = applyCurvePose(vehicle, routeCurve, progressRef.current, speedRef.current, poseYawRef, delta);
     const steerDeltaCap = VEHICLE_TUNING.maxSteerRatePerSec * delta;
     steerRef.current = THREE.MathUtils.clamp(targetSteer, steerRef.current - steerDeltaCap, steerRef.current + steerDeltaCap);
-    setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
+
+    setNearbyLandmarkId(nearbyLandmark?.id ?? null);
     setVehicleState({
       vehicleSpeed: Math.abs(speedRef.current) * VEHICLE_TUNING.displaySpeedMultiplier,
       vehicleSteer: steerRef.current,
@@ -177,12 +205,12 @@ function getRouteContext(progress) {
 
 function getCurvatureSpeedFactor(progress) {
   roadCurve.getTangentAt(progress, tangentPoint);
-  roadCurve.getTangentAt(Math.min((progress + 0.008) % 1, 0.9999), aheadTangent);
+  roadCurve.getTangentAt(Math.min((progress + VEHICLE_TUNING.lookAheadDistance * 0.66) % 1, 0.9999), aheadTangent);
   flatTangent.copy(tangentPoint).setY(0).normalize();
   flatAheadTangent.copy(aheadTangent).setY(0).normalize();
   if (flatTangent.lengthSq() === 0 || flatAheadTangent.lengthSq() === 0) return 1;
   const turnAngle = flatTangent.angleTo(flatAheadTangent);
-  return THREE.MathUtils.clamp(1 - turnAngle * 2.8, 0.42, 1);
+  return THREE.MathUtils.clamp(1 - turnAngle * VEHICLE_TUNING.turnSpeedFactor, 0.42, 1);
 }
 
 function getInitialProgress(initialLandmarkId, curve) {
@@ -214,7 +242,7 @@ function getInitialProgress(initialLandmarkId, curve) {
 function applyCurvePose(vehicle, curve, progress, speed, poseYawRef, delta) {
   curve.getPointAt(progress, currentPoint);
   curve.getTangentAt(progress, tangentPoint);
-  curve.getTangentAt(Math.min((progress + 0.012) % 1, 0.9999), aheadTangent);
+  curve.getTangentAt(Math.min((progress + VEHICLE_TUNING.lookAheadDistance) % 1, 0.9999), aheadTangent);
 
   flatTangent.copy(tangentPoint).setY(0).normalize();
   if (flatTangent.lengthSq() === 0) return 0;
@@ -241,6 +269,10 @@ function applyCurvePose(vehicle, curve, progress, speed, poseYawRef, delta) {
 }
 
 function getNearbyLandmarkId(x, z) {
+  return getNearbyLandmarkInfo(x, z)?.id ?? null;
+}
+
+function getNearbyLandmarkInfo(x, z) {
   let closest = null;
   let closestDistance = Number.POSITIVE_INFINITY;
   for (const landmark of landmarks) {
@@ -252,7 +284,8 @@ function getNearbyLandmarkId(x, z) {
       closestDistance = distance;
     }
   }
-  return closest;
+  if (!closest) return null;
+  return { id: closest, distance: closestDistance };
 }
 
 export function VehicleChassis({ bodyRef }) {
