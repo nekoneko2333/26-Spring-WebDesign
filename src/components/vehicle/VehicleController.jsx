@@ -85,7 +85,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       steerRef.current = 0;
       poseYawRef.current = 0;
       initializedTargetRef.current = routeInitKey;
-      applyCurvePose(vehicle, routeCurve, progressRef.current, 0);
+      applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, delta);
       setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
       setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
     }
@@ -99,7 +99,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       setAutoDrive(false);
       setNearbyLandmarkId(initialLandmarkId ?? null);
       setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
-      applyCurvePose(vehicle, routeCurve, progressRef.current, 0);
+      applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, delta);
       return;
     }
 
@@ -137,7 +137,12 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
         targetSpeedRef.current *= VEHICLE_TUNING.poiCruiseFactor * poiSlowdown;
       }
     }
-    targetSpeedRef.current = THREE.MathUtils.clamp(targetSpeedRef.current, -VEHICLE_TUNING.maxReverseKmh, VEHICLE_TUNING.maxSpeed);
+
+    targetSpeedRef.current = THREE.MathUtils.clamp(
+      targetSpeedRef.current,
+      -VEHICLE_TUNING.maxReverseKmh,
+      VEHICLE_TUNING.maxSpeed,
+    );
 
     const maxDelta = (Math.abs(targetSpeedRef.current) > Math.abs(speedRef.current)
       ? VEHICLE_TUNING.acceleration
@@ -157,6 +162,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     const targetSteer = applyCurvePose(vehicle, routeCurve, progressRef.current, speedRef.current, poseYawRef, delta);
     const steerDeltaCap = VEHICLE_TUNING.maxSteerRatePerSec * delta;
     steerRef.current = THREE.MathUtils.clamp(targetSteer, steerRef.current - steerDeltaCap, steerRef.current + steerDeltaCap);
+
     setNearbyLandmarkId(nearbyLandmark?.id ?? null);
     setVehicleState({
       vehicleSpeed: Math.abs(speedRef.current) * VEHICLE_TUNING.displaySpeedMultiplier,
