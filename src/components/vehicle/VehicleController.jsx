@@ -10,12 +10,16 @@ import { buildSemanticRouteHeightProfile, worldPosToRouteHeight } from '../../da
 
 const START_PROGRESS = 0;
 const BASE_CLEARANCE = 0.22;
-const SIMULATION_TIME_SCALE = 1680;
-const DISPLAY_SPEED_MULTIPLIER = 4.2;
-const EXHIBITION_TARGET_MULTIPLIER = 1.34;
-const MAX_REVERSE_KMH = 24;
-const ACCEL_KMH_PER_SEC = 82;
-const DECEL_KMH_PER_SEC = 66;
+const VEHICLE_TUNING = {
+  simulationTimeScale: 1680,
+  displaySpeedMultiplier: 4.2,
+  exhibitionTargetMultiplier: 1.34,
+  maxReverseKmh: 24,
+  accelKmhPerSec: 82,
+  decelKmhPerSec: 66,
+  maxSteerRatePerSec: 2.6,
+  maxSteerAngle: 0.42,
+};
 const SIMULATED_DAYS = 3;
 const wheelOffsets = [
   [-0.82, 0.2, 1.22],
@@ -49,6 +53,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
   const targetSpeedRef = useRef(0);
   const steerRef = useRef(0);
   const initializedTargetRef = useRef(null);
+  const poseYawRef = useRef(0);
 
   const routeCurve = useMemo(() => {
     const sampledPoints = roadCurve.getPoints(160);
@@ -72,6 +77,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       speedRef.current = 0;
       targetSpeedRef.current = 0;
       steerRef.current = 0;
+      poseYawRef.current = 0;
       initializedTargetRef.current = routeInitKey;
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0);
       setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
@@ -83,6 +89,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       speedRef.current = 0;
       targetSpeedRef.current = 0;
       steerRef.current = 0;
+      poseYawRef.current = 0;
       setAutoDrive(false);
       setNearbyLandmarkId(initialLandmarkId ?? null);
       setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
@@ -102,19 +109,22 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     if (routeLocked) {
       targetSpeedRef.current = 0;
     } else if (autoDrive) {
-      targetSpeedRef.current = routeContext.segment.speedLimit * routeSpeedFactor * EXHIBITION_TARGET_MULTIPLIER;
+      targetSpeedRef.current = routeContext.segment.speedLimit * routeSpeedFactor * VEHICLE_TUNING.exhibitionTargetMultiplier;
     } else {
       let targetKmh = 0;
-      if (input.forward) targetKmh += routeContext.segment.speedLimit * routeSpeedFactor * EXHIBITION_TARGET_MULTIPLIER * (input.boost ? 1.35 : 1);
-      if (input.backward) targetKmh -= MAX_REVERSE_KMH;
+      if (input.forward) targetKmh += routeContext.segment.speedLimit * routeSpeedFactor * VEHICLE_TUNING.exhibitionTargetMultiplier * (input.boost ? 1.35 : 1);
+      if (input.backward) targetKmh -= VEHICLE_TUNING.maxReverseKmh;
       targetSpeedRef.current = targetKmh;
     }
 
-    const maxDelta = (Math.abs(targetSpeedRef.current) > Math.abs(speedRef.current) ? ACCEL_KMH_PER_SEC : DECEL_KMH_PER_SEC) * delta;
+    const maxDelta = (Math.abs(targetSpeedRef.current) > Math.abs(speedRef.current)
+      ? VEHICLE_TUNING.accelKmhPerSec
+      : VEHICLE_TUNING.decelKmhPerSec) * delta;
     speedRef.current = THREE.MathUtils.clamp(targetSpeedRef.current, speedRef.current - maxDelta, speedRef.current + maxDelta);
     if (Math.abs(speedRef.current) < 0.05) speedRef.current = 0;
 
-    const progressDelta = (speedRef.current / Math.max(currentRoute.distanceKm, 1) / 3600) * SIMULATION_TIME_SCALE * delta;
+    const progressDelta = (speedRef.current / Math.max(currentRoute.distanceKm, 1) / 3600)
+      * VEHICLE_TUNING.simulationTimeScale * delta;
 
     if (autoDrive && !routeLocked) {
       progressRef.current = (progressRef.current + progressDelta) % 1;
@@ -122,10 +132,12 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       progressRef.current = THREE.MathUtils.clamp(progressRef.current + progressDelta, 0, 0.9995);
     }
 
-    steerRef.current = applyCurvePose(vehicle, routeCurve, progressRef.current, speedRef.current);
+    const targetSteer = applyCurvePose(vehicle, routeCurve, progressRef.current, speedRef.current, poseYawRef, delta);
+    const steerDeltaCap = VEHICLE_TUNING.maxSteerRatePerSec * delta;
+    steerRef.current = THREE.MathUtils.clamp(targetSteer, steerRef.current - steerDeltaCap, steerRef.current + steerDeltaCap);
     setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
     setVehicleState({
-      vehicleSpeed: Math.abs(speedRef.current) * DISPLAY_SPEED_MULTIPLIER,
+      vehicleSpeed: Math.abs(speedRef.current) * VEHICLE_TUNING.displaySpeedMultiplier,
       vehicleSteer: steerRef.current,
       routeContext,
       routeProgress: progressRef.current,
@@ -152,11 +164,25 @@ function getRouteTimeline(progress) {
 function getRouteContext(progress) {
   const point = getRoutePointAtProgress(progress);
   const segment = getRouteSegmentAtProgress(progress);
+  const curvatureSpeedFactor = getCurvatureSpeedFactor(progress);
   return {
     point,
-    segment,
+    segment: {
+      ...segment,
+      speedLimit: segment.speedLimit * curvatureSpeedFactor,
+    },
     profile: getRouteProfile(segment),
   };
+}
+
+function getCurvatureSpeedFactor(progress) {
+  roadCurve.getTangentAt(progress, tangentPoint);
+  roadCurve.getTangentAt(Math.min((progress + 0.008) % 1, 0.9999), aheadTangent);
+  flatTangent.copy(tangentPoint).setY(0).normalize();
+  flatAheadTangent.copy(aheadTangent).setY(0).normalize();
+  if (flatTangent.lengthSq() === 0 || flatAheadTangent.lengthSq() === 0) return 1;
+  const turnAngle = flatTangent.angleTo(flatAheadTangent);
+  return THREE.MathUtils.clamp(1 - turnAngle * 2.8, 0.42, 1);
 }
 
 function getInitialProgress(initialLandmarkId, curve) {
@@ -185,7 +211,7 @@ function getInitialProgress(initialLandmarkId, curve) {
   return closestProgress;
 }
 
-function applyCurvePose(vehicle, curve, progress, speed) {
+function applyCurvePose(vehicle, curve, progress, speed, poseYawRef, delta) {
   curve.getPointAt(progress, currentPoint);
   curve.getTangentAt(progress, tangentPoint);
   curve.getTangentAt(Math.min((progress + 0.012) % 1, 0.9999), aheadTangent);
@@ -201,14 +227,17 @@ function applyCurvePose(vehicle, curve, progress, speed) {
   }
 
   vehicle.position.copy(currentPoint);
-  vehicle.lookAt(lookTarget);
+  const targetYaw = Math.atan2(lookTarget.x - currentPoint.x, lookTarget.z - currentPoint.z);
+  if (!Number.isFinite(poseYawRef.current)) poseYawRef.current = targetYaw;
+  poseYawRef.current = THREE.MathUtils.damp(poseYawRef.current, targetYaw, 8.6, delta);
+  vehicle.rotation.set(0, poseYawRef.current, 0);
 
   flatAheadTangent.copy(aheadTangent).setY(0).normalize();
   if (flatAheadTangent.lengthSq() === 0) return 0;
 
   const turnAngle = flatTangent.angleTo(flatAheadTangent);
   const turnSign = Math.sign(flatTangent.clone().cross(flatAheadTangent).dot(upAxis)) || 0;
-  return THREE.MathUtils.clamp(turnAngle * turnSign * 4.5, -0.42, 0.42);
+  return THREE.MathUtils.clamp(turnAngle * turnSign * 4.5, -VEHICLE_TUNING.maxSteerAngle, VEHICLE_TUNING.maxSteerAngle);
 }
 
 function getNearbyLandmarkId(x, z) {
