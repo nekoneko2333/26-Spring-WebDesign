@@ -15,6 +15,8 @@ let heightMap = null;
 let hmWidth = 0;
 let hmHeight = 0;
 let loadPromise = null;
+let activeRouteCorridorPoints = null;
+let activeRouteCorridorKey = '';
 
 function emit() {
   for (const listener of listeners) listener(terrainState);
@@ -256,13 +258,15 @@ function buildGeometry() {
 }
 
 function buildRouteCorridorProfile() {
-  const samples = roadCurve.getPoints(220);
-  const heights = buildSemanticRouteHeightProfile(samples, getRouteSegmentAtProgress, { clearance: 0.12 });
+  const samples = activeRouteCorridorPoints?.length >= 2 ? activeRouteCorridorPoints : roadCurve.getPoints(220);
+  const heights = activeRouteCorridorPoints?.length >= 2
+    ? buildRouteHeightProfile(samples, { clearance: 0.18, maxGrade: 0.025, smoothPasses: 2 })
+    : buildSemanticRouteHeightProfile(samples, getRouteSegmentAtProgress, { clearance: 0.12 });
   return samples.map((point, index) => ({
     x: point.x,
     z: point.z,
     height: heights[index],
-    segment: getRouteSegmentAtProgress(index / Math.max(samples.length - 1, 1)),
+    segment: activeRouteCorridorPoints?.length >= 2 ? { type: 'realRoad' } : getRouteSegmentAtProgress(index / Math.max(samples.length - 1, 1)),
   }));
 }
 
@@ -360,6 +364,23 @@ export function subscribeTerrain(listener) {
 
 export function getTerrainState() {
   return terrainState;
+}
+
+export function setTerrainRouteCorridor(points) {
+  const nextKey = points?.length >= 2
+    ? `${points.length}:${points[0].x.toFixed(2)},${points[0].z.toFixed(2)}:${points[points.length - 1].x.toFixed(2)},${points[points.length - 1].z.toFixed(2)}`
+    : '';
+  if (nextKey === activeRouteCorridorKey) return;
+
+  activeRouteCorridorKey = nextKey;
+  activeRouteCorridorPoints = points?.length >= 2 ? points : null;
+  if (terrainState.status !== 'ready') return;
+  terrainState = {
+    ...terrainState,
+    geometry: buildGeometry(),
+    version: terrainState.version + 1,
+  };
+  emit();
 }
 
 export function worldPosToHeight(worldX, worldZ) {

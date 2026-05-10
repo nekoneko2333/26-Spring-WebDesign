@@ -3,10 +3,11 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useKeyboardDrive } from '../../hooks/useKeyboardDrive.js';
 import { useTerrainData } from '../../hooks/useTerrainData.js';
+import { useActiveRoute3d } from '../../hooks/useActiveRoute3d.js';
 import { useAppStore } from '../../state/useAppStore.js';
 import { landmarks } from '../../data/landmarks.js';
-import { currentRoute, getRoutePointAtProgress, getRouteProfile, getRouteSegmentAtProgress, roadCurve } from '../../data/routes.js';
-import { buildSemanticRouteHeightProfile, worldPosToRouteHeight } from '../../data/terrain.js';
+import { getRouteProfile } from '../../data/routes.js';
+import { buildRouteHeightProfile, worldPosToRouteHeight } from '../../data/terrain.js';
 
 const START_PROGRESS = 0;
 const BASE_CLEARANCE = 0.22;
@@ -37,6 +38,7 @@ const landmarkPoint = new THREE.Vector3();
 export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }) {
   const controls = useKeyboardDrive();
   const terrain = useTerrainData();
+  const activeRoute = useActiveRoute3d();
   const setCameraMode = useAppStore((state) => state.setCameraMode);
   const setNearbyLandmarkId = useAppStore((state) => state.setNearbyLandmarkId);
   const setVehicleState = useAppStore((state) => state.setVehicleState);
@@ -51,8 +53,8 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
   const initializedTargetRef = useRef(null);
 
   const routeCurve = useMemo(() => {
-    const sampledPoints = roadCurve.getPoints(160);
-    const roadProfile = buildSemanticRouteHeightProfile(sampledPoints, getRouteSegmentAtProgress, { clearance: 0.055 });
+    const sampledPoints = activeRoute.curve.getPoints(activeRoute.source === 'osrm' ? 420 : 180);
+    const roadProfile = buildRouteHeightProfile(sampledPoints, { clearance: 0.22, maxGrade: 0.025, smoothPasses: 2 });
 
     const terrainAwarePoints = sampledPoints.map((point, index) => new THREE.Vector3(
       point.x,
@@ -60,13 +62,13 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       point.z,
     ));
     return new THREE.CatmullRomCurve3(terrainAwarePoints, false, 'centripetal', 0.08);
-  }, [terrain.version]);
+  }, [activeRoute, terrain.version]);
 
   useFrame((_, delta) => {
     const vehicle = bodyRef.current;
     if (!vehicle) return;
 
-    const routeInitKey = `${initialLandmarkId ?? 'start'}-${terrain.version}`;
+    const routeInitKey = `${initialLandmarkId ?? 'start'}-${terrain.version}-${activeRoute.source}-${activeRoute.points.length}`;
     if (initializedTargetRef.current !== routeInitKey) {
       progressRef.current = getInitialProgress(initialLandmarkId, routeCurve);
       speedRef.current = 0;
@@ -75,7 +77,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       initializedTargetRef.current = routeInitKey;
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0);
       setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
-      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
+      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current, activeRoute), ...getRouteTimeline(progressRef.current) });
     }
 
     if (!drivingEnabled) {
@@ -85,13 +87,13 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       steerRef.current = 0;
       setAutoDrive(false);
       setNearbyLandmarkId(initialLandmarkId ?? null);
-      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
+      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current, activeRoute), ...getRouteTimeline(progressRef.current) });
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0);
       return;
     }
 
     const routeLocked = focusPanelOpen || modelViewerOpen;
-    const routeContext = getRouteContext(progressRef.current);
+    const routeContext = getRouteContext(progressRef.current, activeRoute);
     const routeSpeedFactor = THREE.MathUtils.clamp(routeContext.profile.speedFactor, 0.2, 1.08);
     const input = controls.current;
     const hasManualInput = input.forward || input.backward;
@@ -114,7 +116,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     speedRef.current = THREE.MathUtils.clamp(targetSpeedRef.current, speedRef.current - maxDelta, speedRef.current + maxDelta);
     if (Math.abs(speedRef.current) < 0.05) speedRef.current = 0;
 
-    const progressDelta = (speedRef.current / Math.max(currentRoute.distanceKm, 1) / 3600) * SIMULATION_TIME_SCALE * delta;
+    const progressDelta = (speedRef.current / Math.max(activeRoute.distanceKm, 1) / 3600) * SIMULATION_TIME_SCALE * delta;
 
     if (autoDrive && !routeLocked) {
       progressRef.current = (progressRef.current + progressDelta) % 1;
@@ -149,9 +151,29 @@ function getRouteTimeline(progress) {
   };
 }
 
-function getRouteContext(progress) {
-  const point = getRoutePointAtProgress(progress);
-  const segment = getRouteSegmentAtProgress(progress);
+function getRouteContext(progress, activeRoute) {
+  const routePoint = activeRoute.pointAtProgress(progress);
+  const point = {
+    id: `route-${routePoint.index}`,
+    landmarkId: null,
+    roadType: activeRoute.source === 'osrm' ? 'real_osrm_road' : 'planned_waypoint_line',
+  };
+  const segment = {
+    id: activeRoute.source === 'osrm' ? 'osrm-road' : 'planned-road',
+    type: activeRoute.source === 'osrm' ? 'motorway' : 'scenic',
+    trafficState: 'normal',
+    speedLimit: activeRoute.source === 'osrm' ? 90 : 70,
+    profile: {
+      label: activeRoute.source === 'osrm' ? 'OSRM road geometry' : 'Waypoint route',
+      surfaceLabel: activeRoute.source === 'osrm' ? 'real road geometry' : 'waypoint fallback',
+      speedFactor: 0.9,
+      roughness: activeRoute.source === 'osrm' ? 0.018 : 0.032,
+      turnLean: 0.92,
+      curveIntensity: 0.7,
+      elevationStyle: 'rolling',
+      color: '#6b7f84',
+    },
+  };
   return {
     point,
     segment,

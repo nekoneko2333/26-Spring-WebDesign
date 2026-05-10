@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
+    "fetch:live-data": "node tools/fetch-live-landmark-data.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },

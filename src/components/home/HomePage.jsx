@@ -5,11 +5,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../state/useAppStore.js';
 import { landmarks } from '../../data/landmarks.js';
 import { currentRoute, routeSegments } from '../../data/routes.js';
-import { travelGuide, travelLandmarkMeta, travelMapPoints } from '../../data/travelGuide.js';
+import { travelGuide, travelLandmarkMeta } from '../../data/travelGuide.js';
 import { reviewLocales } from '../../data/reviewLocales.js';
 import { useRouteMetrics } from '../../hooks/useRouteMetrics.js';
 import { useWeatherForLandmark } from '../../hooks/useWeather.js';
 import { useWikipediaSummary } from '../../hooks/useWikipediaSummary.js';
+import { useLiveLandmarkIndex } from '../../hooks/useLiveLandmarkData.js';
 
 const homeCopy = {
   en: {
@@ -41,11 +42,16 @@ const homeCopy = {
     },
     actions: {
       open3d: 'Open 3D Drive',
+      openV2: 'Open V2 Map',
+      openV3: 'Open V3 Sketch',
+      openAmsterdam: 'Open Amsterdam VR Lab',
       continue3d: 'Continue',
       export: 'Export',
       compare: 'Compare',
       favorites: 'Favorites',
       addToRoute: 'Add to route',
+      optimizeRoute: 'Optimize route',
+      showMore: 'Show more',
       remove: 'Remove',
       generate: 'Generate itinerary',
       resetRoute: 'Reset route',
@@ -76,7 +82,7 @@ const homeCopy = {
     },
     destinationCta: 'Open in 3D',
     ratingLabel: 'Source score',
-    routeSource: 'OSRM route (real)',
+    routeSource: 'Planned route',
     distanceUnit: 'km',
     durationUnit: 'h',
     speedUnit: 'km/h',
@@ -157,11 +163,15 @@ const homeCopy = {
     },
     actions: {
       open3d: '进入 3D 导览',
+      openV2: '打开 V2 地图',
+      openV3: '打开 V3 示意',
       continue3d: '继续导览',
       export: '导出',
       compare: '对比',
       favorites: '收藏',
       addToRoute: '加入路线',
+      optimizeRoute: '优化路线',
+      showMore: '查看更多',
       remove: '移除',
       generate: '生成行程',
       resetRoute: '重置路线',
@@ -192,7 +202,7 @@ const homeCopy = {
     },
     destinationCta: '进入 3D',
     ratingLabel: '来源评分',
-    routeSource: 'OSRM 实时路线',
+    routeSource: '规划路线',
     distanceUnit: 'km',
     durationUnit: 'h',
     speedUnit: 'km/h',
@@ -249,6 +259,18 @@ const homeCopy = {
 function getLandmarkDisplayName(landmark, language) {
   const meta = travelLandmarkMeta[landmark.id];
   return meta?.name?.[language] ?? landmark.name;
+}
+
+function getLiveSummary(liveLandmark, language) {
+  return liveLandmark?.wikipedia?.[language]?.extract || (language === 'en' ? liveLandmark?.wikipedia?.en?.extract : '') || '';
+}
+
+function getLiveImage(liveLandmark, language) {
+  return liveLandmark?.wikipedia?.[language]?.thumbnail || liveLandmark?.wikipedia?.en?.thumbnail || liveLandmark?.wikidata?.image || '';
+}
+
+function getLivePageUrl(liveLandmark, language) {
+  return liveLandmark?.wikipedia?.[language]?.pageUrl || liveLandmark?.wikipedia?.en?.pageUrl || liveLandmark?.wikidata?.source || '';
 }
 
 function getSegmentDisplay(segment, pageCopy) {
@@ -310,6 +332,111 @@ function haversineKm(a, b) {
   const sinDLon = Math.sin(dLon / 2);
   const c = 2 * Math.asin(Math.sqrt((sinDLat ** 2) + Math.cos(lat1) * Math.cos(lat2) * (sinDLon ** 2)));
   return R * c;
+}
+
+const ROUTE_MAP_BOUNDS = {
+  lonMin: 6.2,
+  lonMax: 18.8,
+  latMin: 36.4,
+  latMax: 46.5,
+};
+
+const ITALY_TRANSPORT_NETWORK = [
+  [[9.19, 45.46], [10.99, 45.44], [11.88, 45.41], [12.23, 45.49]],
+  [[10.99, 45.44], [11.34, 44.49], [11.25, 43.77], [12.48, 41.91], [14.33, 41.07], [14.49, 40.75]],
+  [[11.25, 43.77], [10.40, 43.72], [9.71, 44.15]],
+  [[14.49, 40.75], [15.01, 40.42], [16.61, 40.67], [17.24, 40.78]],
+  [[14.49, 40.75], [14.60, 40.63], [14.35, 40.81], [14.33, 41.07]],
+  [[13.36, 38.11], [13.59, 37.29], [15.00, 37.75]],
+  [[7.69, 45.07], [9.19, 45.46], [9.26, 45.99]],
+];
+
+const ITALY_MAINLAND_POLYGON = [
+  [7.5, 44.1], [7.7, 45.1], [8.6, 45.7], [10.2, 46.2], [12.2, 46.0], [13.6, 45.7], [13.9, 44.8],
+  [13.2, 43.9], [13.0, 43.1], [13.8, 42.6], [14.5, 42.0], [15.0, 41.2], [16.2, 41.9], [18.2, 40.7],
+  [18.5, 39.9], [17.5, 40.1], [16.8, 39.5], [17.2, 38.9], [16.6, 38.7], [16.0, 39.2], [15.6, 40.0],
+  [14.8, 40.6], [14.1, 40.9], [13.4, 41.3], [12.6, 41.7], [12.0, 42.5], [11.3, 43.4], [10.3, 43.9],
+  [9.3, 44.2], [8.5, 44.4], [7.8, 44.5],
+];
+const SARDINIA_POLYGON = [
+  [8.2, 41.2], [9.0, 41.2], [9.6, 40.6], [9.7, 39.7], [9.4, 38.9], [8.7, 38.6], [8.2, 39.1], [8.0, 40.0],
+];
+const SICILY_POLYGON = [
+  [12.4, 38.1], [13.4, 38.2], [15.1, 37.9], [15.7, 37.3], [14.8, 36.8], [13.4, 37.0], [12.5, 37.5],
+];
+
+function lngLatToMapPoint(lon, lat) {
+  const x = ((lon - ROUTE_MAP_BOUNDS.lonMin) / (ROUTE_MAP_BOUNDS.lonMax - ROUTE_MAP_BOUNDS.lonMin)) * 100;
+  const y = (1 - ((lat - ROUTE_MAP_BOUNDS.latMin) / (ROUTE_MAP_BOUNDS.latMax - ROUTE_MAP_BOUNDS.latMin))) * 100;
+  return {
+    x: Math.min(96, Math.max(4, x)),
+    y: Math.min(96, Math.max(4, y)),
+  };
+}
+
+function lngLatToSvgPoint(lon, lat) {
+  const point = lngLatToMapPoint(lon, lat);
+  return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+}
+
+function polygonToSvgPath(points) {
+  return points
+    .map(([lon, lat], index) => {
+      const point = lngLatToMapPoint(lon, lat);
+      return `${index === 0 ? 'M' : 'L'}${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+    })
+    .join(' ')
+    .concat(' Z');
+}
+
+function optimizeRouteOrder(routeIds, lockedIds) {
+  const locked = new Set(lockedIds);
+  const next = [...routeIds];
+  let chunkStart = 0;
+
+  while (chunkStart < next.length) {
+    while (chunkStart < next.length && locked.has(next[chunkStart])) chunkStart += 1;
+    let chunkEnd = chunkStart;
+    while (chunkEnd < next.length && !locked.has(next[chunkEnd])) chunkEnd += 1;
+    if (chunkEnd - chunkStart > 2) {
+      const before = next[chunkStart - 1] ?? null;
+      const optimized = nearestNeighborChunk(next.slice(chunkStart, chunkEnd), before);
+      next.splice(chunkStart, optimized.length, ...optimized);
+    }
+    chunkStart = chunkEnd + 1;
+  }
+
+  return next;
+}
+
+function nearestNeighborChunk(ids, startId = null) {
+  const remaining = new Set(ids);
+  const out = [];
+  let cursor = startId && travelLandmarkMeta[startId] ? startId : ids[0];
+  if (remaining.has(cursor)) {
+    out.push(cursor);
+    remaining.delete(cursor);
+  }
+
+  while (remaining.size > 0) {
+    const from = travelLandmarkMeta[cursor] ?? travelLandmarkMeta[out[out.length - 1]];
+    let best = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const id of remaining) {
+      const to = travelLandmarkMeta[id];
+      if (!from || !to) continue;
+      const distance = haversineKm(from, to);
+      if (distance < bestDistance) {
+        best = id;
+        bestDistance = distance;
+      }
+    }
+    const nextId = best ?? remaining.values().next().value;
+    out.push(nextId);
+    remaining.delete(nextId);
+    cursor = nextId;
+  }
+  return out;
 }
 
 function formatDistanceKm(value) {
@@ -414,9 +541,11 @@ function exportTextFile(filename, content) {
   URL.revokeObjectURL(url);
 }
 
-export function HomePage({ onOpenDrive }) {
+export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
   const language = useAppStore((state) => state.language);
   const setLanguage = useAppStore((state) => state.setLanguage);
+  const setActiveRouteIds = useAppStore((state) => state.setActiveRouteIds);
+  const setActiveRouteGeometry = useAppStore((state) => state.setActiveRouteGeometry);
   const copy = homeCopy[language] ?? homeCopy.en;
   const guideCopy = travelGuide[language] ?? travelGuide.en;
   const reviewsCopy = reviewLocales[language] ?? reviewLocales.en;
@@ -434,10 +563,24 @@ export function HomePage({ onOpenDrive }) {
   const [itineraryDays, setItineraryDays] = useState(3);
   const [itineraryPace, setItineraryPace] = useState('standard');
   const [showCompare, setShowCompare] = useState(false);
+  const [destinationVisibleCount, setDestinationVisibleCount] = useState(12);
+  const [routeQuery, setRouteQuery] = useState('');
 
   const routeMetrics = useRouteMetrics(routeIds);
+  const liveData = useLiveLandmarkIndex();
   const leadStopId = routeIds[0] ?? null;
   const leadWeather = useWeatherForLandmark(leadStopId);
+
+  useEffect(() => {
+    setActiveRouteIds(routeIds);
+  }, [routeIds, setActiveRouteIds]);
+
+  useEffect(() => {
+    setActiveRouteGeometry({
+      coordinates: routeMetrics.data?.geometryCoordinates ?? [],
+      distanceKm: routeMetrics.data?.distanceKm ?? null,
+    });
+  }, [routeMetrics.data, setActiveRouteGeometry]);
 
   useEffect(() => {
     // Make navigation feel like an actual page switch.
@@ -511,6 +654,35 @@ export function HomePage({ onOpenDrive }) {
     return sorted;
   }, [filterRegion, filterSeason, filterType, language, query, ratings, sortMode]);
 
+  const hasActiveDestinationSearch = query.trim().length > 0
+    || filterRegion !== 'any'
+    || filterType !== 'any'
+    || filterSeason !== 'any';
+
+  useEffect(() => {
+    setDestinationVisibleCount(12);
+  }, [filterRegion, filterSeason, filterType, query, sortMode]);
+
+  const visibleLandmarks = useMemo(() => (
+    hasActiveDestinationSearch ? filteredLandmarks : filteredLandmarks.slice(0, destinationVisibleCount)
+  ), [destinationVisibleCount, filteredLandmarks, hasActiveDestinationSearch]);
+
+  const routeSearchResults = useMemo(() => {
+    const q = routeQuery.trim().toLowerCase();
+    if (!q) return landmarks.filter((landmark) => !routeIds.includes(landmark.id)).slice(0, 8);
+    return landmarks
+      .filter((landmark) => {
+        if (routeIds.includes(landmark.id)) return false;
+        const meta = travelLandmarkMeta[landmark.id];
+        const name = getLandmarkDisplayName(landmark, language);
+        return name.toLowerCase().includes(q)
+          || (meta?.city?.[language] ?? '').toLowerCase().includes(q)
+          || (meta?.region?.[language] ?? '').toLowerCase().includes(q)
+          || (meta?.type?.[language] ?? '').toLowerCase().includes(q);
+      })
+      .slice(0, 8);
+  }, [language, routeIds, routeQuery]);
+
   const toggleFavorite = useCallback((id) => {
     setFavorites((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }, [setFavorites]);
@@ -541,6 +713,10 @@ export function HomePage({ onOpenDrive }) {
       return next;
     });
   }, [lockedSet, setRouteIds]);
+
+  const optimizeRoute = useCallback(() => {
+    setRouteIds((prev) => optimizeRouteOrder(prev, lockedIds));
+  }, [lockedIds, setRouteIds]);
 
   const toggleLock = useCallback((id) => {
     setLockedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -637,6 +813,7 @@ export function HomePage({ onOpenDrive }) {
         compareCount={compareSet.size}
         routeCount={routeIds.length}
         onOpenDrive={openDriveFromRoute}
+        onOpenAmsterdam={onOpenAmsterdam}
       />
 
       {activePage === 'destinations' && (
@@ -648,7 +825,10 @@ export function HomePage({ onOpenDrive }) {
 
             <div className="travel-hero__actions">
               <button className="travel-btn travel-btn--primary" type="button" onClick={openDriveFromRoute}>{copy.actions.open3d}</button>
+              <button className="travel-btn travel-btn--ghost" type="button" onClick={() => { window.location.hash = '#/v2'; }}>{copy.actions.openV2}</button>
+              <button className="travel-btn travel-btn--ghost" type="button" onClick={() => { window.location.hash = '#/v3'; }}>{copy.actions.openV3}</button>
               <button className="travel-btn travel-btn--ghost" type="button" onClick={() => setActivePage('planner')}>{guideCopy.hero.secondaryCta}</button>
+              <button className="travel-btn travel-btn--ghost" type="button" onClick={onOpenAmsterdam}>{copy.actions.openAmsterdam ?? 'Amsterdam VR'}</button>
             </div>
           </div>
 
@@ -689,19 +869,25 @@ export function HomePage({ onOpenDrive }) {
       {activePage === 'destinations' && (
         <section className="travel-page travel-page--destinations">
           <PageHeading pageCopy={copy.pages.destinations} />
-          <DestinationGrid
-            language={language}
-            pageCopy={copy}
-            reviewsCopy={reviewsCopy}
-            landmarks={filteredLandmarks}
-            favorites={favoriteSet}
-            compare={compareSet}
+            <DestinationGrid
+              language={language}
+              pageCopy={copy}
+              reviewsCopy={reviewsCopy}
+              liveIndex={liveData.index}
+              landmarks={visibleLandmarks}
+              favorites={favoriteSet}
+              compare={compareSet}
             onToggleFavorite={toggleFavorite}
             onToggleCompare={toggleCompare}
             onAddToRoute={addToRoute}
             onOpenDrive={onOpenDrive}
           />
           <div className="travel-actions-row">
+            {!hasActiveDestinationSearch && destinationVisibleCount < filteredLandmarks.length && (
+              <button className="travel-btn travel-btn--ghost" type="button" onClick={() => setDestinationVisibleCount((count) => count + 12)}>
+                {copy.actions.showMore} ({visibleLandmarks.length}/{filteredLandmarks.length})
+              </button>
+            )}
             <button className="travel-btn travel-btn--ghost" type="button" disabled={compareIds.length < 2} onClick={() => setShowCompare(true)}>
               {copy.actions.compare} ({compareIds.length}/4)
             </button>
@@ -721,14 +907,19 @@ export function HomePage({ onOpenDrive }) {
               copy={copy}
               routeIds={routeIds}
               locked={lockedSet}
+              routeQuery={routeQuery}
+              setRouteQuery={setRouteQuery}
+              routeSearchResults={routeSearchResults}
               onMove={moveRoute}
               onRemove={removeFromRoute}
+              onAdd={addToRoute}
               onLock={toggleLock}
               onReset={resetRoute}
+              onOptimize={optimizeRoute}
               onOpenDrive={openDriveFromRoute}
               onExport={exportItinerary}
             />
-            <RoutePreview language={language} copy={copy} routeIds={routeIds} />
+            <RoutePreview language={language} copy={copy} routeIds={routeIds} routeMetrics={routeMetrics} />
           </div>
 
           <div className="travel-planner__grid travel-planner__grid--secondary">
@@ -752,6 +943,7 @@ export function HomePage({ onOpenDrive }) {
           <ReviewsPanel
             language={language}
             pageCopy={copy}
+            liveIndex={liveData.index}
             favorites={favoriteSet}
             onToggleFavorite={toggleFavorite}
             onOpenDrive={onOpenDrive}
@@ -762,15 +954,20 @@ export function HomePage({ onOpenDrive }) {
       {activePage === 'drive' && (
         <section key="drive" className="travel-page travel-page--drive">
           <PageHeading pageCopy={copy.pages.drive} />
-          <div className="travel-drive-cta">
-            <div>
-              <h2>{guideCopy.featurePanel.title}</h2>
-              <p>{guideCopy.featurePanel.body}</p>
+          <div className="travel-drive-grid">
+            <div className="travel-drive-cta">
+              <div>
+                <h2>{guideCopy.featurePanel.title}</h2>
+                <p>{guideCopy.featurePanel.body}</p>
+              </div>
+              <div className="travel-drive-cta__actions">
+                <button className="travel-btn travel-btn--primary" type="button" onClick={openDriveFromRoute}>{copy.actions.open3d}</button>
+                <button className="travel-btn travel-btn--ghost" type="button" onClick={() => setActivePage('destinations')}>{copy.nav[0].label}</button>
+                <button className="travel-btn travel-btn--ghost" type="button" onClick={() => { window.location.hash = '#/v2'; }}>V2 Topology</button>
+                <button className="travel-btn travel-btn--ghost" type="button" onClick={() => { window.location.hash = '#/v3'; }}>V3 Abstract</button>
+              </div>
             </div>
-            <div className="travel-drive-cta__actions">
-              <button className="travel-btn travel-btn--primary" type="button" onClick={openDriveFromRoute}>{copy.actions.open3d}</button>
-              <button className="travel-btn travel-btn--ghost" type="button" onClick={() => setActivePage('destinations')}>{copy.nav[0].label}</button>
-            </div>
+            <AmsterdamLabGateway language={language} onOpenAmsterdam={onOpenAmsterdam} />
           </div>
         </section>
       )}
@@ -800,6 +997,7 @@ function SiteNav({
   compareCount,
   routeCount,
   onOpenDrive,
+  onOpenAmsterdam,
 }) {
   const navIndex = Math.max(0, copy.nav.findIndex((item) => item.id === activePage));
 
@@ -833,6 +1031,15 @@ function SiteNav({
         <button className="travel-btn travel-btn--primary travel-btn--wide" type="button" onClick={onOpenDrive}>
           {guideCopy.hero.primaryCta}
         </button>
+        <button className="travel-btn travel-btn--ghost travel-btn--wide" type="button" onClick={() => { window.location.hash = '#/v2'; }}>
+          V2 Map
+        </button>
+        <button className="travel-btn travel-btn--ghost travel-btn--wide" type="button" onClick={() => { window.location.hash = '#/v3'; }}>
+          V3 Sketch
+        </button>
+        <button className="travel-btn travel-btn--ghost travel-btn--wide travel-btn--lab" type="button" onClick={onOpenAmsterdam}>
+          Amsterdam VR
+        </button>
       </div>
 
       <div className="travel-lang-toggle" role="group" aria-label="Language toggle">
@@ -852,6 +1059,29 @@ function PageHeading({ pageCopy }) {
       </div>
       <p className="travel-section-heading__body">{pageCopy.body}</p>
     </div>
+  );
+}
+
+function AmsterdamLabGateway({ language, onOpenAmsterdam }) {
+  const isZh = language === 'zh';
+
+  return (
+    <article className="travel-lab-gateway">
+      <p className="travel-panel__eyebrow">{isZh ? '城市实验' : 'City lab'}</p>
+      <h2>Amsterdam Museumplein VR Lab</h2>
+      <p>
+        {isZh
+          ? '进入独立的阿姆斯特丹本地城市数据场景，包含 Museumplein 建筑瓦片、POI、路线与地面图层。'
+          : 'Open the standalone Amsterdam scene with local Museumplein building tiles, POIs, route data, and ground layers.'}
+      </p>
+      <dl>
+        <div><dt>{isZh ? '数据模式' : 'Data mode'}</dt><dd>{isZh ? '本地优先' : 'Local-first'}</dd></div>
+        <div><dt>{isZh ? '场景' : 'Scene'}</dt><dd>WebGL city VR</dd></div>
+      </dl>
+      <button className="travel-btn travel-btn--primary" type="button" onClick={onOpenAmsterdam}>
+        {isZh ? '打开阿姆斯特丹页面' : 'Open Amsterdam Page'}
+      </button>
+    </article>
   );
 }
 
@@ -1051,10 +1281,15 @@ function RouteEditor({
   copy,
   routeIds,
   locked,
+  routeQuery,
+  setRouteQuery,
+  routeSearchResults,
   onMove,
   onRemove,
+  onAdd,
   onLock,
   onReset,
+  onOptimize,
   onOpenDrive,
   onExport,
 }) {
@@ -1063,6 +1298,26 @@ function RouteEditor({
       <p className="travel-panel__eyebrow">{copy.pages.planner.eyebrow}</p>
       <h2>{copy.pages.planner.title}</h2>
       <p>{copy.pages.planner.body}</p>
+      <div className="travel-route-search">
+        <input
+          className="travel-search-input"
+          value={routeQuery}
+          onChange={(event) => setRouteQuery(event.target.value)}
+          placeholder={language === 'zh' ? '搜索景点、城市、区域并加入路线' : 'Search landmarks, cities, or regions to add stops'}
+          aria-label={language === 'zh' ? '搜索路线景点' : 'Search route stops'}
+        />
+        <div className="travel-route-search__results">
+          {routeSearchResults.map((landmark) => {
+            const meta = travelLandmarkMeta[landmark.id];
+            return (
+              <button key={landmark.id} type="button" onClick={() => onAdd(landmark.id)}>
+                <strong>{getLandmarkDisplayName(landmark, language)}</strong>
+                <span>{meta?.city?.[language]} / {meta?.region?.[language]}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="travel-route-editor">
         {routeIds.length === 0 && (
@@ -1095,6 +1350,7 @@ function RouteEditor({
 
       <div className="travel-actions-row">
         <button className="travel-btn travel-btn--ghost" type="button" onClick={onReset}>{copy.actions.resetRoute}</button>
+        <button className="travel-btn travel-btn--ghost" type="button" onClick={onOptimize}>{copy.actions.optimizeRoute}</button>
         <button className="travel-btn travel-btn--ghost" type="button" onClick={onExport}>{copy.actions.export}</button>
         <button className="travel-btn travel-btn--primary" type="button" onClick={onOpenDrive}>{copy.actions.open3d}</button>
       </div>
@@ -1102,36 +1358,59 @@ function RouteEditor({
   );
 }
 
-function RoutePreview({ language, copy, routeIds }) {
+function RoutePreview({ language, copy, routeIds, routeMetrics }) {
   const points = routeIds
-    .map((id) => ({ id, pos: travelMapPoints[id] }))
-    .filter((p) => Boolean(p.pos));
+    .map((id) => {
+      const meta = travelLandmarkMeta[id];
+      if (!meta) return null;
+      return { id, point: lngLatToMapPoint(meta.lon, meta.lat), label: meta.city?.[language] ?? meta.name?.[language] ?? id };
+    })
+    .filter((p) => Boolean(p.point));
 
-  const svgPoints = points.map((p) => {
-    const x = Number.parseFloat(p.pos.left);
-    const y = Number.parseFloat(p.pos.top);
-    return `${x},${y}`;
-  }).join(' ');
+  const routeData = routeMetrics?.data;
+  const routeGeometry = routeData?.geometryCoordinates?.length
+    ? routeData.geometryCoordinates.map(([lon, lat]) => lngLatToSvgPoint(lon, lat)).join(' ')
+    : '';
+  const networkLines = ITALY_TRANSPORT_NETWORK.map((line) => line.map(([lon, lat]) => lngLatToSvgPoint(lon, lat)).join(' '));
+  const mainlandPath = polygonToSvgPath(ITALY_MAINLAND_POLYGON);
+  const sardiniaPath = polygonToSvgPath(SARDINIA_POLYGON);
+  const sicilyPath = polygonToSvgPath(SICILY_POLYGON);
+  const routeState = routeIds.length < 2
+    ? (language === 'zh' ? '至少选择 2 个景点开始规划。' : 'Choose at least 2 stops to calculate a road route.')
+    : routeMetrics?.isFetching
+      ? (language === 'zh' ? '正在调用 OSRM 计算真实道路路线...' : 'Calculating real road route with OSRM...')
+      : routeGeometry
+        ? (language === 'zh' ? '已使用 OSRM 真实道路几何绘制路线。' : 'Route drawn from OSRM road geometry.')
+        : (language === 'zh' ? '道路服务暂不可用，保留景点坐标和交通走廊。' : 'Road service unavailable; showing stop coordinates and transport corridors.');
 
   return (
     <article className="travel-panel travel-panel--map">
       <p className="travel-panel__eyebrow">{copy.routeSource}</p>
       <h2>{language === 'zh' ? '路线预览' : 'Route preview'}</h2>
       <div className="travel-map travel-map--mini">
+        <span className="travel-map__sea travel-map__sea--a" aria-hidden="true" />
+        <span className="travel-map__sea travel-map__sea--b" aria-hidden="true" />
         <svg viewBox="0 0 100 100" className="travel-map__svg" aria-hidden="true">
-          <polyline fill="none" stroke="rgba(185, 129, 82, 0.9)" strokeWidth="1.1" points={svgPoints} />
+          <path className="travel-map__land" d={mainlandPath} />
+          <path className="travel-map__land travel-map__land--island" d={sardiniaPath} />
+          <path className="travel-map__land travel-map__land--island" d={sicilyPath} />
+          {networkLines.map((line, index) => (
+            <polyline key={index} className="travel-map__network" fill="none" points={line} />
+          ))}
+          {routeGeometry && <polyline className="travel-map__real-route" fill="none" points={routeGeometry} />}
+          {points.map((p, index) => (
+            <g key={p.id} className="travel-map__pin-svg" transform={`translate(${p.point.x.toFixed(2)} ${p.point.y.toFixed(2)})`}>
+              <circle className="travel-map__pin-halo" r="2.55" />
+              <circle className="travel-map__pin-core" r="1.15" />
+              <text x="2.4" y={index % 2 === 0 ? -2.2 : 4.4}>{p.label}</text>
+            </g>
+          ))}
         </svg>
-        {points.map((p) => (
-          <span key={p.id} className="travel-map__pin" style={p.pos}>
-            <span className="travel-map__pin-dot" />
-            <span className="travel-map__pin-label">{travelLandmarkMeta[p.id]?.city?.[language]}</span>
-          </span>
-        ))}
       </div>
       <p className="travel-map__note">
-        {language === 'zh'
+        {false && language === 'zh'
           ? `共 ${routeIds.length} 站，可在“路线规划”里调整顺序并生成行程。`
-          : `${routeIds.length} stops. Edit the order and generate an itinerary in the planner.`}
+          : routeState}
       </p>
     </article>
   );
@@ -1239,8 +1518,20 @@ function TravelSlider({ min, max, value, onChange, ariaLabel }) {
   );
 }
 
-function ReviewBrief({ landmarkId, language }) {
+function ReviewBrief({ landmarkId, language, liveLandmark }) {
   const wiki = useWikipediaSummary(landmarkId, language);
+  const liveDescription = getLiveSummary(liveLandmark, language);
+  const sourceUrl = getLivePageUrl(liveLandmark, language);
+  if (liveDescription) {
+    return (
+      <article className="travel-review-card">
+        <p>{liveDescription}</p>
+        {sourceUrl
+          ? <small><a href={sourceUrl} target="_blank" rel="noreferrer">Wikipedia / Wikidata</a></small>
+          : <small>Wikipedia / Wikidata</small>}
+      </article>
+    );
+  }
   if (wiki.isLoading) return <article className="travel-review-card"><p>Loading…</p><small>Wikipedia</small></article>;
   if (!wiki.data?.extract) return <article className="travel-review-card"><p>-</p><small>Wikipedia</small></article>;
   return (
@@ -1254,6 +1545,7 @@ function ReviewBrief({ landmarkId, language }) {
 function DestinationGridV2({
   language,
   pageCopy,
+  liveIndex,
   landmarks: landmarkList,
   favorites,
   compare,
@@ -1271,6 +1563,7 @@ function DestinationGridV2({
           index={index}
           language={language}
           pageCopy={pageCopy}
+          liveLandmark={liveIndex?.get(landmark.id)}
           favorites={favorites}
           compare={compare}
           onToggleFavorite={onToggleFavorite}
@@ -1288,6 +1581,7 @@ function DestinationCardV2({
   index,
   language,
   pageCopy,
+  liveLandmark,
   favorites,
   compare,
   onToggleFavorite,
@@ -1297,12 +1591,16 @@ function DestinationCardV2({
 }) {
   const meta = travelLandmarkMeta[landmark.id];
   const wiki = useWikipediaSummary(landmark.id, language);
-  const description = (wiki.data?.extract && wiki.data.extract.trim()) ? wiki.data.extract : meta.blurb[language];
+  const liveDescription = getLiveSummary(liveLandmark, language);
+  const description = liveDescription || ((wiki.data?.extract && wiki.data.extract.trim()) ? wiki.data.extract : meta.blurb[language]);
+  const imageUrl = getLiveImage(liveLandmark, language);
+  const sourceUrl = getLivePageUrl(liveLandmark, language);
   const tags = buildKeywordTags(description, language);
 
   return (
     <article className={`travel-destination-card travel-destination-card--${landmark.id}`}>
       <div className="travel-destination-card__media">
+        {imageUrl && <img src={imageUrl} alt="" loading="lazy" />}
         <span>{meta.city[language]}</span>
         <div className="travel-card-tools">
           <button type="button" className={`travel-icon-btn ${favorites.has(landmark.id) ? 'is-on' : ''}`} onClick={() => onToggleFavorite(landmark.id)} aria-label={pageCopy.actions.favorites}>♥</button>
@@ -1319,7 +1617,9 @@ function DestinationCardV2({
           {tags.map((tag) => <span key={tag} className="travel-tag">{tag}</span>)}
         </div>
         <div className="travel-destination-card__meta">
-          <span>{language === 'zh' ? '资料来源: Wikipedia' : 'Source: Wikipedia'}</span>
+          {sourceUrl
+            ? <a href={sourceUrl} target="_blank" rel="noreferrer">Source: Wikipedia / Wikidata</a>
+            : <span>{language === 'zh' ? '资料来源: Wikipedia' : 'Source: Wikipedia'}</span>}
           <div className="travel-btn-row">
             <button className="travel-btn travel-btn--ghost travel-btn--compact" type="button" onClick={() => onAddToRoute(landmark.id)}>{pageCopy.actions.addToRoute}</button>
             <button className="travel-btn travel-btn--ghost travel-btn--compact" type="button" onClick={() => onOpenDrive(landmark.id)}>{pageCopy.destinationCta}</button>
@@ -1331,12 +1631,14 @@ function DestinationCardV2({
   );
 }
 
-function ReviewsPanel({ language, pageCopy, favorites, onToggleFavorite, onOpenDrive }) {
+function ReviewsPanel({ language, pageCopy, liveIndex, favorites, onToggleFavorite, onOpenDrive }) {
   return (
     <div className="travel-reviews-grid">
       {landmarks.map((landmark) => {
         const meta = travelLandmarkMeta[landmark.id];
-        const tags = buildKeywordTags(`${meta?.blurb?.[language] ?? ''}`, language);
+        const liveLandmark = liveIndex?.get(landmark.id);
+        const liveDescription = getLiveSummary(liveLandmark, language);
+        const tags = buildKeywordTags(liveDescription || `${meta?.blurb?.[language] ?? ''}`, language);
         return (
           <article key={landmark.id} className="travel-reviews-block">
             <div className="travel-reviews-block__head">
@@ -1353,7 +1655,7 @@ function ReviewsPanel({ language, pageCopy, favorites, onToggleFavorite, onOpenD
               {tags.map((tag) => <span key={`${landmark.id}-${tag}`} className="travel-tag">{tag}</span>)}
             </div>
             <div className="travel-reviews-block__list">
-              <ReviewBrief landmarkId={landmark.id} language={language} />
+              <ReviewBrief landmarkId={landmark.id} language={language} liveLandmark={liveLandmark} />
             </div>
           </article>
         );

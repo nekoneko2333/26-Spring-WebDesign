@@ -34,6 +34,16 @@ function PlaceholderLandmarkModel({ landmark }) {
     bridge: '#d7c2a2',
     cathedral: '#d9d2bd',
     ruins: '#b99b72',
+    arena: '#c7a070',
+    fountain: '#9fc5cf',
+    palace: '#d6c4a8',
+    tower: '#d7d0bd',
+    temple: '#d2b98f',
+    castle: '#b9a58a',
+    coast: '#8fb9a7',
+    lake: '#7eaec1',
+    mountain: '#9a8f7c',
+    village: '#d8c8a6',
   }[landmark.modelKind] ?? '#c7a070';
 
   return (
@@ -54,12 +64,72 @@ function PlaceholderLandmarkModel({ landmark }) {
           <meshStandardMaterial color={color} roughness={0.66} />
         </mesh>
       )}
+      {landmark.modelKind === 'arena' && (
+        <>
+          <mesh castShadow position={[0, 0.9, 0]}>
+            <torusGeometry args={[landmark.scale * 0.38, 0.22, 12, 48]} />
+            <meshStandardMaterial color={color} roughness={0.78} />
+          </mesh>
+          <mesh position={[0, 0.92, 0]}>
+            <torusGeometry args={[landmark.scale * 0.25, 0.05, 8, 48]} />
+            <meshStandardMaterial color="#eadbbf" roughness={0.72} />
+          </mesh>
+        </>
+      )}
       {landmark.modelKind === 'cathedral' && [ -1.8, 0, 1.8 ].map((x) => (
         <mesh key={x} castShadow position={[x, 1.3, 0]}>
           <coneGeometry args={[0.42, 1.9, 5]} />
           <meshStandardMaterial color="#eee4ce" roughness={0.62} />
         </mesh>
       ))}
+      {landmark.modelKind === 'tower' && (
+        <>
+          <mesh castShadow position={[0, 2.15, 0]}>
+            <cylinderGeometry args={[landmark.scale * 0.18, landmark.scale * 0.24, landmark.scale * 0.72, 12]} />
+            <meshStandardMaterial color={color} roughness={0.64} />
+          </mesh>
+          <mesh castShadow position={[0, 4.55, 0]}>
+            <coneGeometry args={[landmark.scale * 0.16, landmark.scale * 0.34, 12]} />
+            <meshStandardMaterial color="#b98257" roughness={0.58} />
+          </mesh>
+        </>
+      )}
+      {landmark.modelKind === 'fountain' && (
+        <>
+          <mesh castShadow position={[0, 0.86, 0]}>
+            <cylinderGeometry args={[landmark.scale * 0.38, landmark.scale * 0.42, 0.32, 32]} />
+            <meshStandardMaterial color="#c8d6d7" roughness={0.42} />
+          </mesh>
+          <mesh position={[0, 1.12, 0]}>
+            <cylinderGeometry args={[landmark.scale * 0.3, landmark.scale * 0.3, 0.08, 32]} />
+            <meshStandardMaterial color="#72b9d3" emissive="#3f9fc0" emissiveIntensity={0.18} transparent opacity={0.72} />
+          </mesh>
+        </>
+      )}
+      {['palace', 'castle'].includes(landmark.modelKind) && [ -2.4, 2.4 ].map((x) => (
+        <mesh key={x} castShadow position={[x, 1.45, 0]}>
+          <cylinderGeometry args={[0.46, 0.54, 2.2, 10]} />
+          <meshStandardMaterial color={color} roughness={0.7} />
+        </mesh>
+      ))}
+      {landmark.modelKind === 'temple' && [ -2.2, -1.1, 0, 1.1, 2.2 ].map((x) => (
+        <mesh key={x} castShadow position={[x, 1.12, -0.15]}>
+          <cylinderGeometry args={[0.16, 0.18, 1.9, 10]} />
+          <meshStandardMaterial color="#e5d2a7" roughness={0.78} />
+        </mesh>
+      ))}
+      {landmark.modelKind === 'village' && [ -1.8, -0.55, 0.8, 2.0 ].map((x, index) => (
+        <mesh key={x} castShadow position={[x, 1.15, (index % 2) * 0.7 - 0.25]}>
+          <coneGeometry args={[0.5, 1.2, 12]} />
+          <meshStandardMaterial color="#d8c8a6" roughness={0.72} />
+        </mesh>
+      ))}
+      {['coast', 'lake', 'mountain'].includes(landmark.modelKind) && (
+        <mesh castShadow position={[0, 1.35, 0]}>
+          <coneGeometry args={[landmark.scale * 0.42, landmark.scale * 0.48, 6]} />
+          <meshStandardMaterial color={color} roughness={0.84} />
+        </mesh>
+      )}
       {landmark.modelKind === 'ruins' && [ -2.1, -0.7, 0.8, 2.2 ].map((x, index) => (
         <mesh key={x} castShadow position={[x, 1 + (index % 2) * 0.22, -0.1]}>
           <cylinderGeometry args={[0.18, 0.22, 1.8 + (index % 2) * 0.35, 8]} />
@@ -101,9 +171,15 @@ function LandmarkModel({ landmark }) {
 }
 
 export function LandmarkModels() {
+  const activeRouteIds = useAppStore((state) => state.activeRouteIds);
+  const visibleLandmarks = useMemo(() => {
+    const ids = activeRouteIds?.length ? new Set(activeRouteIds) : new Set(['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii']);
+    return landmarks.filter((landmark) => ids.has(landmark.id));
+  }, [activeRouteIds]);
+
   return (
     <group>
-      {landmarks.map((landmark) => (
+      {visibleLandmarks.map((landmark) => (
         <LandmarkModel key={landmark.id} landmark={landmark} />
       ))}
     </group>
