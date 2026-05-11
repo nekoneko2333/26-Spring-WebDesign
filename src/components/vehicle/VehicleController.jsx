@@ -184,7 +184,12 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
         targetSpeedRef.current *= VEHICLE_TUNING.poiCruiseFactor * poiSlowdown;
       }
     }
-    targetSpeedRef.current = THREE.MathUtils.clamp(targetSpeedRef.current, -VEHICLE_TUNING.maxReverseKmh, VEHICLE_TUNING.maxSpeed);
+
+    targetSpeedRef.current = THREE.MathUtils.clamp(
+      targetSpeedRef.current,
+      -VEHICLE_TUNING.maxReverseKmh,
+      VEHICLE_TUNING.maxSpeed,
+    );
 
     const maxDelta = (Math.abs(targetSpeedRef.current) > Math.abs(speedRef.current)
       ? VEHICLE_TUNING.acceleration
@@ -204,6 +209,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     const targetSteer = applyCurvePose(vehicle, routeCurve, progressRef.current, speedRef.current, poseYawRef, delta);
     const steerDeltaCap = VEHICLE_TUNING.maxSteerRatePerSec * delta;
     steerRef.current = THREE.MathUtils.clamp(targetSteer, steerRef.current - steerDeltaCap, steerRef.current + steerDeltaCap);
+
     setNearbyLandmarkId(nearbyLandmark?.id ?? null);
     setVehicleState({
       vehicleSpeed: Math.abs(speedRef.current) * VEHICLE_TUNING.displaySpeedMultiplier,
