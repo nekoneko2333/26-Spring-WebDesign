@@ -32,6 +32,26 @@ http://127.0.0.1:5173/#/amsterdam-vr
 npm.cmd run build
 ```
 
+## 阶段 0：优化前基线检查（小车与沉浸导览）
+
+在开始小车优化前，建议先做一轮固定基线，便于比较改造效果：
+
+1. 启动前端并分别访问 Italy 与 Amsterdam 入口。
+2. 在 Italy 导览路线上记录以下指标：
+   - 小车是否抖动、转向是否突兀
+   - 自动驾驶与手动切换是否顺畅
+   - 景点触发是否准确
+   - 平均 FPS 与低帧场景
+3. 记录一段 30~60 秒演示视频作为“优化前”对照样本。
+
+推荐检查命令：
+
+```bash
+npm install
+npm.cmd run dev
+npm.cmd run build
+```
+
 ## 功能概览
 
 ### Italy Drive Guide
