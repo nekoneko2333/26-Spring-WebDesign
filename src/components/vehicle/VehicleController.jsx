@@ -237,6 +237,7 @@ function getGuidedTourPoi(landmarkId) {
     id: landmark.id,
     name: landmark.name,
     position: landmark.position,
+    landmarkTriggerRadius: landmark.triggerRadius,
     triggerRadius: Math.max(landmark.triggerRadius, VEHICLE_TUNING.poiApproachDistance),
     focusDuration: VEHICLE_TUNING.focusDurationSec,
     introText: `${landmark.name} ahead`,
@@ -312,7 +313,7 @@ function updateGuidedTourState({
   }
 
   if (!autoDrive) {
-    if (activeGuidePoi) {
+    if (activeGuidePoi && activeGuidePoi.distance <= activeGuidePoi.landmarkTriggerRadius) {
       transition(GUIDED_TOUR_STATES.APPROACH_POI, activeGuidePoi.id, activeGuidePoi.introText);
       return;
     }
