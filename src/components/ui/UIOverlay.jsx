@@ -10,6 +10,15 @@ const driveRouteCopy = {
   en: {
     title: 'Italy Drive',
     waypointNearby: 'waypoint nearby',
+    guideStateLabel: 'Guided tour',
+    guideStates: {
+      IDLE: 'Standby',
+      DRIVING: 'Cruising',
+      APPROACH_POI: 'Approaching landmark',
+      FOCUS_POI: 'Immersive focus',
+      RESUME: 'Resuming route',
+      FINISHED: 'Finished',
+    },
     speedUnit: 'km/h',
     dayLabel: 'Day {day}',
     timeLabel: '{hour}',
@@ -54,6 +63,15 @@ const driveRouteCopy = {
   zh: {
     title: '意大利行车导览',
     waypointNearby: '临近地标',
+    guideStateLabel: '沉浸导览',
+    guideStates: {
+      IDLE: '待机',
+      DRIVING: '巡航中',
+      APPROACH_POI: '接近景点',
+      FOCUS_POI: '沉浸聚焦',
+      RESUME: '回到路线',
+      FINISHED: '已完成',
+    },
     speedUnit: '公里/小时',
     dayLabel: '第 {day} 天',
     timeLabel: '{hour}',
@@ -121,6 +139,9 @@ export function UIOverlay({ isStarted }) {
     routeContext,
     routeDay,
     routeHour,
+    guidedTourState,
+    guidedTourLandmarkId,
+    guidedTourMessage,
     vehicleSpeed,
     focusPanelOpen,
     modelViewerOpen,
@@ -137,6 +158,7 @@ export function UIOverlay({ isStarted }) {
 
   const nearbyLandmark = landmarks.find((item) => item.id === nearbyLandmarkId);
   const selectedLandmark = landmarks.find((item) => item.id === selectedLandmarkId);
+  const guidedTourLandmark = landmarks.find((item) => item.id === guidedTourLandmarkId);
   const displayLandmark = selectedLandmark ?? nearbyLandmark;
   const { data: reviewPayload, isLoading } = useLandmarkReviews(selectedLandmarkId, language);
   const locale = reviewLocales[language];
@@ -227,6 +249,14 @@ export function UIOverlay({ isStarted }) {
       <div className="hud-title is-visible">{routeCopy.title}</div>
       <div className={`hud-mode is-visible ${autoDrive ? 'is-autodriving' : ''}`}>
         {cameraMode === 'focus' ? locale.ui.landmarkFocus : cameraMode === 'follow' ? (autoDrive ? locale.ui.autoDriving : locale.ui.drivingView) : locale.ui.mapMode}
+      </div>
+
+      <div className={`guided-tour-status is-visible guided-tour-status--${guidedTourState || 'IDLE'}`} aria-live="polite">
+        <span>{routeCopy.guideStateLabel}</span>
+        <strong>{routeCopy.guideStates[guidedTourState] ?? routeCopy.guideStates.IDLE}</strong>
+        {(guidedTourLandmark || guidedTourMessage) && (
+          <p>{guidedTourMessage || getLandmarkName(guidedTourLandmark, language)}</p>
+        )}
       </div>
 
       <button className={`btn-map-view ${cameraMode !== 'map' && !routeLocked ? 'is-visible' : ''}`} onClick={() => setCameraMode('map')}>

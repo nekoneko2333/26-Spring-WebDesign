@@ -23,8 +23,19 @@ const VEHICLE_TUNING = {
   stopDistance: 22,
   poiApproachDistance: 72,
   poiCruiseFactor: 0.7,
+  focusSpeedKmh: 8,
+  focusDurationSec: 5.2,
+  resumeClearanceDistance: 46,
   maxSteerRatePerSec: 2.6,
   maxSteerAngle: 0.42,
+};
+const GUIDED_TOUR_STATES = {
+  IDLE: 'IDLE',
+  DRIVING: 'DRIVING',
+  APPROACH_POI: 'APPROACH_POI',
+  FOCUS_POI: 'FOCUS_POI',
+  RESUME: 'RESUME',
+  FINISHED: 'FINISHED',
 };
 const SIMULATED_DAYS = 3;
 const wheelOffsets = [
@@ -50,6 +61,9 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
   const setCameraMode = useAppStore((state) => state.setCameraMode);
   const setNearbyLandmarkId = useAppStore((state) => state.setNearbyLandmarkId);
   const setVehicleState = useAppStore((state) => state.setVehicleState);
+  const selectLandmark = useAppStore((state) => state.selectLandmark);
+  const clearGuidedTourFocus = useAppStore((state) => state.clearGuidedTourFocus);
+  const setGuidedTourState = useAppStore((state) => state.setGuidedTourState);
   const autoDrive = useAppStore((state) => state.autoDrive);
   const setAutoDrive = useAppStore((state) => state.setAutoDrive);
   const focusPanelOpen = useAppStore((state) => state.focusPanelOpen);
@@ -59,7 +73,11 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
   const targetSpeedRef = useRef(0);
   const steerRef = useRef(0);
   const initializedTargetRef = useRef(null);
-  const poseYawRef = useRef(0);
+  const poseYawRef = useRef(Number.NaN);
+  const guidedTourStateRef = useRef(GUIDED_TOUR_STATES.IDLE);
+  const focusedLandmarkIdRef = useRef(null);
+  const focusTimerRef = useRef(0);
+  const visitedLandmarksRef = useRef(new Set());
 
   const routeCurve = useMemo(() => {
     const sampledPoints = roadCurve.getPoints(160);
@@ -83,10 +101,15 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       speedRef.current = 0;
       targetSpeedRef.current = 0;
       steerRef.current = 0;
-      poseYawRef.current = 0;
+      poseYawRef.current = Number.NaN;
+      guidedTourStateRef.current = GUIDED_TOUR_STATES.IDLE;
+      focusedLandmarkIdRef.current = null;
+      focusTimerRef.current = 0;
+      visitedLandmarksRef.current = new Set();
       initializedTargetRef.current = routeInitKey;
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, delta);
       setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
+      setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.IDLE));
       setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
     }
 
@@ -95,9 +118,14 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       speedRef.current = 0;
       targetSpeedRef.current = 0;
       steerRef.current = 0;
-      poseYawRef.current = 0;
+      poseYawRef.current = Number.NaN;
+      guidedTourStateRef.current = GUIDED_TOUR_STATES.IDLE;
+      focusedLandmarkIdRef.current = null;
+      focusTimerRef.current = 0;
       setAutoDrive(false);
       setNearbyLandmarkId(initialLandmarkId ?? null);
+      clearGuidedTourFocus();
+      setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.IDLE));
       setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, delta);
       return;
@@ -113,6 +141,25 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     }
 
     const nearbyLandmark = getNearbyLandmarkInfo(currentPoint.x, currentPoint.z);
+    const activeGuidePoi = nearbyLandmark && !visitedLandmarksRef.current.has(nearbyLandmark.id)
+      ? nearbyLandmark
+      : null;
+
+    updateGuidedTourState({
+      activeGuidePoi,
+      autoDrive,
+      clearGuidedTourFocus,
+      delta,
+      focusedLandmarkIdRef,
+      focusTimerRef,
+      guidedTourStateRef,
+      routeLocked,
+      selectLandmark,
+      setCameraMode,
+      setGuidedTourState,
+      speedKmh: Math.abs(speedRef.current),
+      visitedLandmarksRef,
+    });
 
     if (routeLocked) {
       targetSpeedRef.current = 0;
@@ -125,7 +172,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       targetSpeedRef.current = targetKmh;
     }
 
-    if (nearbyLandmark) {
+    if (activeGuidePoi && autoDrive && !routeLocked && guidedTourStateRef.current !== GUIDED_TOUR_STATES.RESUME) {
       if (nearbyLandmark.distance <= VEHICLE_TUNING.stopDistance) {
         targetSpeedRef.current = 0;
       } else if (nearbyLandmark.distance <= VEHICLE_TUNING.poiApproachDistance) {
@@ -172,7 +219,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       ...getRouteTimeline(progressRef.current),
     });
 
-    if (speedRef.current !== 0 && !routeLocked) setCameraMode('follow');
+    if (speedRef.current !== 0 && !routeLocked && guidedTourStateRef.current !== GUIDED_TOUR_STATES.FOCUS_POI) setCameraMode('follow');
   });
 
   return null;
@@ -187,6 +234,117 @@ function getRouteTimeline(progress) {
     routeDay,
     routeHour: 7 + localDayProgress * 12,
   };
+}
+
+function getGuidedTourPoi(landmarkId) {
+  const landmark = landmarks.find((item) => item.id === landmarkId);
+  if (!landmark) return null;
+  return {
+    id: landmark.id,
+    name: landmark.name,
+    position: landmark.position,
+    triggerRadius: Math.max(landmark.triggerRadius, VEHICLE_TUNING.poiApproachDistance),
+    focusDuration: VEHICLE_TUNING.focusDurationSec,
+    introText: `${landmark.name} ahead`,
+    outroText: `Leaving ${landmark.name}`,
+    cameraPreset: 'focus',
+    audioKey: `guide-${landmark.id}`,
+  };
+}
+
+function getGuidedTourPayload(guidedTourState, guidedTourLandmarkId = null, guidedTourMessage = '') {
+  return { guidedTourState, guidedTourLandmarkId, guidedTourMessage };
+}
+
+function transitionGuidedTour({
+  clearGuidedTourFocus,
+  focusedLandmarkIdRef,
+  focusTimerRef,
+  guidedTourLandmarkId = null,
+  guidedTourMessage = '',
+  guidedTourState,
+  guidedTourStateRef,
+  selectLandmark,
+  setCameraMode,
+  setGuidedTourState,
+}) {
+  if (guidedTourStateRef.current === guidedTourState && focusedLandmarkIdRef.current === guidedTourLandmarkId) return;
+  guidedTourStateRef.current = guidedTourState;
+  focusedLandmarkIdRef.current = guidedTourLandmarkId;
+  focusTimerRef.current = 0;
+
+  if (guidedTourState === GUIDED_TOUR_STATES.FOCUS_POI && guidedTourLandmarkId) {
+    selectLandmark(guidedTourLandmarkId);
+  }
+  if (guidedTourState === GUIDED_TOUR_STATES.RESUME || guidedTourState === GUIDED_TOUR_STATES.DRIVING) {
+    clearGuidedTourFocus();
+    setCameraMode('follow');
+  }
+
+  setGuidedTourState(getGuidedTourPayload(guidedTourState, guidedTourLandmarkId, guidedTourMessage));
+}
+
+function updateGuidedTourState({
+  activeGuidePoi,
+  autoDrive,
+  clearGuidedTourFocus,
+  delta,
+  focusedLandmarkIdRef,
+  focusTimerRef,
+  guidedTourStateRef,
+  routeLocked,
+  selectLandmark,
+  setCameraMode,
+  setGuidedTourState,
+  speedKmh,
+  visitedLandmarksRef,
+}) {
+  const transition = (guidedTourState, guidedTourLandmarkId = null, guidedTourMessage = '') => transitionGuidedTour({
+    clearGuidedTourFocus,
+    focusedLandmarkIdRef,
+    focusTimerRef,
+    guidedTourLandmarkId,
+    guidedTourMessage,
+    guidedTourState,
+    guidedTourStateRef,
+    selectLandmark,
+    setCameraMode,
+    setGuidedTourState,
+  });
+
+  if (routeLocked || !autoDrive) {
+    transition(autoDrive ? GUIDED_TOUR_STATES.IDLE : GUIDED_TOUR_STATES.DRIVING);
+    return;
+  }
+
+  if (guidedTourStateRef.current === GUIDED_TOUR_STATES.FOCUS_POI) {
+    focusTimerRef.current += delta;
+    if (focusTimerRef.current >= (activeGuidePoi?.focusDuration ?? VEHICLE_TUNING.focusDurationSec)) {
+      if (focusedLandmarkIdRef.current) visitedLandmarksRef.current.add(focusedLandmarkIdRef.current);
+      transition(GUIDED_TOUR_STATES.RESUME, focusedLandmarkIdRef.current, activeGuidePoi?.outroText ?? 'Resuming route');
+    }
+    return;
+  }
+
+  if (guidedTourStateRef.current === GUIDED_TOUR_STATES.RESUME) {
+    if (!activeGuidePoi || activeGuidePoi.id !== focusedLandmarkIdRef.current) {
+      transition(GUIDED_TOUR_STATES.DRIVING);
+    }
+    return;
+  }
+
+  if (activeGuidePoi) {
+    if (activeGuidePoi.distance <= VEHICLE_TUNING.stopDistance && speedKmh <= VEHICLE_TUNING.focusSpeedKmh) {
+      transition(GUIDED_TOUR_STATES.FOCUS_POI, activeGuidePoi.id, activeGuidePoi.introText);
+      return;
+    }
+    if (activeGuidePoi.distance <= activeGuidePoi.triggerRadius) {
+      transition(GUIDED_TOUR_STATES.APPROACH_POI, activeGuidePoi.id, activeGuidePoi.introText);
+      return;
+    }
+  }
+
+  transition(GUIDED_TOUR_STATES.DRIVING);
 }
 
 function getRouteContext(progress) {
@@ -279,13 +437,14 @@ function getNearbyLandmarkInfo(x, z) {
     const dx = landmark.position[0] - x;
     const dz = landmark.position[2] - z;
     const distance = Math.hypot(dx, dz);
-    if (distance <= landmark.triggerRadius && distance < closestDistance) {
+    const guideTriggerRadius = Math.max(landmark.triggerRadius, VEHICLE_TUNING.poiApproachDistance);
+    if (distance <= guideTriggerRadius && distance < closestDistance) {
       closest = landmark.id;
       closestDistance = distance;
     }
   }
   if (!closest) return null;
-  return { id: closest, distance: closestDistance };
+  return { ...getGuidedTourPoi(closest), distance: closestDistance };
 }
 
 export function VehicleChassis({ bodyRef }) {
