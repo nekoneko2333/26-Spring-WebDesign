@@ -19,7 +19,7 @@
    ============================================================ */
 .guided-tour-status {
   position: fixed;
-  top: 58px;
+  top: 76px;
   left: 50%;
   z-index: 21;
   min-width: 210px;
@@ -257,7 +257,7 @@
    ============================================================ */
 .interact-prompt {
   position: fixed;
-  top: 88px;
+  top: 152px;
   left: 50%;
   transform: translateX(-50%) translateY(-6px);
   z-index: 24;
@@ -427,6 +427,7 @@ body.ui-awake .hud-mode {
 .app-shell.is-zh .hud-time,
 .app-shell.is-zh .btn-map-view,
 .app-shell.is-zh .interact-prompt,
+.app-shell.is-zh .guided-tour-status,
 .app-shell.is-zh .drive-overlay__close {
   font-family: var(--font-ui-zh);
 }
