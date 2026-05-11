@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { landmarks } from '../../data/landmarks.js';
 import { currentRoute } from '../../data/routes.js';
 import { travelLandmarkMeta } from '../../data/travelGuide.js';
-import { useRouteMetrics } from '../../hooks/useRouteMetrics.js';
 import './routeVersions.css';
 
 const BOUNDS = { lonMin: 6.2, lonMax: 18.8, latMin: 36.4, latMax: 46.5 };
@@ -50,19 +49,40 @@ function pathFromPolygon(coords) {
   }).join(' ').concat(' Z');
 }
 
-function routePolyline(routeMetrics, routeIds) {
-  const osrm = routeMetrics.data?.geometryCoordinates;
-  if (osrm?.length) return osrm.map(([lon, lat]) => {
-    const p = project(lon, lat);
-    return `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
-  }).join(' ');
+function projectRouteCoords(routeIds) {
+  const routeIdSet = new Set(routeIds);
+  const routePoints = currentRoute.points
+    .filter((point) => !point.landmarkId || routeIdSet.has(point.landmarkId))
+    .map((point) => [point.lon, point.lat]);
 
-  return routeIds.map((id) => {
-    const meta = travelLandmarkMeta[id];
-    if (!meta) return null;
-    const p = project(meta.lon, meta.lat);
-    return `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
-  }).filter(Boolean).join(' ');
+  if (routePoints.length >= 2) return routePoints;
+
+  return routeIds
+    .map((id) => travelLandmarkMeta[id])
+    .filter(Boolean)
+    .map((meta) => [meta.lon, meta.lat]);
+}
+
+function routePolyline(routeIds) {
+  return pointString(projectRouteCoords(routeIds));
+}
+
+function localTopologyRouteCoords(topology, routeIds) {
+  if (topology?.route?.coordinates?.length) {
+    const step = Math.max(1, Math.floor(topology.route.coordinates.length / 1800));
+    return topology.route.coordinates.filter((_, index) => index % step === 0);
+  }
+  return projectRouteCoords(routeIds);
+}
+
+function simplifyPolygonForSvg(polygon) {
+  if (polygon.length <= 80) return polygon;
+  const step = Math.max(1, Math.floor(polygon.length / 260));
+  const simplified = polygon.filter((_, index) => index % step === 0);
+  const first = polygon[0];
+  const last = simplified[simplified.length - 1];
+  if (first && last && (first[0] !== last[0] || first[1] !== last[1])) simplified.push(first);
+  return simplified;
 }
 
 function fallbackRouteLine(stops) {
@@ -70,17 +90,50 @@ function fallbackRouteLine(stops) {
   return coords.length >= 2 ? pointString(coords) : pointString(NETWORK[1]);
 }
 
-function sampleRoutePoint(routeMetrics, routeIds, t) {
-  const coords = routeMetrics.data?.geometryCoordinates;
-  if (coords?.length) {
-    const index = Math.min(coords.length - 1, Math.floor(t * (coords.length - 1)));
-    return project(coords[index][0], coords[index][1]);
-  }
-  const ids = routeIds.filter((id) => travelLandmarkMeta[id]);
-  if (!ids.length) return project(12.48, 41.91);
-  const index = Math.min(ids.length - 1, Math.floor(t * Math.max(ids.length - 1, 1)));
-  const meta = travelLandmarkMeta[ids[index]];
-  return project(meta.lon, meta.lat);
+function measureProjectedRoute(coords) {
+  const points = coords.map(([lon, lat]) => project(lon, lat));
+  const distances = points.reduce((out, point, index) => {
+    if (index === 0) return [0];
+    const previous = points[index - 1];
+    const segment = Math.hypot(point.x - previous.x, point.y - previous.y);
+    out.push(out[index - 1] + segment);
+    return out;
+  }, []);
+  return { points, distances, total: distances[distances.length - 1] || 1 };
+}
+
+function sampleRoutePoint(coords, t) {
+  if (!coords.length) return project(12.48, 41.91);
+  const { points, distances, total } = measureProjectedRoute(coords);
+  const target = ((t % 1) + 1) % 1 * total;
+  const index = Math.max(0, distances.findIndex((distance) => distance >= target));
+  if (index <= 0) return points[0];
+  const previousDistance = distances[index - 1];
+  const segmentDistance = distances[index] - previousDistance || 1;
+  const localT = (target - previousDistance) / segmentDistance;
+  const previous = points[index - 1];
+  const next = points[index];
+  return {
+    x: previous.x + (next.x - previous.x) * localT,
+    y: previous.y + (next.y - previous.y) * localT,
+  };
+}
+
+function routeStopProgress(coords, stops) {
+  const { points, distances, total } = measureProjectedRoute(coords);
+  return stops.map((stop) => {
+    const stopPoint = project(stop.meta.lon, stop.meta.lat);
+    let bestIndex = 0;
+    let bestDistance = Infinity;
+    points.forEach((point, index) => {
+      const distance = Math.hypot(point.x - stopPoint.x, point.y - stopPoint.y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    });
+    return (distances[bestIndex] ?? 0) / total;
+  });
 }
 
 function getStops(routeIds) {
@@ -111,25 +164,62 @@ function Topbar({ title, subtitle }) {
 
 export function RouteV2Page() {
   const [routeIds] = useState(loadRouteIds);
+  const [topology, setTopology] = useState(null);
   const [progress, setProgress] = useState(0);
-  const routeMetrics = useRouteMetrics(routeIds);
+  const [isPlaying, setIsPlaying] = useState(true);
   const stops = useMemo(() => getStops(routeIds), [routeIds]);
-  const routeLine = routePolyline(routeMetrics, routeIds);
+  const topologyCoords = useMemo(() => localTopologyRouteCoords(topology, routeIds), [routeIds, topology]);
+  const routeLine = useMemo(() => pointString(topologyCoords), [topologyCoords]);
   const displayRouteLine = routeLine || fallbackRouteLine(stops);
-  const glow = sampleRoutePoint(routeMetrics, routeIds, progress);
-  const activeStop = stops[Math.min(stops.length - 1, Math.floor(progress * stops.length))] ?? stops[0];
+  const glow = sampleRoutePoint(topologyCoords, progress);
+  const stopProgress = useMemo(() => routeStopProgress(topologyCoords, stops), [topologyCoords, stops]);
+  const activeIndex = Math.max(0, stopProgress.findLastIndex((value) => value <= progress + 0.015));
+  const activeStop = stops[activeIndex] ?? stops[0];
+  const contourGroups = topology?.terrain?.contours ?? [];
+  const boundaryPolygons = useMemo(() => (
+    topology?.map?.boundary?.map(simplifyPolygonForSvg) ?? []
+  ), [topology]);
 
   useEffect(() => {
+    let cancelled = false;
+    fetch('/data/italy-route-topology.json')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!cancelled && payload) setTopology(payload);
+      })
+      .catch(() => {
+        if (!cancelled) setTopology(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isPlaying) return undefined;
     let frame = 0;
-    let start = performance.now();
+    const startProgress = progress;
+    const start = performance.now();
     const tick = (now) => {
-      const t = ((now - start) / 22000) % 1;
+      const t = (startProgress + ((now - start) / 22000)) % 1;
       setProgress(t);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [isPlaying]);
+
+  const jumpToStop = (index) => {
+    if (!stops.length) return;
+    setIsPlaying(false);
+    setProgress(stopProgress[index] ?? (index / stops.length));
+  };
+
+  const stepRoute = (direction) => {
+    if (!stops.length) return;
+    const nextIndex = (activeIndex + direction + stops.length) % stops.length;
+    jumpToStop(nextIndex);
+  };
 
   return (
     <main className="route-version-page">
@@ -146,11 +236,27 @@ export function RouteV2Page() {
                 </linearGradient>
               </defs>
               <rect className="route-v2-sea" width="100" height="100" />
-              <path className="route-v2-land" d={pathFromPolygon(MAINLAND)} />
-              <path className="route-v2-land" d={pathFromPolygon(SARDINIA)} />
-              <path className="route-v2-land" d={pathFromPolygon(SICILY)} />
-              {[20, 29, 38, 47, 56, 65, 74].map((y) => <path key={y} className="route-v2-contour" d={`M15 ${y} C34 ${y - 8}, 54 ${y + 10}, 84 ${y - 2}`} />)}
-              {NETWORK.map((line, index) => <polyline key={index} className="route-v2-network" points={pointString(line)} />)}
+              {boundaryPolygons.length > 0
+                ? boundaryPolygons.map((polygon, index) => <path key={index} className="route-v2-land" d={pathFromPolygon(polygon)} />)
+                : (
+                  <>
+                    <path className="route-v2-land" d={pathFromPolygon(MAINLAND)} />
+                    <path className="route-v2-land" d={pathFromPolygon(SARDINIA)} />
+                    <path className="route-v2-land" d={pathFromPolygon(SICILY)} />
+                  </>
+                )}
+              {contourGroups.length > 0
+                ? contourGroups.map((group) => group.lines.map((line, index) => (
+                  <polyline key={`${group.level}-${index}`} className="route-v2-contour" data-level={group.level} points={pointString(line.map((point) => [point.lon, point.lat]))} />
+                )))
+                : [20, 29, 38, 47, 56, 65, 74].map((y) => <path key={y} className="route-v2-contour" d={`M15 ${y} C34 ${y - 8}, 54 ${y + 10}, 84 ${y - 2}`} />)}
+              {topology?.route?.coordinates?.length
+                ? currentRoute.points.map((point, index, points) => {
+                  if (index === 0) return null;
+                  const previous = points[index - 1];
+                  return <polyline key={point.id} className="route-v2-network" points={pointString([[previous.lon, previous.lat], [point.lon, point.lat]])} />;
+                })
+                : NETWORK.map((line, index) => <polyline key={index} className="route-v2-network" points={pointString(line)} />)}
               <polyline className="route-v2-route" points={displayRouteLine} />
               {stops.map(({ id, meta }) => {
                 const p = project(meta.lon, meta.lat);
@@ -167,17 +273,35 @@ export function RouteV2Page() {
             )}
           </section>
           <aside className="route-v2-side">
-            <h2>{routeMetrics.data?.distanceKm ? `${routeMetrics.data.distanceKm} km` : 'Route'}</h2>
-            <p>The light point follows the planned route. Landmarks stay off the map until the route reaches them.</p>
+            <h2>{topology?.route?.distanceKm ? `${topology.route.distanceKm} km` : `${currentRoute.distanceKm} km`}</h2>
+            <p>{topology ? 'Local OSRM route geometry with downloaded elevation contours.' : 'Loading local topology; using bundled route fallback.'}</p>
+            <div className="route-v2-controls">
+              <button type="button" onClick={() => stepRoute(-1)}>Prev</button>
+              <button type="button" className="is-primary" onClick={() => setIsPlaying((value) => !value)}>
+                {isPlaying ? 'Pause' : 'Play'}
+              </button>
+              <button type="button" onClick={() => stepRoute(1)}>Next</button>
+              <input
+                aria-label="Route progress"
+                type="range"
+                min="0"
+                max="1000"
+                value={Math.round(progress * 1000)}
+                onChange={(event) => {
+                  setIsPlaying(false);
+                  setProgress(Number(event.target.value) / 1000);
+                }}
+              />
+            </div>
             <div className="route-v2-stops">
               {stops.map((stop, index) => (
-                <div key={stop.id} className="route-v2-stop-row">
+                <button key={stop.id} className={`route-v2-stop-row ${index === activeIndex ? 'is-active' : ''}`} type="button" onClick={() => jumpToStop(index)}>
                   <span>{index + 1}</span>
                   <div>
                     <strong>{stop.meta.name.en}</strong>
                     <small>{stop.meta.city.en} / {stop.meta.type.en}</small>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </aside>
@@ -189,96 +313,185 @@ export function RouteV2Page() {
 
 export function RouteV3Page() {
   const [routeIds] = useState(loadRouteIds);
-  const [steer, setSteer] = useState(0);
+  const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedSide, setSelectedSide] = useState(null);
+  const [driveProgress, setDriveProgress] = useState(0);
+  const [phase, setPhase] = useState('choice');
+  const [showStopCard, setShowStopCard] = useState(false);
   const stops = useMemo(() => getStops(routeIds), [routeIds]);
-  const left = stops.filter((_, index) => index % 2 === 0).slice(0, 4);
-  const right = stops.filter((_, index) => index % 2 === 1).slice(0, 4);
-  const roadStyle = { transform: `translateX(calc(-50% + ${steer * -28}px)) skewX(${steer * -1.5}deg)` };
-  const carStyle = { transform: `translateX(calc(-50% + ${steer * 54}px)) rotate(${steer * 4}deg)` };
+  const currentStop = stops[currentIndex] ?? stops[0];
+  const routeCount = stops.length;
+  const leftIndex = routeCount > 1 ? (currentIndex - 1 + routeCount) % routeCount : currentIndex;
+  const rightIndex = routeCount > 1 ? (currentIndex + 1) % routeCount : currentIndex;
+  const leftStop = stops[leftIndex] ?? currentStop;
+  const rightStop = stops[rightIndex] ?? currentStop;
+  const targetIndex = selectedSide === 'left' ? leftIndex : rightIndex;
+  const targetStop = stops[targetIndex] ?? rightStop;
+  const sideSign = selectedSide === 'left' ? -1 : selectedSide === 'right' ? 1 : 0;
+  const turnEase = driveProgress * driveProgress * (3 - 2 * driveProgress);
+  const steeringLoad = Math.sin(Math.min(1, driveProgress) * Math.PI);
+  const laneReach = Math.min(330, viewport.width * 0.28);
+  const counterLoad = Math.min(28, viewport.width * 0.035);
+  const depthReach = Math.min(420, Math.max(250, viewport.height * 0.48));
+  const carX = sideSign * (turnEase * laneReach - steeringLoad * counterLoad);
+  const carY = -turnEase * depthReach;
+  const carScale = 1 - turnEase * 0.34;
+  const carYaw = sideSign * (-steeringLoad * 24 - turnEase * 8);
+  const carRoll = sideSign * steeringLoad * 10;
+  const carStyle = {
+    ['--car-roll']: `${carRoll}deg`,
+    transform: `translateX(-50%) translate(${carX}px, ${carY}px) rotateZ(${carYaw}deg) scale(${carScale})`,
+  };
+
+  useEffect(() => {
+    setCurrentIndex(0);
+    setSelectedSide(null);
+    setDriveProgress(0);
+    setPhase('choice');
+    setShowStopCard(false);
+  }, [routeIds]);
+
+  useEffect(() => {
+    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'driving' || routeCount < 2 || !selectedSide) return undefined;
+    let frame = 0;
+    let last = performance.now();
+    const tick = (now) => {
+      const delta = Math.min(80, now - last);
+      last = now;
+      setDriveProgress((value) => {
+        const next = value + delta / 2800;
+        if (next >= 1) {
+          setCurrentIndex(targetIndex);
+          setPhase('arrived');
+          setShowStopCard(true);
+          return 1;
+        }
+        return next;
+      });
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [phase, routeCount, selectedSide, targetIndex]);
+
+  const startDrive = (side) => {
+    if (phase !== 'choice' || routeCount < 2) return;
+    setSelectedSide(side);
+    setDriveProgress(0);
+    setShowStopCard(false);
+    setPhase('driving');
+  };
+
+  const closeStopCard = () => {
+    setSelectedSide(null);
+    setDriveProgress(0);
+    setPhase('choice');
+    setShowStopCard(false);
+  };
 
   useEffect(() => {
     const onKeyDown = (event) => {
       const key = event.key.toLowerCase();
       if (key === 'a' || event.key === 'ArrowLeft') {
-        setSteer(-1);
+        startDrive('left');
       }
       if (key === 'd' || event.key === 'ArrowRight') {
-        setSteer(1);
-      }
-    };
-    const onKeyUp = (event) => {
-      const key = event.key.toLowerCase();
-      if (key === 'a' || key === 'd' || event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-        setSteer(0);
+        startDrive('right');
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
     };
-  }, []);
-
-  const pressLeft = () => setSteer(-1);
-  const pressRight = () => setSteer(1);
-  const releaseSteer = () => setSteer(0);
+  }, [phase, routeCount, selectedSide, targetIndex]);
 
   return (
     <main className="route-v3-page">
       <div className="route-version-shell">
-        <Topbar title="Italy Route V3" subtitle="Abstract first-person route browser with no terrain and no map load." />
-        <section className="route-v3-stage" data-steer={steer}>
+        <Topbar title="Italy Route V3" subtitle="Forked route driving: choose left or right, turn into the selected landmark, then review it." />
+        <section className={`route-v3-stage route-v3-stage--${phase}`} data-side={selectedSide ?? 'none'}>
           <div className="route-v3-horizon" />
-          <div className="route-v3-curve" />
-          <div className="route-v3-road" style={roadStyle} />
+          <svg className="route-v3-road-svg" viewBox="0 0 1000 760" preserveAspectRatio="none" aria-hidden="true">
+            <path className="route-v3-road-fill" d="M404 820 C424 660 444 574 466 512 C426 430 312 338 38 252 L96 216 C414 304 528 408 540 512 C544 604 568 700 596 820 Z" />
+            <path className="route-v3-road-fill" d="M596 820 C576 660 556 574 534 512 C574 430 688 338 962 252 L904 216 C586 304 472 408 460 512 C456 604 432 700 404 820 Z" />
+            <path className="route-v3-road-rim" d="M404 820 C424 660 444 574 466 512 C426 430 312 338 38 252" />
+            <path className="route-v3-road-rim" d="M596 820 C576 660 556 574 534 512 C574 430 688 338 962 252" />
+            <path className="route-v3-road-lane" d="M500 820 C500 684 500 596 500 512 C500 418 406 328 76 236" />
+            <path className="route-v3-road-lane" d="M500 820 C500 684 500 596 500 512 C500 418 594 328 924 236" />
+            <path className={`route-v3-road-choice ${selectedSide === 'left' ? 'is-active' : ''}`} d="M500 820 C500 684 500 596 500 512 C500 418 406 328 76 236" />
+            <path className={`route-v3-road-choice ${selectedSide === 'right' ? 'is-active' : ''}`} d="M500 820 C500 684 500 596 500 512 C500 418 594 328 924 236" />
+          </svg>
+          <CandidateButton side="left" stop={leftStop} active={selectedSide === 'left'} disabled={phase !== 'choice'} onClick={() => startDrive('left')} />
+          <CandidateButton side="right" stop={rightStop} active={selectedSide === 'right'} disabled={phase !== 'choice'} onClick={() => startDrive('right')} />
           <div className="route-v3-car" style={carStyle} aria-label="Route vehicle">
             <span />
           </div>
+          {currentStop && (
+            <button className="route-v3-current" type="button" onClick={() => setShowStopCard(true)}>
+              <span>Current stop</span>
+              <strong>{currentStop.meta.name.en}</strong>
+            </button>
+          )}
           <div className="route-v3-controls" aria-label="Steering controls">
-            <button
-              className={steer < 0 ? 'is-active' : ''}
-              type="button"
-              onPointerDown={pressLeft}
-              onPointerUp={releaseSteer}
-              onPointerCancel={releaseSteer}
-              onPointerLeave={releaseSteer}
-            >
+            <button className={selectedSide === 'left' ? 'is-active' : ''} type="button" disabled={phase !== 'choice'} onClick={() => startDrive('left')}>
               A
             </button>
-            <button
-              className={steer > 0 ? 'is-active' : ''}
-              type="button"
-              onPointerDown={pressRight}
-              onPointerUp={releaseSteer}
-              onPointerCancel={releaseSteer}
-              onPointerLeave={releaseSteer}
-            >
+            <button className={selectedSide === 'right' ? 'is-active' : ''} type="button" disabled={phase !== 'choice'} onClick={() => startDrive('right')}>
               D
             </button>
           </div>
-          <div className="route-v3-tabs route-v3-tabs--left">
-            {left.map((stop) => <InfoTab key={stop.id} stop={stop} />)}
+          <div className="route-v3-route-hud">
+            <span>{currentStop?.meta.name.en ?? 'Start'}</span>
+            <div className="route-v3-progress" aria-label="Segment progress">
+              <i style={{ width: `${Math.round(driveProgress * 100)}%` }} />
+            </div>
+            <span>{phase === 'driving' ? targetStop?.meta.name.en : 'Choose A / D'}</span>
           </div>
-          <div className="route-v3-tabs route-v3-tabs--right">
-            {right.map((stop) => <InfoTab key={stop.id} stop={stop} />)}
-          </div>
+          {showStopCard && currentStop && (
+            <InfoStop
+              stop={currentStop}
+              onClose={closeStopCard}
+            />
+          )}
         </section>
         <article className="route-v3-panel">
-          <h2>Route sketch</h2>
-          <p>This version keeps only a smooth symbolic road, two broad turns, and side panels for browsing route landmarks.</p>
+          <h2>{currentStop?.meta.name.en ?? 'Route fork'}</h2>
+          <p>Press A for the left landmark or D for the right landmark. The car drives through the chosen curve, opens the destination card, then waits for you to close it before the next fork.</p>
         </article>
       </div>
     </main>
   );
 }
 
-function InfoTab({ stop }) {
+function CandidateButton({ side, stop, active, disabled, onClick }) {
   return (
-    <article className="route-v3-tab">
+    <button type="button" className={`route-v3-candidate route-v3-candidate--${side} ${active ? 'is-active' : ''}`} disabled={disabled} onClick={onClick}>
+      <span>{side === 'left' ? 'A / Left route' : 'D / Right route'} - {stop.meta.city.en}</span>
       <strong>{stop.meta.name.en}</strong>
-      <span>{stop.meta.city.en} / {stop.meta.type.en}</span>
+      <small>{stop.meta.type.en}</small>
+    </button>
+  );
+}
+
+function InfoStop({ stop, onClose }) {
+  return (
+    <article className="route-v3-info-card">
+      <span>Landmark card</span>
+      <h2>{stop.meta.name.en}</h2>
+      <p>{stop.meta.blurb.en}</p>
+      <div>
+        <small>{stop.meta.city.en} / {stop.meta.type.en}</small>
+        <small>{stop.meta.season.en}</small>
+      </div>
+      <button type="button" onClick={onClose}>Close</button>
     </article>
   );
 }
