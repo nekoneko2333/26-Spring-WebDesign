@@ -164,8 +164,8 @@ function getRouteContext(progress, activeRoute) {
     trafficState: 'normal',
     speedLimit: activeRoute.source === 'osrm' ? 90 : 70,
     profile: {
-      label: activeRoute.source === 'osrm' ? 'OSRM road geometry' : 'Waypoint route',
-      surfaceLabel: activeRoute.source === 'osrm' ? 'real road geometry' : 'waypoint fallback',
+      label: activeRoute.source === 'osrm' ? 'Road route' : 'Planned route',
+      surfaceLabel: activeRoute.source === 'osrm' ? 'mapped road' : 'planned path',
       speedFactor: 0.9,
       roughness: activeRoute.source === 'osrm' ? 0.018 : 0.032,
       turnLean: 0.92,

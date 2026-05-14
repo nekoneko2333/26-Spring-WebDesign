@@ -31,8 +31,8 @@ export const travelGuide = {
     },
     stats: [
       { value: '06', label: 'Destinations' },
-      { value: 'OSRM', label: 'Route metrics' },
-      { value: 'WebGL', label: 'Interactive guide' },
+      { value: 'Live', label: 'Route planning' },
+      { value: '3D', label: 'Interactive guide' },
     ],
     itinerary: [
       {
@@ -58,11 +58,11 @@ export const travelGuide = {
       },
       {
         title: 'Route Planning',
-        body: 'Route distance and ETA use OSRM. The editor keeps a clear contract for future traffic + DEM integration.',
+        body: 'Route distance and ETA update from the selected stops, with a clear editor for adjusting the trip before entering 3D mode.',
       },
       {
         title: '3D Preview',
-        body: 'The 3D module combines imported GLB models, landmark coordinates, and procedural city markers so every stop appears on the route.',
+        body: 'The 3D preview combines detailed landmark models, mapped positions, and visual city markers so every stop appears on the route.',
       },
     ],
   },
@@ -98,8 +98,8 @@ export const travelGuide = {
     },
     stats: [
       { value: '06', label: '目的地' },
-      { value: 'OSRM', label: '路线数据' },
-      { value: 'WebGL', label: '交互导览' },
+      { value: '实时', label: '路线规划' },
+      { value: '3D', label: '交互导览' },
     ],
     itinerary: [
       {
@@ -125,11 +125,11 @@ export const travelGuide = {
       },
       {
         title: '路线规划',
-        body: '路线里程与时长来自 OSRM。编辑器保留清晰的数据契约，便于后续接入交通与地形数据。',
+        body: '路线里程与时长会根据已选停靠点更新，编辑器可以在进入 3D 导览前调整整段行程。',
       },
       {
         title: '3D 预览',
-        body: '3D 模块结合已导入的 GLB 模型、地标坐标和程序化城市标记，让每个停靠点都出现在路线场景中。',
+        body: '3D 预览结合精细地标模型、地图位置和城市标记，让每个停靠点都自然出现在路线场景中。',
       },
     ],
   },

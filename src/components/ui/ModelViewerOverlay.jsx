@@ -96,7 +96,7 @@ export function ModelViewerOverlay({ landmark, isOpen, onClose }) {
         <p className="mv-desc">{desc}</p>
         {sourceUrl && (
           <a className="mv-source" href={sourceUrl} target="_blank" rel="noreferrer">
-            Wikipedia
+            {language === 'zh' ? '查看背景资料' : 'Read background'}
           </a>
         )}
       </div>

@@ -75,6 +75,26 @@ function localTopologyRouteCoords(topology, routeIds) {
   return projectRouteCoords(routeIds);
 }
 
+function topologyNodes(coords, count = 34) {
+  if (!coords.length) return [];
+  const step = Math.max(1, Math.floor(coords.length / count));
+  return coords
+    .filter((_, index) => index % step === 0)
+    .slice(0, count)
+    .map(([lon, lat], index) => ({ id: `node-${index}`, ...project(lon, lat) }));
+}
+
+function topologySegments(coords, count = 18) {
+  if (coords.length < 2) return [];
+  const step = Math.max(2, Math.floor(coords.length / count));
+  const segments = [];
+  for (let index = 0; index < coords.length - 1; index += step) {
+    const slice = coords.slice(index, Math.min(coords.length, index + step + 1));
+    if (slice.length > 1) segments.push(pointString(slice));
+  }
+  return segments;
+}
+
 function simplifyPolygonForSvg(polygon) {
   if (polygon.length <= 80) return polygon;
   const step = Math.max(1, Math.floor(polygon.length / 260));
@@ -155,14 +175,16 @@ function Topbar({ title, subtitle }) {
       </div>
       <div className="route-version-actions">
         <a href="#">Home</a>
+        <a href="#/legacy">Old Home</a>
         <a href="#/v2">V2</a>
+        <a href="#/v2-legacy">Old V2</a>
         <a href="#/v3">V3</a>
       </div>
     </div>
   );
 }
 
-export function RouteV2Page() {
+export function RouteV2Page({ variant = 'modern' }) {
   const [routeIds] = useState(loadRouteIds);
   const [topology, setTopology] = useState(null);
   const [progress, setProgress] = useState(0);
@@ -179,6 +201,9 @@ export function RouteV2Page() {
   const boundaryPolygons = useMemo(() => (
     topology?.map?.boundary?.map(simplifyPolygonForSvg) ?? []
   ), [topology]);
+  const networkNodes = useMemo(() => topologyNodes(topologyCoords), [topologyCoords]);
+  const networkSegments = useMemo(() => topologySegments(topologyCoords), [topologyCoords]);
+  const isLegacy = variant === 'legacy';
 
   useEffect(() => {
     let cancelled = false;
@@ -222,9 +247,9 @@ export function RouteV2Page() {
   };
 
   return (
-    <main className="route-version-page">
+    <main className={`route-version-page ${isLegacy ? 'route-version-page--legacy' : 'route-version-page--modern'}`}>
       <div className="route-version-shell">
-        <Topbar title="Italy Route V2" subtitle="Aerial route topology, contour-driven terrain mood, and point-based travel." />
+        <Topbar title="Italy Route V2" subtitle={isLegacy ? 'Aerial route topology, contour-driven terrain mood, and point-based travel.' : 'A clean travel map with real route shape, terrain detail, and stop-by-stop progress.'} />
         <div className="route-v2-grid">
           <section className="route-v2-map-panel">
             <svg className="route-v2-map" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-label="Italy route topology">
@@ -234,8 +259,22 @@ export function RouteV2Page() {
                   <stop offset="0.52" stopColor="#c8b56d" />
                   <stop offset="1" stopColor="#b2755d" />
                 </linearGradient>
+                <linearGradient id="route-v2-modern-land" x1="0" x2="1" y1="0" y2="1">
+                  <stop offset="0" stopColor="#eef5ef" />
+                  <stop offset="0.45" stopColor="#d6e6d9" />
+                  <stop offset="1" stopColor="#c7d8ce" />
+                </linearGradient>
+                <filter id="route-v2-route-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="0" stdDeviation="1.2" floodColor="#0c5f8f" floodOpacity="0.45" />
+                </filter>
               </defs>
               <rect className="route-v2-sea" width="100" height="100" />
+              {!isLegacy && (
+                <g className="route-v2-graticule" aria-hidden="true">
+                  {[12, 24, 36, 48, 60, 72, 84].map((x) => <line key={`x-${x}`} x1={x} y1="0" x2={x} y2="100" />)}
+                  {[14, 28, 42, 56, 70, 84].map((y) => <line key={`y-${y}`} x1="0" y1={y} x2="100" y2={y} />)}
+                </g>
+              )}
               {boundaryPolygons.length > 0
                 ? boundaryPolygons.map((polygon, index) => <path key={index} className="route-v2-land" d={pathFromPolygon(polygon)} />)
                 : (
@@ -257,13 +296,28 @@ export function RouteV2Page() {
                   return <polyline key={point.id} className="route-v2-network" points={pointString([[previous.lon, previous.lat], [point.lon, point.lat]])} />;
                 })
                 : NETWORK.map((line, index) => <polyline key={index} className="route-v2-network" points={pointString(line)} />)}
+              {!isLegacy && networkSegments.map((line, index) => <polyline key={`topology-${index}`} className="route-v2-topology-edge" points={line} />)}
+              {!isLegacy && <polyline className="route-v2-route-casing" points={displayRouteLine} />}
               <polyline className="route-v2-route" points={displayRouteLine} />
+              {!isLegacy && networkNodes.map((node) => <circle key={node.id} className="route-v2-topology-node" cx={node.x} cy={node.y} r="0.55" />)}
               {stops.map(({ id, meta }) => {
                 const p = project(meta.lon, meta.lat);
-                return <circle key={id} className="route-v2-stop" cx={p.x} cy={p.y} r="1.2" />;
+                return (
+                  <g key={id} className="route-v2-stop-group">
+                    <circle className="route-v2-stop" cx={p.x} cy={p.y} r="1.2" />
+                    {!isLegacy && <text x={p.x + 1.8} y={p.y - 1.2}>{meta.city.en}</text>}
+                  </g>
+                );
               })}
               <circle className="route-v2-glow" cx={glow.x} cy={glow.y} r="1.7" />
             </svg>
+            {!isLegacy && (
+              <div className="route-v2-map-legend">
+                <span><i className="route-v2-key route-v2-key--route" /> 推荐路线</span>
+                <span><i className="route-v2-key route-v2-key--node" /> 关键节点</span>
+                <span><i className="route-v2-key route-v2-key--contour" /> 地形线</span>
+              </div>
+            )}
             {activeStop && (
               <aside className="route-v2-pop">
                 <div className="route-v2-mini-model"><span /></div>
@@ -274,7 +328,7 @@ export function RouteV2Page() {
           </section>
           <aside className="route-v2-side">
             <h2>{topology?.route?.distanceKm ? `${topology.route.distanceKm} km` : `${currentRoute.distanceKm} km`}</h2>
-            <p>{topology ? 'Local OSRM route geometry with downloaded elevation contours.' : 'Loading local topology; using bundled route fallback.'}</p>
+            <p>{topology ? '已生成包含道路走向、地形线和停靠点的路线视图。' : '正在加载路线视图，先显示默认线路。'}</p>
             <div className="route-v2-controls">
               <button type="button" onClick={() => stepRoute(-1)}>Prev</button>
               <button type="button" className="is-primary" onClick={() => setIsPlaying((value) => !value)}>
@@ -293,6 +347,13 @@ export function RouteV2Page() {
                 }}
               />
             </div>
+            {!isLegacy && (
+              <div className="route-v2-source-stack">
+                <span>地图细节：{topology?.map?.boundary?.length ?? '默认'} 个区域</span>
+                <span>路线精度：{topology?.route?.coordinates?.length?.toLocaleString('en-US') ?? currentRoute.points.length} 个路径点</span>
+                <span>地形层次：{topology?.terrain?.contours?.length ?? 0} 组</span>
+              </div>
+            )}
             <div className="route-v2-stops">
               {stops.map((stop, index) => (
                 <button key={stop.id} className={`route-v2-stop-row ${index === activeIndex ? 'is-active' : ''}`} type="button" onClick={() => jumpToStop(index)}>

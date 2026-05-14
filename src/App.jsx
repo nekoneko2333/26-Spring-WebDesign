@@ -101,8 +101,21 @@ export default function App() {
     return <RouteV2Page />;
   }
 
+  if (hashRoute === '#/v2-legacy') {
+    return <RouteV2Page variant="legacy" />;
+  }
+
   if (hashRoute === '#/v3') {
     return <RouteV3Page />;
+  }
+
+  if (hashRoute === '#/legacy') {
+    return (
+      <>
+        <HomePage variant="legacy" onOpenDrive={handleOpenDrive} onOpenAmsterdam={handleOpenAmsterdam} />
+        {driveOpen && <DriveExperience onClose={handleCloseDrive} initialLandmarkId={initialLandmarkId} />}
+      </>
+    );
   }
 
   return (

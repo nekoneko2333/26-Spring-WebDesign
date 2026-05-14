@@ -38,7 +38,7 @@ const amsterdamCopy = {
     panel: {
       eyebrow: 'Isolated experiment',
       heading: 'Amsterdam Museumplein VR Lab',
-      body: 'Local-first test area for city VR roaming. The scene reads manifest, POIs, route GeoJSON, and future GLB building tiles from public city assets.',
+      body: 'A dedicated city roaming experience for Museumplein, with buildings, points of interest, route data, and ground layers loaded into one scene.',
     },
     metrics: {
       area: 'Area',
@@ -62,7 +62,7 @@ const amsterdamCopy = {
       followCamera: 'Follow',
       freeCamera: 'Free',
       destination: 'Destination',
-      network: 'OSM network',
+      network: 'Walking network',
       progress: 'Progress',
       speed: 'Speed',
       tourSpeed: 'Movement speed',
@@ -82,9 +82,9 @@ const amsterdamCopy = {
     source: {
       eyebrow: 'Pipeline',
       items: [
-        '3DBAG CityJSON converted to local GLB tiles.',
-        'OpenStreetMap extract converted to local ground GeoJSON.',
-        'Curated POIs and hand-authored loop route kept in public assets.',
+        'Local building tiles prepared for the city scene.',
+        'Ground layers prepared for streets, paths, and open space.',
+        'Curated points and walking loop prepared for guided roaming.',
       ],
     },
     sceneNote: 'local building tiles loaded',
@@ -115,7 +115,7 @@ const amsterdamCopy = {
     panel: {
       eyebrow: '独立实验',
       heading: '阿姆斯特丹 Museumplein VR 实验室',
-      body: '这是一个独立的城市漫游测试区。场景会读取本地清单、兴趣点、路线 GeoJSON、地面图层和 GLB 建筑瓦片。',
+      body: '这是一个独立的城市漫游页面，包含建筑、兴趣点、步行路线和地面图层。',
     },
     metrics: {
       area: '区域',
@@ -139,7 +139,7 @@ const amsterdamCopy = {
       followCamera: '跟随',
       freeCamera: '自由',
       destination: '终点',
-      network: 'OSM 路网',
+      network: '步行路网',
       progress: '进度',
       speed: '速度',
       tourSpeed: '移动速度',
@@ -159,8 +159,8 @@ const amsterdamCopy = {
     source: {
       eyebrow: '数据流程',
       items: [
-        '3DBAG CityJSON 已转换为本地 GLB 建筑瓦片。',
-        'OpenStreetMap 数据已转换为本地地面 GeoJSON。',
+        '建筑数据已整理为城市场景图层。',
+        '地面图层已整理为街道、步道和开放空间。',
         '兴趣点和环线路线都保存在 public 资源目录中。',
       ],
     },

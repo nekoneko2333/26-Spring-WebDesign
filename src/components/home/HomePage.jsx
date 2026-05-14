@@ -71,8 +71,8 @@ const homeCopy = {
       },
       reviews: {
         eyebrow: 'Reviews',
-        title: 'Wikipedia summaries first, full context one click away',
-        body: 'Each destination uses the Wikipedia summary API for readable background notes and source links.',
+        title: 'Get the context before you choose a stop',
+        body: 'Each destination includes concise background notes so you can compare the character, setting, and travel value of each stop.',
       },
       drive: {
         eyebrow: '3D drive',
@@ -81,7 +81,7 @@ const homeCopy = {
       },
     },
     destinationCta: 'Open in 3D',
-    ratingLabel: 'Source score',
+    ratingLabel: 'Rating',
     routeSource: 'Planned route',
     distanceUnit: 'km',
     durationUnit: 'h',
@@ -117,7 +117,7 @@ const homeCopy = {
       pompeii_arrival: 'urban arrival near the ruins',
     },
     routeLabels: {
-      source: 'Source',
+      source: 'Route',
       distance: 'Distance',
       duration: 'Duration',
       points: 'Route points',
@@ -191,8 +191,8 @@ const homeCopy = {
       },
       reviews: {
         eyebrow: '评价',
-        title: '先看 Wikipedia 摘要，再看来源页面',
-        body: '每个目的地都读取 Wikipedia 摘要接口，展示可追溯的背景资料与来源链接。',
+        title: '先了解目的地，再决定停靠点',
+        body: '每个目的地都提供简洁的背景介绍，方便比较景点气质、所在城市和旅行价值。',
       },
       drive: {
         eyebrow: '3D 导览',
@@ -237,7 +237,7 @@ const homeCopy = {
       pompeii_arrival: '靠近遗址的城市抵达段',
     },
     routeLabels: {
-      source: '来源',
+      source: '路线',
       distance: '距离',
       duration: '时长',
       points: '路线点',
@@ -469,38 +469,38 @@ function buildLiveHighlightCards({ language, routeIds, routeMetrics, itinerarySt
   if (language === 'zh') {
     return [
       {
-        label: '实时路线',
+        label: '智能路线',
         value: `${formatDistanceKm(distanceKm)} km`,
-        detail: `OSRM 返回约 ${formatDurationHours(durationHours, language)}；当前路线从 ${firstCity} 到 ${lastCity}，共 ${selectedStops.length} 个停靠点。`,
+        detail: `预计约 ${formatDurationHours(durationHours, language)}，当前路线从 ${firstCity} 到 ${lastCity}，共 ${selectedStops.length} 个停靠点。`,
       },
       {
-        label: '路线结构',
-        value: `${routePointCount} 个路径点`,
-        detail: `路线数据包含 ${routeSegments.length} 个语义路段，其中 ${scenicSegments} 段为风景、桥梁、隧道或山地体验。`,
+        label: '路线细节',
+        value: `${routePointCount} 个关键点`,
+        detail: `路线拆分为 ${routeSegments.length} 段行程，其中 ${scenicSegments} 段包含风景、桥梁、隧道或山地体验。`,
       },
       {
-        label: '3D 资产',
-        value: `${modelCount}/${selectedStops.length} 个 GLB`,
-        detail: `已导入 ${modelCount} 个真实 GLB 模型；其余地标使用坐标、类型和程序化几何在场景中定位。`,
+        label: '3D 预览',
+        value: `${modelCount}/${selectedStops.length} 个地标`,
+        detail: `已有 ${modelCount} 个地标支持精细模型；其余地标会以位置、类型和视觉标记呈现在场景中。`,
       },
     ];
   }
 
   return [
     {
-      label: 'Live route',
+      label: 'Smart route',
       value: `${formatDistanceKm(distanceKm)} km`,
-      detail: `OSRM returns about ${formatDurationHours(durationHours, language)} from ${firstCity} to ${lastCity} across ${selectedStops.length} selected stops.`,
+      detail: `Estimated at about ${formatDurationHours(durationHours, language)} from ${firstCity} to ${lastCity} across ${selectedStops.length} selected stops.`,
     },
     {
-      label: 'Route geometry',
-      value: `${routePointCount} path points`,
-      detail: `The route contains ${routeSegments.length} semantic road segments, including ${scenicSegments} scenic, bridge, tunnel, or mountain sections.`,
+      label: 'Route detail',
+      value: `${routePointCount} key points`,
+      detail: `The trip is split into ${routeSegments.length} drive sections, including ${scenicSegments} scenic, bridge, tunnel, or mountain moments.`,
     },
     {
-      label: '3D assets',
-      value: `${modelCount}/${selectedStops.length} GLB`,
-      detail: `${modelCount} imported GLB models are available; remaining landmarks are placed from coordinates, type, and procedural geometry.`,
+      label: '3D preview',
+      value: `${modelCount}/${selectedStops.length} landmarks`,
+      detail: `${modelCount} stops include detailed 3D models; the rest appear with location-aware visual markers in the scene.`,
     },
   ];
 }
@@ -541,7 +541,7 @@ function exportTextFile(filename, content) {
   URL.revokeObjectURL(url);
 }
 
-export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
+export function HomePage({ variant = 'modern', onOpenDrive, onOpenAmsterdam }) {
   const language = useAppStore((state) => state.language);
   const setLanguage = useAppStore((state) => state.setLanguage);
   const setActiveRouteIds = useAppStore((state) => state.setActiveRouteIds);
@@ -795,8 +795,10 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
   const CompareModal = CompareModalV2;
   const DestinationGrid = DestinationGridV2;
 
+  const isLegacy = variant === 'legacy';
+
   return (
-    <div className="travel-home">
+    <div className={`travel-home ${language === 'zh' ? 'is-zh' : 'is-en'} ${isLegacy ? 'travel-home--legacy' : 'travel-home--modern'}`}>
       <HomeWebGLBackdrop />
       <div className="travel-ambient travel-ambient--grid" aria-hidden="true" />
       <div className="travel-ambient travel-ambient--beam" aria-hidden="true" />
@@ -829,7 +831,18 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
               <button className="travel-btn travel-btn--ghost" type="button" onClick={() => { window.location.hash = '#/v3'; }}>{copy.actions.openV3}</button>
               <button className="travel-btn travel-btn--ghost" type="button" onClick={() => setActivePage('planner')}>{guideCopy.hero.secondaryCta}</button>
               <button className="travel-btn travel-btn--ghost" type="button" onClick={onOpenAmsterdam}>{copy.actions.openAmsterdam ?? 'Amsterdam VR'}</button>
+              {!isLegacy && <button className="travel-btn travel-btn--ghost" type="button" onClick={() => { window.location.hash = '#/legacy'; }}>Legacy Home</button>}
+              {isLegacy && <button className="travel-btn travel-btn--ghost" type="button" onClick={() => { window.location.hash = '#/'; }}>Modern Home</button>}
             </div>
+
+            {!isLegacy && (
+              <ModernHeroTelemetry
+                language={language}
+                routeIds={routeIds}
+                distanceKm={routeMetrics.data?.distanceKm ?? itineraryStats.totalKm ?? currentRoute.distanceKm}
+                durationHours={routeMetrics.data?.durationHours ?? currentRoute.durationHours}
+              />
+            )}
           </div>
 
           <div className="travel-hero__aside">
@@ -986,6 +999,39 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
   );
 }
 
+function ModernHeroTelemetry({ language, routeIds, distanceKm, durationHours }) {
+  const isZh = language === 'zh';
+  const visibleStops = routeIds
+    .map((id) => travelLandmarkMeta[id])
+    .filter(Boolean)
+    .slice(0, 6);
+
+  return (
+    <section className="travel-hero-telemetry" aria-label={isZh ? '路线状态' : 'Route status'}>
+      <div className="travel-hero-telemetry__rail" aria-hidden="true">
+        {visibleStops.map((stop, index) => (
+          <span key={`${stop.name.en}-${index}`} style={{ ['--rail-index']: index }} />
+        ))}
+        <i />
+      </div>
+      <div className="travel-hero-telemetry__stats">
+        <article>
+          <span>{isZh ? '路线里程' : 'Route distance'}</span>
+          <strong>{formatDistanceKm(distanceKm)} km</strong>
+        </article>
+        <article>
+          <span>{isZh ? '预计时间' : 'ETA'}</span>
+          <strong>{formatDurationHours(durationHours, language)}</strong>
+        </article>
+        <article>
+          <span>{isZh ? '停靠点' : 'Stops'}</span>
+          <strong>{routeIds.length}</strong>
+        </article>
+      </div>
+    </section>
+  );
+}
+
 function SiteNav({
   copy,
   activePage,
@@ -1034,6 +1080,9 @@ function SiteNav({
         <button className="travel-btn travel-btn--ghost travel-btn--wide" type="button" onClick={() => { window.location.hash = '#/v2'; }}>
           V2 Map
         </button>
+        <button className="travel-btn travel-btn--ghost travel-btn--wide" type="button" onClick={() => { window.location.hash = '#/legacy'; }}>
+          Legacy Home
+        </button>
         <button className="travel-btn travel-btn--ghost travel-btn--wide" type="button" onClick={() => { window.location.hash = '#/v3'; }}>
           V3 Sketch
         </button>
@@ -1076,7 +1125,7 @@ function AmsterdamLabGateway({ language, onOpenAmsterdam }) {
       </p>
       <dl>
         <div><dt>{isZh ? '数据模式' : 'Data mode'}</dt><dd>{isZh ? '本地优先' : 'Local-first'}</dd></div>
-        <div><dt>{isZh ? '场景' : 'Scene'}</dt><dd>WebGL city VR</dd></div>
+        <div><dt>{isZh ? '场景' : 'Scene'}</dt><dd>{isZh ? '城市漫游' : 'City roaming'}</dd></div>
       </dl>
       <button className="travel-btn travel-btn--primary" type="button" onClick={onOpenAmsterdam}>
         {isZh ? '打开阿姆斯特丹页面' : 'Open Amsterdam Page'}
@@ -1261,7 +1310,7 @@ function DestinationGrid({
                 {tags.map((tag) => <span key={tag} className="travel-tag">{tag}</span>)}
               </div>
               <div className="travel-destination-card__meta">
-                <span>{language === 'zh' ? '资料来源: Wikipedia' : 'Source: Wikipedia'}</span>
+                <span>{language === 'zh' ? '背景资料' : 'Background'}</span>
                 <div className="travel-btn-row">
                   <button className="travel-btn travel-btn--ghost travel-btn--compact" type="button" onClick={() => onAddToRoute(landmark.id)}>{pageCopy.actions.addToRoute}</button>
                   <button className="travel-btn travel-btn--ghost travel-btn--compact" type="button" onClick={() => onOpenDrive(landmark.id)}>{pageCopy.destinationCta}</button>
@@ -1378,10 +1427,10 @@ function RoutePreview({ language, copy, routeIds, routeMetrics }) {
   const routeState = routeIds.length < 2
     ? (language === 'zh' ? '至少选择 2 个景点开始规划。' : 'Choose at least 2 stops to calculate a road route.')
     : routeMetrics?.isFetching
-      ? (language === 'zh' ? '正在调用 OSRM 计算真实道路路线...' : 'Calculating real road route with OSRM...')
+      ? (language === 'zh' ? '正在生成推荐路线...' : 'Calculating the recommended route...')
       : routeGeometry
-        ? (language === 'zh' ? '已使用 OSRM 真实道路几何绘制路线。' : 'Route drawn from OSRM road geometry.')
-        : (language === 'zh' ? '道路服务暂不可用，保留景点坐标和交通走廊。' : 'Road service unavailable; showing stop coordinates and transport corridors.');
+        ? (language === 'zh' ? '已根据城市道路和停靠点绘制路线。' : 'Route drawn from roads and selected stops.')
+        : (language === 'zh' ? '暂时显示停靠点和主要交通走廊。' : 'Showing selected stops and main travel corridors for now.');
 
   return (
     <article className="travel-panel travel-panel--map">
@@ -1527,17 +1576,17 @@ function ReviewBrief({ landmarkId, language, liveLandmark }) {
       <article className="travel-review-card">
         <p>{liveDescription}</p>
         {sourceUrl
-          ? <small><a href={sourceUrl} target="_blank" rel="noreferrer">Wikipedia / Wikidata</a></small>
-          : <small>Wikipedia / Wikidata</small>}
+          ? <small><a href={sourceUrl} target="_blank" rel="noreferrer">{language === 'zh' ? '查看背景资料' : 'Read background'}</a></small>
+          : <small>{language === 'zh' ? '背景资料' : 'Background'}</small>}
       </article>
     );
   }
-  if (wiki.isLoading) return <article className="travel-review-card"><p>Loading…</p><small>Wikipedia</small></article>;
-  if (!wiki.data?.extract) return <article className="travel-review-card"><p>-</p><small>Wikipedia</small></article>;
+  if (wiki.isLoading) return <article className="travel-review-card"><p>{language === 'zh' ? '正在加载...' : 'Loading...'}</p><small>{language === 'zh' ? '背景资料' : 'Background'}</small></article>;
+  if (!wiki.data?.extract) return <article className="travel-review-card"><p>-</p><small>{language === 'zh' ? '背景资料' : 'Background'}</small></article>;
   return (
     <article className="travel-review-card">
       <p>{wiki.data.extract}</p>
-      <small>Wikipedia</small>
+      <small>{language === 'zh' ? '背景资料' : 'Background'}</small>
     </article>
   );
 }
@@ -1618,8 +1667,8 @@ function DestinationCardV2({
         </div>
         <div className="travel-destination-card__meta">
           {sourceUrl
-            ? <a href={sourceUrl} target="_blank" rel="noreferrer">Source: Wikipedia / Wikidata</a>
-            : <span>{language === 'zh' ? '资料来源: Wikipedia' : 'Source: Wikipedia'}</span>}
+            ? <a href={sourceUrl} target="_blank" rel="noreferrer">{language === 'zh' ? '查看背景资料' : 'Read background'}</a>
+            : <span>{language === 'zh' ? '背景资料' : 'Background'}</span>}
           <div className="travel-btn-row">
             <button className="travel-btn travel-btn--ghost travel-btn--compact" type="button" onClick={() => onAddToRoute(landmark.id)}>{pageCopy.actions.addToRoute}</button>
             <button className="travel-btn travel-btn--ghost travel-btn--compact" type="button" onClick={() => onOpenDrive(landmark.id)}>{pageCopy.destinationCta}</button>
