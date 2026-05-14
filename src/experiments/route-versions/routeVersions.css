@@ -284,6 +284,78 @@
   perspective: 900px;
 }
 
+.route-v3-mini-map {
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  z-index: 8;
+  width: min(420px, calc(100% - 36px));
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.24);
+  background: rgba(18,18,18,0.62);
+  color: #fff;
+  transform: translateX(-50%);
+  backdrop-filter: blur(14px);
+}
+
+.route-v3-mini-map > span {
+  display: block;
+  margin-bottom: 9px;
+  color: rgba(255,255,255,0.62);
+  font: 900 10px/1 Manrope, sans-serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.route-v3-mini-map div {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--route-count, 6), minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.route-v3-mini-map div::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  top: 50%;
+  height: 2px;
+  background: rgba(255,255,255,0.22);
+  transform: translateY(-50%);
+}
+
+.route-v3-mini-map i {
+  position: relative;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  justify-self: center;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,0.8);
+  background: #5c6a69;
+}
+
+.route-v3-mini-map i.is-current {
+  background: #f5d166;
+  box-shadow: 0 0 0 5px rgba(245,209,102,0.18);
+}
+
+.route-v3-mini-map i.is-target {
+  background: #78bdd0;
+  box-shadow: 0 0 0 5px rgba(120,189,208,0.18);
+}
+
+.route-v3-mini-map strong {
+  display: block;
+  overflow: hidden;
+  color: rgba(255,255,255,0.82);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .route-v3-horizon {
   position: absolute;
   left: 0;
@@ -727,6 +799,28 @@
   padding: 18px;
 }
 
+.route-v3-panel__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.route-v3-panel__stats span {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: rgba(255,255,255,0.52);
+  color: rgba(0,0,0,0.56);
+  font-size: 11px;
+}
+
+.route-v3-panel__stats strong {
+  color: #111;
+  font-size: 15px;
+}
+
 @media (max-width: 860px) {
   .route-v2-grid {
     grid-template-columns: 1fr;
@@ -769,9 +863,13 @@
   .route-v3-car {
     bottom: 86px;
   }
+
+  .route-v3-panel__stats {
+    grid-template-columns: 1fr;
+  }
 }
 
-/* Modern V2 map skin. The legacy route keeps the original rules above. */
+/* Modern V2 map skin. */
 .route-version-page--modern {
   background: #eef3f6;
   color: #102436;
@@ -996,6 +1094,38 @@
   color: #506477;
   font-size: 12px;
   line-height: 1.35;
+}
+
+.route-version-page--modern .route-v2-insights {
+  display: grid;
+  gap: 10px;
+}
+
+.route-version-page--modern .route-v2-insights article {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid rgba(16, 36, 54, 0.1);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.72);
+}
+
+.route-version-page--modern .route-v2-insights span {
+  color: #667b91;
+  font: 800 10px/1 Manrope, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.route-version-page--modern .route-v2-insights strong {
+  color: #102436;
+  font-size: 20px;
+}
+
+.route-version-page--modern .route-v2-insights small {
+  color: #506477;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 @media (max-width: 920px) {

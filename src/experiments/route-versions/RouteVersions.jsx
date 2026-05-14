@@ -156,6 +156,44 @@ function routeStopProgress(coords, stops) {
   });
 }
 
+function findActiveStopIndex(progressValues, progress) {
+  let active = 0;
+  for (let index = 0; index < progressValues.length; index += 1) {
+    if (progressValues[index] <= progress + 0.015) active = index;
+  }
+  return active;
+}
+
+function distanceKmBetween(a, b) {
+  if (!a || !b) return 0;
+  const R = 6371;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lon - a.lon);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = (Math.sin(dLat / 2) ** 2) + Math.cos(lat1) * Math.cos(lat2) * (Math.sin(dLon / 2) ** 2);
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function formatKm(value) {
+  if (!Number.isFinite(value)) return '0 km';
+  return value >= 100 ? `${Math.round(value).toLocaleString('en-US')} km` : `${value.toFixed(1)} km`;
+}
+
+function elevationSummary(samples) {
+  const values = (samples ?? []).map((sample) => Number(sample.elevation)).filter(Number.isFinite);
+  if (!values.length) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  let gain = 0;
+  for (let index = 1; index < values.length; index += 1) {
+    const delta = values[index] - values[index - 1];
+    if (delta > 0) gain += delta;
+  }
+  return { min, max, gain: Math.round(gain) };
+}
+
 function getStops(routeIds) {
   return routeIds
     .map((id) => {
@@ -175,16 +213,14 @@ function Topbar({ title, subtitle }) {
       </div>
       <div className="route-version-actions">
         <a href="#">Home</a>
-        <a href="#/legacy">Old Home</a>
         <a href="#/v2">V2</a>
-        <a href="#/v2-legacy">Old V2</a>
         <a href="#/v3">V3</a>
       </div>
     </div>
   );
 }
 
-export function RouteV2Page({ variant = 'modern' }) {
+export function RouteV2Page() {
   const [routeIds] = useState(loadRouteIds);
   const [topology, setTopology] = useState(null);
   const [progress, setProgress] = useState(0);
@@ -195,7 +231,7 @@ export function RouteV2Page({ variant = 'modern' }) {
   const displayRouteLine = routeLine || fallbackRouteLine(stops);
   const glow = sampleRoutePoint(topologyCoords, progress);
   const stopProgress = useMemo(() => routeStopProgress(topologyCoords, stops), [topologyCoords, stops]);
-  const activeIndex = Math.max(0, stopProgress.findLastIndex((value) => value <= progress + 0.015));
+  const activeIndex = findActiveStopIndex(stopProgress, progress);
   const activeStop = stops[activeIndex] ?? stops[0];
   const contourGroups = topology?.terrain?.contours ?? [];
   const boundaryPolygons = useMemo(() => (
@@ -203,7 +239,10 @@ export function RouteV2Page({ variant = 'modern' }) {
   ), [topology]);
   const networkNodes = useMemo(() => topologyNodes(topologyCoords), [topologyCoords]);
   const networkSegments = useMemo(() => topologySegments(topologyCoords), [topologyCoords]);
-  const isLegacy = variant === 'legacy';
+  const elevation = useMemo(() => elevationSummary(topology?.route?.elevationSamples), [topology]);
+  const routeProgressPct = Math.round(progress * 100);
+  const nextStop = stops[(activeIndex + 1) % Math.max(1, stops.length)] ?? activeStop;
+  const nextDistance = activeStop && nextStop ? distanceKmBetween(activeStop.meta, nextStop.meta) : 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -247,9 +286,9 @@ export function RouteV2Page({ variant = 'modern' }) {
   };
 
   return (
-    <main className={`route-version-page ${isLegacy ? 'route-version-page--legacy' : 'route-version-page--modern'}`}>
+    <main className="route-version-page route-version-page--modern">
       <div className="route-version-shell">
-        <Topbar title="Italy Route V2" subtitle={isLegacy ? 'Aerial route topology, contour-driven terrain mood, and point-based travel.' : 'A clean travel map with real route shape, terrain detail, and stop-by-stop progress.'} />
+        <Topbar title="Italy Route V2" subtitle="A clean travel map with real route shape, terrain detail, and stop-by-stop progress." />
         <div className="route-v2-grid">
           <section className="route-v2-map-panel">
             <svg className="route-v2-map" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-label="Italy route topology">
@@ -269,12 +308,10 @@ export function RouteV2Page({ variant = 'modern' }) {
                 </filter>
               </defs>
               <rect className="route-v2-sea" width="100" height="100" />
-              {!isLegacy && (
-                <g className="route-v2-graticule" aria-hidden="true">
-                  {[12, 24, 36, 48, 60, 72, 84].map((x) => <line key={`x-${x}`} x1={x} y1="0" x2={x} y2="100" />)}
-                  {[14, 28, 42, 56, 70, 84].map((y) => <line key={`y-${y}`} x1="0" y1={y} x2="100" y2={y} />)}
-                </g>
-              )}
+              <g className="route-v2-graticule" aria-hidden="true">
+                {[12, 24, 36, 48, 60, 72, 84].map((x) => <line key={`x-${x}`} x1={x} y1="0" x2={x} y2="100" />)}
+                {[14, 28, 42, 56, 70, 84].map((y) => <line key={`y-${y}`} x1="0" y1={y} x2="100" y2={y} />)}
+              </g>
               {boundaryPolygons.length > 0
                 ? boundaryPolygons.map((polygon, index) => <path key={index} className="route-v2-land" d={pathFromPolygon(polygon)} />)
                 : (
@@ -296,28 +333,26 @@ export function RouteV2Page({ variant = 'modern' }) {
                   return <polyline key={point.id} className="route-v2-network" points={pointString([[previous.lon, previous.lat], [point.lon, point.lat]])} />;
                 })
                 : NETWORK.map((line, index) => <polyline key={index} className="route-v2-network" points={pointString(line)} />)}
-              {!isLegacy && networkSegments.map((line, index) => <polyline key={`topology-${index}`} className="route-v2-topology-edge" points={line} />)}
-              {!isLegacy && <polyline className="route-v2-route-casing" points={displayRouteLine} />}
+              {networkSegments.map((line, index) => <polyline key={`topology-${index}`} className="route-v2-topology-edge" points={line} />)}
+              <polyline className="route-v2-route-casing" points={displayRouteLine} />
               <polyline className="route-v2-route" points={displayRouteLine} />
-              {!isLegacy && networkNodes.map((node) => <circle key={node.id} className="route-v2-topology-node" cx={node.x} cy={node.y} r="0.55" />)}
+              {networkNodes.map((node) => <circle key={node.id} className="route-v2-topology-node" cx={node.x} cy={node.y} r="0.55" />)}
               {stops.map(({ id, meta }) => {
                 const p = project(meta.lon, meta.lat);
                 return (
                   <g key={id} className="route-v2-stop-group">
                     <circle className="route-v2-stop" cx={p.x} cy={p.y} r="1.2" />
-                    {!isLegacy && <text x={p.x + 1.8} y={p.y - 1.2}>{meta.city.en}</text>}
+                    <text x={p.x + 1.8} y={p.y - 1.2}>{meta.city.en}</text>
                   </g>
                 );
               })}
               <circle className="route-v2-glow" cx={glow.x} cy={glow.y} r="1.7" />
             </svg>
-            {!isLegacy && (
-              <div className="route-v2-map-legend">
-                <span><i className="route-v2-key route-v2-key--route" /> 推荐路线</span>
-                <span><i className="route-v2-key route-v2-key--node" /> 关键节点</span>
-                <span><i className="route-v2-key route-v2-key--contour" /> 地形线</span>
-              </div>
-            )}
+            <div className="route-v2-map-legend">
+              <span><i className="route-v2-key route-v2-key--route" /> Recommended route</span>
+              <span><i className="route-v2-key route-v2-key--node" /> Key nodes</span>
+              <span><i className="route-v2-key route-v2-key--contour" /> Terrain lines</span>
+            </div>
             {activeStop && (
               <aside className="route-v2-pop">
                 <div className="route-v2-mini-model"><span /></div>
@@ -328,7 +363,7 @@ export function RouteV2Page({ variant = 'modern' }) {
           </section>
           <aside className="route-v2-side">
             <h2>{topology?.route?.distanceKm ? `${topology.route.distanceKm} km` : `${currentRoute.distanceKm} km`}</h2>
-            <p>{topology ? '已生成包含道路走向、地形线和停靠点的路线视图。' : '正在加载路线视图，先显示默认线路。'}</p>
+            <p>{topology ? 'Route view combines road shape, terrain lines, and selected stops.' : 'Loading route view; showing the default line first.'}</p>
             <div className="route-v2-controls">
               <button type="button" onClick={() => stepRoute(-1)}>Prev</button>
               <button type="button" className="is-primary" onClick={() => setIsPlaying((value) => !value)}>
@@ -347,13 +382,28 @@ export function RouteV2Page({ variant = 'modern' }) {
                 }}
               />
             </div>
-            {!isLegacy && (
-              <div className="route-v2-source-stack">
-                <span>地图细节：{topology?.map?.boundary?.length ?? '默认'} 个区域</span>
-                <span>路线精度：{topology?.route?.coordinates?.length?.toLocaleString('en-US') ?? currentRoute.points.length} 个路径点</span>
-                <span>地形层次：{topology?.terrain?.contours?.length ?? 0} 组</span>
-              </div>
-            )}
+            <div className="route-v2-source-stack">
+              <span>Map detail: {topology?.map?.boundary?.length ?? 'default'} regions</span>
+              <span>Route precision: {topology?.route?.coordinates?.length?.toLocaleString('en-US') ?? currentRoute.points.length} path points</span>
+              <span>Terrain layers: {topology?.terrain?.contours?.length ?? 0} groups</span>
+            </div>
+            <div className="route-v2-insights">
+              <article>
+                <span>Current progress</span>
+                <strong>{routeProgressPct}%</strong>
+                <small>{activeStop?.meta.name.en ?? 'Start'} to {nextStop?.meta.name.en ?? 'next stop'}</small>
+              </article>
+              <article>
+                <span>Next leg</span>
+                <strong>{formatKm(nextDistance)}</strong>
+                <small>{activeStop?.meta.city.en ?? '-'} to {nextStop?.meta.city.en ?? '-'}</small>
+              </article>
+              <article>
+                <span>Terrain range</span>
+                <strong>{elevation ? `${Math.round(elevation.min)}-${Math.round(elevation.max)} m` : 'Pending'}</strong>
+                <small>{elevation ? `Approx. climb ${elevation.gain.toLocaleString('en-US')} m` : 'Loading elevation profile'}</small>
+              </article>
+            </div>
             <div className="route-v2-stops">
               {stops.map((stop, index) => (
                 <button key={stop.id} className={`route-v2-stop-row ${index === activeIndex ? 'is-active' : ''}`} type="button" onClick={() => jumpToStop(index)}>
@@ -387,6 +437,8 @@ export function RouteV3Page() {
   const rightIndex = routeCount > 1 ? (currentIndex + 1) % routeCount : currentIndex;
   const leftStop = stops[leftIndex] ?? currentStop;
   const rightStop = stops[rightIndex] ?? currentStop;
+  const leftDistance = currentStop && leftStop ? distanceKmBetween(currentStop.meta, leftStop.meta) : 0;
+  const rightDistance = currentStop && rightStop ? distanceKmBetween(currentStop.meta, rightStop.meta) : 0;
   const targetIndex = selectedSide === 'left' ? leftIndex : rightIndex;
   const targetStop = stops[targetIndex] ?? rightStop;
   const sideSign = selectedSide === 'left' ? -1 : selectedSide === 'right' ? 1 : 0;
@@ -480,6 +532,7 @@ export function RouteV3Page() {
         <Topbar title="Italy Route V3" subtitle="Forked route driving: choose left or right, turn into the selected landmark, then review it." />
         <section className={`route-v3-stage route-v3-stage--${phase}`} data-side={selectedSide ?? 'none'}>
           <div className="route-v3-horizon" />
+          <RouteV3MiniMap stops={stops} currentIndex={currentIndex} targetIndex={phase === 'driving' ? targetIndex : null} />
           <svg className="route-v3-road-svg" viewBox="0 0 1000 760" preserveAspectRatio="none" aria-hidden="true">
             <path className="route-v3-road-fill" d="M404 820 C424 660 444 574 466 512 C426 430 312 338 38 252 L96 216 C414 304 528 408 540 512 C544 604 568 700 596 820 Z" />
             <path className="route-v3-road-fill" d="M596 820 C576 660 556 574 534 512 C574 430 688 338 962 252 L904 216 C586 304 472 408 460 512 C456 604 432 700 404 820 Z" />
@@ -490,8 +543,8 @@ export function RouteV3Page() {
             <path className={`route-v3-road-choice ${selectedSide === 'left' ? 'is-active' : ''}`} d="M500 820 C500 684 500 596 500 512 C500 418 406 328 76 236" />
             <path className={`route-v3-road-choice ${selectedSide === 'right' ? 'is-active' : ''}`} d="M500 820 C500 684 500 596 500 512 C500 418 594 328 924 236" />
           </svg>
-          <CandidateButton side="left" stop={leftStop} active={selectedSide === 'left'} disabled={phase !== 'choice'} onClick={() => startDrive('left')} />
-          <CandidateButton side="right" stop={rightStop} active={selectedSide === 'right'} disabled={phase !== 'choice'} onClick={() => startDrive('right')} />
+          <CandidateButton side="left" stop={leftStop} distanceKm={leftDistance} routeIndex={leftIndex} routeCount={routeCount} active={selectedSide === 'left'} disabled={phase !== 'choice'} onClick={() => startDrive('left')} />
+          <CandidateButton side="right" stop={rightStop} distanceKm={rightDistance} routeIndex={rightIndex} routeCount={routeCount} active={selectedSide === 'right'} disabled={phase !== 'choice'} onClick={() => startDrive('right')} />
           <div className="route-v3-car" style={carStyle} aria-label="Route vehicle">
             <span />
           </div>
@@ -525,19 +578,43 @@ export function RouteV3Page() {
         </section>
         <article className="route-v3-panel">
           <h2>{currentStop?.meta.name.en ?? 'Route fork'}</h2>
-          <p>Press A for the left landmark or D for the right landmark. The car drives through the chosen curve, opens the destination card, then waits for you to close it before the next fork.</p>
+          <p>Choose the previous or next stop in the planned route. Each choice now shows distance, city, stop order, and route progress before the drive animation starts.</p>
+          <div className="route-v3-panel__stats">
+            <span>Current stop <strong>{currentIndex + 1}/{routeCount}</strong></span>
+            <span>Previous leg <strong>{formatKm(leftDistance)}</strong></span>
+            <span>Next leg <strong>{formatKm(rightDistance)}</strong></span>
+          </div>
         </article>
       </div>
     </main>
   );
 }
 
-function CandidateButton({ side, stop, active, disabled, onClick }) {
+function RouteV3MiniMap({ stops, currentIndex, targetIndex }) {
+  if (!stops.length) return null;
+  return (
+    <div className="route-v3-mini-map" aria-label="Route stop order">
+      <span>Route order</span>
+      <div style={{ ['--route-count']: stops.length }}>
+        {stops.map((stop, index) => (
+          <i
+            key={stop.id}
+            className={`${index === currentIndex ? 'is-current' : ''} ${index === targetIndex ? 'is-target' : ''}`}
+            title={stop.meta.name.en}
+          />
+        ))}
+      </div>
+      <strong>{stops[currentIndex]?.meta.city.en ?? '-'}</strong>
+    </div>
+  );
+}
+
+function CandidateButton({ side, stop, distanceKm, routeIndex, routeCount, active, disabled, onClick }) {
   return (
     <button type="button" className={`route-v3-candidate route-v3-candidate--${side} ${active ? 'is-active' : ''}`} disabled={disabled} onClick={onClick}>
       <span>{side === 'left' ? 'A / Left route' : 'D / Right route'} - {stop.meta.city.en}</span>
       <strong>{stop.meta.name.en}</strong>
-      <small>{stop.meta.type.en}</small>
+      <small>{stop.meta.type.en} / {formatKm(distanceKm)} / stop {routeIndex + 1} of {routeCount}</small>
     </button>
   );
 }

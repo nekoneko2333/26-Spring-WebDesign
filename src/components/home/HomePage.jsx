@@ -541,7 +541,7 @@ function exportTextFile(filename, content) {
   URL.revokeObjectURL(url);
 }
 
-export function HomePage({ variant = 'modern', onOpenDrive, onOpenAmsterdam }) {
+export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
   const language = useAppStore((state) => state.language);
   const setLanguage = useAppStore((state) => state.setLanguage);
   const setActiveRouteIds = useAppStore((state) => state.setActiveRouteIds);
@@ -795,10 +795,8 @@ export function HomePage({ variant = 'modern', onOpenDrive, onOpenAmsterdam }) {
   const CompareModal = CompareModalV2;
   const DestinationGrid = DestinationGridV2;
 
-  const isLegacy = variant === 'legacy';
-
   return (
-    <div className={`travel-home ${language === 'zh' ? 'is-zh' : 'is-en'} ${isLegacy ? 'travel-home--legacy' : 'travel-home--modern'}`}>
+    <div className={`travel-home ${language === 'zh' ? 'is-zh' : 'is-en'} travel-home--modern`}>
       <HomeWebGLBackdrop />
       <div className="travel-ambient travel-ambient--grid" aria-hidden="true" />
       <div className="travel-ambient travel-ambient--beam" aria-hidden="true" />
@@ -831,18 +829,14 @@ export function HomePage({ variant = 'modern', onOpenDrive, onOpenAmsterdam }) {
               <button className="travel-btn travel-btn--ghost" type="button" onClick={() => { window.location.hash = '#/v3'; }}>{copy.actions.openV3}</button>
               <button className="travel-btn travel-btn--ghost" type="button" onClick={() => setActivePage('planner')}>{guideCopy.hero.secondaryCta}</button>
               <button className="travel-btn travel-btn--ghost" type="button" onClick={onOpenAmsterdam}>{copy.actions.openAmsterdam ?? 'Amsterdam VR'}</button>
-              {!isLegacy && <button className="travel-btn travel-btn--ghost" type="button" onClick={() => { window.location.hash = '#/legacy'; }}>Legacy Home</button>}
-              {isLegacy && <button className="travel-btn travel-btn--ghost" type="button" onClick={() => { window.location.hash = '#/'; }}>Modern Home</button>}
             </div>
 
-            {!isLegacy && (
-              <ModernHeroTelemetry
-                language={language}
-                routeIds={routeIds}
-                distanceKm={routeMetrics.data?.distanceKm ?? itineraryStats.totalKm ?? currentRoute.distanceKm}
-                durationHours={routeMetrics.data?.durationHours ?? currentRoute.durationHours}
-              />
-            )}
+            <ModernHeroTelemetry
+              language={language}
+              routeIds={routeIds}
+              distanceKm={routeMetrics.data?.distanceKm ?? itineraryStats.totalKm ?? currentRoute.distanceKm}
+              durationHours={routeMetrics.data?.durationHours ?? currentRoute.durationHours}
+            />
           </div>
 
           <div className="travel-hero__aside">
@@ -1079,9 +1073,6 @@ function SiteNav({
         </button>
         <button className="travel-btn travel-btn--ghost travel-btn--wide" type="button" onClick={() => { window.location.hash = '#/v2'; }}>
           V2 Map
-        </button>
-        <button className="travel-btn travel-btn--ghost travel-btn--wide" type="button" onClick={() => { window.location.hash = '#/legacy'; }}>
-          Legacy Home
         </button>
         <button className="travel-btn travel-btn--ghost travel-btn--wide" type="button" onClick={() => { window.location.hash = '#/v3'; }}>
           V3 Sketch
