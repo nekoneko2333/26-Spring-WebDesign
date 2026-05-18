@@ -256,8 +256,33 @@ const homeCopy = {
   },
 };
 
+const zhLandmarkOverrides = {
+  colosseum: { name: '罗马斗兽场', city: '罗马', region: '拉齐奥', type: '帝国遗迹', season: '最佳光线 / 日落', blurb: '古罗马圆形竞技场，拱廊光影清晰，城市中心能量感强。' },
+  pisa: { name: '比萨斜塔', city: '比萨', region: '托斯卡纳', type: '中世纪钟楼', season: '最佳光线 / 清晨', blurb: '大理石纪念广场与标志性倾斜姿态，紧凑而明亮。' },
+  florence_duomo: { name: '佛罗伦萨主教座堂', city: '佛罗伦萨', region: '托斯卡纳', type: '文艺复兴教堂', season: '最佳光线 / 下午', blurb: '文艺复兴穹顶与密集街巷构成强烈的步行城市氛围。' },
+  venice_rialto: { name: '里亚托桥', city: '威尼斯', region: '威尼托', type: '运河桥梁', season: '最佳光线 / 上午', blurb: '运河跨越节点与层叠步行流线，水城移动体验紧凑清晰。' },
+  milan_duomo: { name: '米兰主教座堂', city: '米兰', region: '伦巴第', type: '哥特式教堂', season: '最佳光线 / 蓝调时刻', blurb: '哥特式尖塔与广场尺度，具有强烈的都市抵达感。' },
+  pompeii: { name: '庞贝古城遗址', city: '庞贝', region: '坎帕尼亚', type: '考古遗址', season: '最佳光线 / 清晨', blurb: '古代街道与保存良好的住宅，让罗马日常城市生活可以被直接阅读。' },
+};
+
+function getLandmarkMeta(landmarkId, language) {
+  const meta = travelLandmarkMeta[landmarkId];
+  if (language !== 'zh') return meta;
+  const override = zhLandmarkOverrides[landmarkId];
+  if (!override || !meta) return meta;
+  return {
+    ...meta,
+    name: { ...meta.name, zh: override.name },
+    city: { ...meta.city, zh: override.city },
+    region: { ...meta.region, zh: override.region },
+    type: { ...meta.type, zh: override.type },
+    season: { ...meta.season, zh: override.season },
+    blurb: { ...meta.blurb, zh: override.blurb },
+  };
+}
+
 function getLandmarkDisplayName(landmark, language) {
-  const meta = travelLandmarkMeta[landmark.id];
+  const meta = getLandmarkMeta(landmark.id, language);
   return meta?.name?.[language] ?? landmark.name;
 }
 
@@ -541,13 +566,302 @@ function exportTextFile(filename, content) {
   URL.revokeObjectURL(url);
 }
 
+const refinedHomeCopy = {
+  en: {
+    brand: { eyebrow: 'Web3D', title: 'Trip3D Italy' },
+    languageLabels: { en: 'EN', zh: '中文' },
+    nav: [
+      { id: 'destinations', label: 'Destinations' },
+      { id: 'planner', label: 'Trips' },
+      { id: 'reviews', label: 'Reviews' },
+      { id: 'drive', label: '3D Drive' },
+    ],
+    search: {
+      title: 'Find your next stop',
+      placeholder: 'Search cities, landmarks, regions, or travel style',
+      clear: 'Reset',
+    },
+    filters: {
+      title: 'Filters',
+      region: 'Region',
+      type: 'Experience',
+      season: 'Best time',
+      any: 'Any',
+    },
+    sort: {
+      title: 'Sort',
+      featured: 'Recommended',
+      rating: 'Top rated',
+      city: 'City',
+    },
+    actions: {
+      open3d: 'Open 3D Drive',
+      openV2: 'Route map',
+      openV3: 'Topology view',
+      openAmsterdam: 'Amsterdam VR',
+      continue3d: 'Continue',
+      export: 'Export',
+      compare: 'Compare',
+      favorites: 'Saved',
+      addToRoute: 'Add stop',
+      optimizeRoute: 'Optimize',
+      showMore: 'Show more',
+      remove: 'Remove',
+      generate: 'Generate itinerary',
+      resetRoute: 'Reset route',
+      lock: 'Lock',
+      unlock: 'Unlock',
+      signIn: 'Sign in',
+      signOut: 'Sign out',
+    },
+    pages: {
+      destinations: {
+        eyebrow: 'Destinations',
+        title: 'Browse landmark stays, day trips, and scenic stops',
+        body: 'Filter by region, experience type, season, and saved stops. Add places to a route before opening the 3D drive.',
+      },
+      planner: {
+        eyebrow: 'Trip planner',
+        title: 'Build a route, lock must-see stops, then export a day plan',
+        body: 'Your route is stored locally and can be optimized against the geographic coordinates already in the project.',
+      },
+      reviews: {
+        eyebrow: 'Reviews',
+        title: 'Read quick context before choosing a destination',
+        body: 'Background notes and source links help you compare why each stop is worth adding to the itinerary.',
+      },
+      drive: {
+        eyebrow: '3D drive',
+        title: 'Preview the journey spatially when the plan is ready',
+        body: 'Open the Three.js drive, focus landmarks, and inspect the route as a guided 3D experience.',
+      },
+    },
+    booking: {
+      tabs: ['Hotels', 'Attractions', 'Routes', '3D Preview'],
+      destination: 'Destination',
+      dates: 'Dates',
+      guests: 'Travelers',
+      destinationValue: 'Italy heritage route',
+      datesValue: 'Flexible dates',
+      guestsValue: '2 adults',
+      submit: 'Search trips',
+    },
+    account: {
+      title: 'Account',
+      body: 'Save favorites, route edits, and cache settings on this device.',
+      email: 'Email',
+      name: 'Name',
+      submit: 'Create local account',
+      demo: 'Local demo login',
+      cached: 'Cached locally',
+      guest: 'Guest session',
+    },
+    cache: {
+      title: 'Local cache',
+      body: 'Favorites, route order, locks, and account session are stored in localStorage. React Query caches live data in memory while the app is open.',
+      route: 'Route stops',
+      favorites: 'Saved places',
+      mode: 'Mode',
+      local: 'Local-first',
+      clear: 'Clear saved route',
+    },
+    destinationCta: 'View in 3D',
+    ratingLabel: 'Rating',
+    routeSource: 'Planned route',
+    distanceUnit: 'km',
+    durationUnit: 'h',
+    speedUnit: 'km/h',
+    coordinateLabels: { lat: 'LAT', lon: 'LON' },
+    highlights: [],
+    trafficLabels: homeCopy.en.trafficLabels,
+    segmentTypes: homeCopy.en.segmentTypes,
+    segmentDescriptions: homeCopy.en.segmentDescriptions,
+    routeLabels: homeCopy.en.routeLabels,
+    itinerary: homeCopy.en.itinerary,
+  },
+  zh: {
+    brand: { eyebrow: 'Web3D', title: 'Trip3D 意大利' },
+    languageLabels: { en: 'EN', zh: '中文' },
+    nav: [
+      { id: 'destinations', label: '目的地' },
+      { id: 'planner', label: '行程' },
+      { id: 'reviews', label: '点评' },
+      { id: 'drive', label: '3D 导览' },
+    ],
+    search: {
+      title: '想去哪一站',
+      placeholder: '搜城市、景点、地区，或你想要的旅行感觉',
+      clear: '重置',
+    },
+    filters: {
+      title: '筛选',
+      region: '地区',
+      type: '体验',
+      season: '最佳时间',
+      any: '不限',
+    },
+    sort: {
+      title: '排序',
+      featured: '推荐',
+      rating: '评分',
+      city: '城市',
+    },
+    actions: {
+      open3d: '打开 3D 路线',
+      openV2: '路线地图',
+      openV3: '拓扑视图',
+      openAmsterdam: '阿姆斯特丹 VR',
+      continue3d: '继续',
+      export: '导出',
+      compare: '对比',
+      favorites: '收藏',
+      addToRoute: '加入行程',
+      optimizeRoute: '优化路线',
+      showMore: '查看更多',
+      remove: '移除',
+      generate: '生成行程',
+      resetRoute: '重置路线',
+      lock: '锁定',
+      unlock: '解锁',
+      signIn: '登录',
+      signOut: '退出',
+    },
+    pages: {
+      destinations: {
+        eyebrow: '目的地',
+        title: '先挑想去的地方，再把路线串起来',
+        body: '按地区、玩法和适合出发的时间筛选景点。看到喜欢的地方可以收藏、对比，或直接加入行程。',
+      },
+      planner: {
+        eyebrow: '行程',
+        title: '把必去景点固定住，其余交给路线优化',
+        body: '当前行程会保存在本机。系统会根据已有经纬度估算距离，并帮你调整更顺的游览顺序。',
+      },
+      reviews: {
+        eyebrow: '点评',
+        title: '出发前先看看每个地方值不值得停',
+        body: '这里保留简短背景、来源链接和旅行提示，方便你快速判断哪些景点更适合加入路线。',
+      },
+      drive: {
+        eyebrow: '3D 导览',
+        title: '路线定好后，用 3D 方式预览一遍',
+        body: '打开 3D 驾驶体验后，可以沿路线查看地标位置、城市关系和重点景点。',
+      },
+    },
+    booking: {
+      tabs: ['酒店', '景点', '路线', '3D 预览'],
+      destination: '目的地',
+      dates: '日期',
+      guests: '出行人数',
+      destinationValue: '意大利遗产路线',
+      datesValue: '日期灵活',
+      guestsValue: '2 位成人',
+      submit: '搜索行程',
+    },
+    account: {
+      title: '账户',
+      body: '收藏、行程和登录状态会先保存在这台设备上。',
+      email: '邮箱',
+      name: '昵称',
+      submit: '登录并保存',
+      demo: '例如：意大利旅行者',
+      cached: '已本地缓存',
+      guest: '游客模式',
+    },
+    cache: {
+      title: '本地缓存',
+      body: '收藏、路线顺序、锁定景点和登录状态会保存在浏览器里；实时数据会在当前页面会话中缓存。',
+      route: '路线停靠点',
+      favorites: '收藏地点',
+      mode: '模式',
+      local: '本地保存',
+      clear: '清空路线缓存',
+    },
+    destinationCta: '进入 3D',
+    ratingLabel: '评分',
+    routeSource: '规划路线',
+    distanceUnit: 'km',
+    durationUnit: '小时',
+    speedUnit: 'km/h',
+    coordinateLabels: { lat: '纬度', lon: '经度' },
+    highlights: [],
+    trafficLabels: {
+      free: '畅通',
+      normal: '正常',
+      slow: '缓行',
+      traffic_jam: '拥堵',
+    },
+    segmentTypes: {
+      city: '城市道路',
+      motorway: '高速公路',
+      scenic: '风景道路',
+      mountain: '山地路段',
+      bridge: '桥梁',
+      tunnel: '隧道',
+      ringRoad: '环城路',
+    },
+    segmentDescriptions: homeCopy.en.segmentDescriptions,
+    routeLabels: {
+      source: '来源',
+      distance: '距离',
+      duration: '时长',
+      points: '路线点',
+      speed: '限速',
+      traffic: '交通',
+      layer: '图层',
+      roadType: '道路类型',
+    },
+    itinerary: {
+      days: '天数',
+      pace: '节奏',
+      relaxed: '轻松',
+      standard: '标准',
+      fast: '紧凑',
+    },
+  },
+};
+
+const refinedTravelGuide = {
+  en: {
+    ...travelGuide.en,
+    hero: {
+      ...travelGuide.en.hero,
+      kicker: 'Italy heritage escapes',
+      title: 'From Roman ruins to lagoon light, Italy is better by the road.',
+      summary: 'Handpicked landmarks, coastal towns, historic streets, and scenic transfers for a route that feels less like a checklist and more like a journey.',
+      secondaryCta: 'Plan route',
+    },
+  },
+  zh: {
+    ...travelGuide.zh,
+    hero: {
+      ...travelGuide.zh.hero,
+      kicker: '意大利遗产之旅',
+      title: '从古罗马遗迹，到泻湖晨光，一路驶进意大利。',
+      summary: '精选地标、海岸小镇、古城街巷与风景路段，把一串目的地串成真正有节奏的旅程。',
+      primaryCta: '打开 3D 路线',
+      secondaryCta: '去排行程',
+    },
+    routePanel: {
+      eyebrow: '建议路线',
+      title: '从米兰一路南下到古罗马遗产',
+      body: '从米兰和威尼斯出发，经过佛罗伦萨、比萨，再抵达罗马、庞贝和意大利南部遗产点。',
+    },
+    featurePanel: {
+      eyebrow: '沉浸式导览',
+      title: '3D 驾驶模式',
+      body: '把已经排好的路线放进 3D 场景里，沿途查看地标、路线距离和模型预览。',
+    },
+  },
+};
+
 export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
   const language = useAppStore((state) => state.language);
   const setLanguage = useAppStore((state) => state.setLanguage);
   const setActiveRouteIds = useAppStore((state) => state.setActiveRouteIds);
   const setActiveRouteGeometry = useAppStore((state) => state.setActiveRouteGeometry);
-  const copy = homeCopy[language] ?? homeCopy.en;
-  const guideCopy = travelGuide[language] ?? travelGuide.en;
+  const copy = refinedHomeCopy[language] ?? refinedHomeCopy.en;
+  const guideCopy = refinedTravelGuide[language] ?? refinedTravelGuide.en;
   const reviewsCopy = reviewLocales[language] ?? reviewLocales.en;
 
   const [activePage, setActivePage] = useState('destinations');
@@ -565,6 +879,11 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
   const [showCompare, setShowCompare] = useState(false);
   const [destinationVisibleCount, setDestinationVisibleCount] = useState(12);
   const [routeQuery, setRouteQuery] = useState('');
+  const [userSession, setUserSession] = useLocalStorageState('web3d.userSession', null);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showAccountCenter, setShowAccountCenter] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorageState('web3d.sidebarCollapsed', false);
+  const [activeService, setActiveService] = useState(null);
 
   const routeMetrics = useRouteMetrics(routeIds);
   const liveData = useLiveLandmarkIndex();
@@ -593,19 +912,19 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
 
   const regions = useMemo(() => {
     const out = new Set();
-    for (const landmark of landmarks) out.add(travelLandmarkMeta[landmark.id]?.region?.[language] ?? '');
+    for (const landmark of landmarks) out.add(getLandmarkMeta(landmark.id, language)?.region?.[language] ?? '');
     return [...out].filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [language]);
 
   const types = useMemo(() => {
     const out = new Set();
-    for (const landmark of landmarks) out.add(travelLandmarkMeta[landmark.id]?.type?.[language] ?? '');
+    for (const landmark of landmarks) out.add(getLandmarkMeta(landmark.id, language)?.type?.[language] ?? '');
     return [...out].filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [language]);
 
   const seasons = useMemo(() => {
     const out = new Set();
-    for (const landmark of landmarks) out.add(travelLandmarkMeta[landmark.id]?.season?.[language] ?? '');
+    for (const landmark of landmarks) out.add(getLandmarkMeta(landmark.id, language)?.season?.[language] ?? '');
     return [...out].filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [language]);
 
@@ -624,7 +943,7 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
   const filteredLandmarks = useMemo(() => {
     const q = query.trim().toLowerCase();
     const results = landmarks.filter((landmark) => {
-      const meta = travelLandmarkMeta[landmark.id];
+      const meta = getLandmarkMeta(landmark.id, language);
       const name = getLandmarkDisplayName(landmark, language);
       const city = meta?.city?.[language] ?? '';
       const region = meta?.region?.[language] ?? '';
@@ -646,8 +965,8 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
       sorted.sort((a, b) => (ratings.get(b.id) ?? 0) - (ratings.get(a.id) ?? 0));
     } else if (sortMode === 'city') {
       sorted.sort((a, b) => {
-        const ac = travelLandmarkMeta[a.id]?.city?.[language] ?? a.name;
-        const bc = travelLandmarkMeta[b.id]?.city?.[language] ?? b.name;
+        const ac = getLandmarkMeta(a.id, language)?.city?.[language] ?? a.name;
+        const bc = getLandmarkMeta(b.id, language)?.city?.[language] ?? b.name;
         return ac.localeCompare(bc);
       });
     }
@@ -673,7 +992,7 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
     return landmarks
       .filter((landmark) => {
         if (routeIds.includes(landmark.id)) return false;
-        const meta = travelLandmarkMeta[landmark.id];
+        const meta = getLandmarkMeta(landmark.id, language);
         const name = getLandmarkDisplayName(landmark, language);
         return name.toLowerCase().includes(q)
           || (meta?.city?.[language] ?? '').toLowerCase().includes(q)
@@ -757,7 +1076,7 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
 
   const routeSearchPlaceholder = useMemo(() => {
     const cities = routeIds
-      .map((id) => travelLandmarkMeta[id]?.city?.[language])
+      .map((id) => getLandmarkMeta(id, language)?.city?.[language])
       .filter(Boolean);
     if (cities.length === 0) return copy.search.placeholder;
     const routeLabel = cities.slice(0, 4).join(' -> ');
@@ -773,7 +1092,7 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
       day.stops.forEach((id) => {
         const landmark = landmarks.find((l) => l.id === id);
         if (!landmark) return;
-        const meta = travelLandmarkMeta[id];
+        const meta = getLandmarkMeta(id, language);
         rows.push(`- ${getLandmarkDisplayName(landmark, language)} (${meta.city[language]})`);
       });
       rows.push('');
@@ -792,11 +1111,31 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
     onOpenDrive(first);
   }, [onOpenDrive, routeIds]);
 
+  const handleLogin = useCallback((payload) => {
+    setUserSession({
+      name: payload.name || payload.email.split('@')[0] || 'Traveler',
+      email: payload.email,
+      createdAt: new Date().toISOString(),
+    });
+    setShowLogin(false);
+    setShowAccountCenter(true);
+  }, [setUserSession]);
+
+  const openLoginFromAccount = useCallback(() => {
+    setShowAccountCenter(false);
+    setShowLogin(true);
+  }, []);
+
+  const signOutFromAccount = useCallback(() => {
+    setUserSession(null);
+    setShowAccountCenter(false);
+  }, [setUserSession]);
+
   const CompareModal = CompareModalV2;
   const DestinationGrid = DestinationGridV2;
 
   return (
-    <div className={`travel-home ${language === 'zh' ? 'is-zh' : 'is-en'} travel-home--modern`}>
+    <div className={`travel-home ${language === 'zh' ? 'is-zh' : 'is-en'} travel-home--modern travel-home--neo ${sidebarCollapsed ? 'is-nav-collapsed' : ''}`}>
       <HomeWebGLBackdrop />
       <div className="travel-ambient travel-ambient--grid" aria-hidden="true" />
       <div className="travel-ambient travel-ambient--beam" aria-hidden="true" />
@@ -814,7 +1153,36 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
         routeCount={routeIds.length}
         onOpenDrive={openDriveFromRoute}
         onOpenAmsterdam={onOpenAmsterdam}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
+        onOpenService={setActiveService}
       />
+
+      <AccountAvatar
+        copy={copy}
+        language={language}
+        userSession={userSession}
+        onOpen={() => setShowAccountCenter((value) => !value)}
+      />
+
+      {showAccountCenter && (
+        <AccountCenter
+          copy={copy}
+          language={language}
+          userSession={userSession}
+          favoritesCount={favoriteSet.size}
+          compareCount={compareSet.size}
+          routeCount={routeIds.length}
+          itineraryDays={itineraryDays}
+          onClose={() => setShowAccountCenter(false)}
+          onSignIn={openLoginFromAccount}
+          onSignOut={signOutFromAccount}
+          onOpenPlanner={() => { setActivePage('planner'); setShowAccountCenter(false); }}
+          onOpenFavorites={() => { setActivePage('destinations'); setShowAccountCenter(false); }}
+          onResetRoute={resetRoute}
+          onOpenService={(serviceId) => { setActiveService(serviceId); setShowAccountCenter(false); }}
+        />
+      )}
 
       {activePage === 'destinations' && (
         <header className="travel-hero">
@@ -822,20 +1190,40 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
             <p className="travel-kicker">{guideCopy.hero.kicker}</p>
             <h1 className="travel-title">{guideCopy.hero.title}</h1>
             <p className="travel-summary">{guideCopy.hero.summary}</p>
+            <BookingSearchStrip
+              copy={copy}
+              onSubmit={() => setActivePage('planner')}
+              onOpenService={setActiveService}
+            />
+            <TripToolkit
+              language={language}
+              onPlan={() => setActivePage('planner')}
+              onSaved={() => setActivePage('destinations')}
+              onReviews={() => setActivePage('reviews')}
+              onDrive={openDriveFromRoute}
+            />
 
             <div className="travel-hero__actions">
               <button className="travel-btn travel-btn--primary" type="button" onClick={openDriveFromRoute}>{copy.actions.open3d}</button>
-              <button className="travel-btn travel-btn--ghost" type="button" onClick={() => { window.location.hash = '#/v2'; }}>{copy.actions.openV2}</button>
-              <button className="travel-btn travel-btn--ghost" type="button" onClick={() => { window.location.hash = '#/v3'; }}>{copy.actions.openV3}</button>
-              <button className="travel-btn travel-btn--ghost" type="button" onClick={() => setActivePage('planner')}>{guideCopy.hero.secondaryCta}</button>
-              <button className="travel-btn travel-btn--ghost" type="button" onClick={onOpenAmsterdam}>{copy.actions.openAmsterdam ?? 'Amsterdam VR'}</button>
+              <div className="travel-hero__quicklinks" aria-label={language === 'zh' ? '路线工具' : 'Route tools'}>
+                <button type="button" onClick={() => setActivePage('planner')}>{guideCopy.hero.secondaryCta}</button>
+                <button type="button" onClick={() => { window.location.hash = '#/v2'; }}>{copy.actions.openV2}</button>
+                <button type="button" onClick={() => { window.location.hash = '#/v3'; }}>{copy.actions.openV3}</button>
+                <button type="button" onClick={onOpenAmsterdam}>{copy.actions.openAmsterdam ?? 'Amsterdam VR'}</button>
+              </div>
             </div>
 
-            <ModernHeroTelemetry
+            <ModernHeroTelemetryFixed
               language={language}
               routeIds={routeIds}
               distanceKm={routeMetrics.data?.distanceKm ?? itineraryStats.totalKm ?? currentRoute.distanceKm}
               durationHours={routeMetrics.data?.durationHours ?? currentRoute.durationHours}
+            />
+            <TripHeroGallery
+              language={language}
+              liveIndex={liveData.index}
+              routeIds={routeIds}
+              onOpenDrive={onOpenDrive}
             />
           </div>
 
@@ -855,7 +1243,16 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
               regions={regions}
               types={types}
               seasons={seasons}
-              placeholder={routeSearchPlaceholder}
+              placeholder={language === 'zh' ? copy.search.placeholder : routeSearchPlaceholder}
+            />
+            <AccountCachePanel
+              copy={copy}
+              userSession={userSession}
+              favoritesCount={favoriteSet.size}
+              routeCount={routeIds.length}
+              onSignIn={() => setShowLogin(true)}
+              onSignOut={() => setUserSession(null)}
+              onClearRoute={resetRoute}
             />
             <HighlightsPanel cards={liveHighlights} />
             {leadStopId && leadWeather.data && (
@@ -989,14 +1386,373 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
           onOpenDrive={onOpenDrive}
         />
       )}
+
+      {showLogin && (
+        <LoginModal
+          copy={copy}
+          onClose={() => setShowLogin(false)}
+          onLogin={handleLogin}
+        />
+      )}
+
+      {activeService && (
+        <TravelServicePanel
+          serviceId={activeService}
+          language={language}
+          copy={copy}
+          routeIds={routeIds}
+          itinerary={itinerary}
+          itineraryStats={itineraryStats}
+          leadWeather={leadWeather.data}
+          onClose={() => setActiveService(null)}
+          onOpenPlanner={() => { setActivePage('planner'); setActiveService(null); }}
+          onOpenDrive={() => { setActiveService(null); openDriveFromRoute(); }}
+          onExport={exportItinerary}
+        />
+      )}
     </div>
+  );
+}
+
+function BookingSearchStrip({ copy, onSubmit, onOpenService }) {
+  const tabServices = ['hotels', 'tickets', 'transit', 'drive'];
+  return (
+    <form className="travel-booking-strip" onSubmit={(event) => { event.preventDefault(); onSubmit(); }}>
+      <div className="travel-booking-tabs" role="tablist" aria-label="Travel services">
+        {copy.booking.tabs.map((item, index) => (
+          <button key={item} type="button" className={index === 0 ? 'is-active' : ''} onClick={() => onOpenService(tabServices[index] ?? 'hotels')}>{item}</button>
+        ))}
+      </div>
+      <label>
+        <span>{copy.booking.destination}</span>
+        <strong>{copy.booking.destinationValue}</strong>
+      </label>
+      <label>
+        <span>{copy.booking.dates}</span>
+        <strong>{copy.booking.datesValue}</strong>
+      </label>
+      <label>
+        <span>{copy.booking.guests}</span>
+        <strong>{copy.booking.guestsValue}</strong>
+      </label>
+      <button type="submit">{copy.booking.submit}</button>
+    </form>
+  );
+}
+
+function TripToolkit({ language, onPlan, onSaved, onReviews, onDrive }) {
+  const isZh = language === 'zh';
+  const tools = isZh
+    ? [
+        { label: '智能排程', meta: '按距离和天数整理路线', onClick: onPlan },
+        { label: '我的收藏', meta: '继续筛选想去的地方', onClick: onSaved },
+        { label: '旅行口碑', meta: '先看背景和点评', onClick: onReviews },
+        { label: '3D 预览', meta: '用空间视角检查路线', onClick: onDrive },
+      ]
+    : [
+        { label: 'Smart plan', meta: 'Order stops by distance and days', onClick: onPlan },
+        { label: 'Saved places', meta: 'Keep refining destinations', onClick: onSaved },
+        { label: 'Travel notes', meta: 'Compare context and reviews', onClick: onReviews },
+        { label: '3D preview', meta: 'Check the route spatially', onClick: onDrive },
+      ];
+
+  return (
+    <div className="travel-toolkit" aria-label={isZh ? '旅行工具' : 'Trip tools'}>
+      {tools.map((tool) => (
+        <button key={tool.label} type="button" onClick={tool.onClick}>
+          <strong>{tool.label}</strong>
+          <span>{tool.meta}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function buildServiceContent({ serviceId, language, routeIds, itinerary, itineraryStats, leadWeather }) {
+  const isZh = language === 'zh';
+  const stops = routeIds
+    .map((id) => landmarks.find((item) => item.id === id))
+    .filter(Boolean)
+    .map((landmark) => ({ landmark, meta: getLandmarkMeta(landmark.id, language) }))
+    .filter((item) => item.meta);
+  const cities = [...new Map(stops.map(({ meta }) => [meta.city[language], meta])).entries()];
+  const totalKm = Math.round(itineraryStats.totalKm || 0);
+  const dayCount = Math.max(1, itinerary.length || 1);
+  const budget = {
+    hotel: dayCount * 145,
+    food: dayCount * 72 * 2,
+    tickets: Math.max(1, stops.length) * 22,
+    transit: Math.max(120, Math.round(totalKm * 0.22)),
+  };
+  budget.total = budget.hotel + budget.food + budget.tickets + budget.transit;
+
+  const commonTitles = {
+    hotels: [isZh ? '酒店和住宿' : 'Hotels and stays', isZh ? '按路线城市给出住宿落点，方便把景点和交通串起来。' : 'Stay bases matched to the route cities so sightseeing and transfers stay practical.'],
+    tickets: [isZh ? '门票和预约' : 'Tickets and entry', isZh ? '把需要提前关注的热门景点列出来，适合后续接真实票务 API。' : 'A reservation watchlist for busy stops, ready to connect to real ticket APIs later.'],
+    food: [isZh ? '美食和餐厅' : 'Food and restaurants', isZh ? '按城市和地区给出用餐灵感，让行程不只是看景点。' : 'Dining ideas by city and region, so the trip is not only landmark-hopping.'],
+    transit: [isZh ? '交通和接驳' : 'Transit and transfers', isZh ? '按路线顺序拆出城际转场，方便评估自驾、火车或短途接驳。' : 'Route transfers in order, useful for comparing driving, trains, and local hops.'],
+    weather: [isZh ? '天气和出发建议' : 'Weather and timing', isZh ? '结合下一站实时天气缓存，给出出发参考。' : 'Uses the next-stop weather cache as a practical timing reference.'],
+    budget: [isZh ? '预算估算' : 'Budget estimate', isZh ? '基于天数、停靠点和路线距离做本地估算。' : 'A local estimate based on days, stops, and route distance.'],
+    guides: [isZh ? '城市攻略' : 'City guides', isZh ? '把每一站拆成可执行的旅行提醒。' : 'Actionable notes for each stop on the route.'],
+    ai: [isZh ? 'AI 行程草案' : 'AI itinerary draft', isZh ? '根据当前路线和天数生成可调整的每日安排。' : 'A day-by-day draft generated from the current route and pace.'],
+    drive: [isZh ? '3D 路线预览' : '3D route preview', isZh ? '进入 3D 前先确认路线长度、停靠点和模型覆盖。' : 'Check distance, stops, and 3D coverage before entering the scene.'],
+  };
+
+  const itemsByService = {
+    hotels: cities.map(([city, meta], index) => ({
+      title: city,
+      value: isZh ? ['历史中心', '火车站周边', '景点步行圈'][index % 3] : ['Historic center', 'Station area', 'Walkable landmark zone'][index % 3],
+      detail: isZh ? `${meta.region[language]} · 建议住 1 晚，靠近主要步行区。` : `${meta.region[language]} · Suggested 1 night near the walkable core.`,
+    })),
+    tickets: stops.slice(0, 8).map(({ landmark, meta }, index) => ({
+      title: getLandmarkDisplayName(landmark, language),
+      value: isZh ? (index % 2 ? '建议提前 3 天' : '热门时段需预约') : (index % 2 ? 'Book 3 days ahead' : 'Reserve busy slots'),
+      detail: `${meta.city[language]} · ${meta.type[language]}`,
+    })),
+    food: cities.map(([city, meta], index) => ({
+      title: city,
+      value: isZh ? ['传统小馆', '咖啡和甜点', '晚餐街区'][index % 3] : ['Trattoria picks', 'Coffee and pastry', 'Dinner district'][index % 3],
+      detail: isZh ? `${meta.region[language]} · 适合安排在景点之间的慢节奏时段。` : `${meta.region[language]} · Best placed between major sightseeing blocks.`,
+    })),
+    transit: routeIds.slice(0, -1).map((id, index) => {
+      const from = getLandmarkMeta(id, language);
+      const to = getLandmarkMeta(routeIds[index + 1], language);
+      const km = from && to ? Math.round(haversineKm(from, to)) : 0;
+      return {
+        title: `${from?.city?.[language] ?? id} -> ${to?.city?.[language] ?? routeIds[index + 1]}`,
+        value: `${km} km`,
+        detail: isZh ? '可比较自驾、火车和本地接驳。' : 'Compare driving, rail, and local transfer options.',
+      };
+    }),
+    weather: [{
+      title: isZh ? '下一站天气' : 'Next-stop weather',
+      value: leadWeather?.temperatureC != null ? `${Math.round(leadWeather.temperatureC)}°C` : (isZh ? '等待缓存' : 'Waiting for cache'),
+      detail: leadWeather?.windKph != null ? `${isZh ? '风速' : 'Wind'} ${Math.round(leadWeather.windKph)} km/h` : (isZh ? '天气数据来自本地实时缓存。' : 'Weather comes from the local live-data cache.'),
+    }, {
+      title: isZh ? '出发建议' : 'Timing note',
+      value: isZh ? '清晨 / 傍晚' : 'Morning / golden hour',
+      detail: isZh ? '热门古城和广场尽量避开正午人流。' : 'Avoid the densest midday windows in historic cores.',
+    }],
+    budget: [
+      { title: isZh ? '住宿' : 'Hotels', value: `€${budget.hotel}`, detail: `${dayCount} ${isZh ? '天估算' : 'days estimate'}` },
+      { title: isZh ? '餐饮' : 'Food', value: `€${budget.food}`, detail: isZh ? '按 2 人估算' : 'Estimated for 2 travelers' },
+      { title: isZh ? '门票' : 'Tickets', value: `€${budget.tickets}`, detail: `${stops.length} ${isZh ? '个停靠点' : 'route stops'}` },
+      { title: isZh ? '交通' : 'Transit', value: `€${budget.transit}`, detail: `${totalKm} km` },
+      { title: isZh ? '合计' : 'Total', value: `€${budget.total}`, detail: isZh ? '本地粗略预算，可继续接入真实价格。' : 'Local rough budget, ready for real pricing data.' },
+    ],
+    guides: stops.slice(0, 8).map(({ landmark, meta }) => ({
+      title: getLandmarkDisplayName(landmark, language),
+      value: meta.season[language],
+      detail: isZh ? `${meta.city[language]} · 预留步行时间，优先安排光线好的时段。` : `${meta.city[language]} · Leave walking time and prioritize good light.`,
+    })),
+    ai: itinerary.map((day) => ({
+      title: isZh ? `第 ${day.dayIndex} 天` : `Day ${day.dayIndex}`,
+      value: day.stops.map((id) => getLandmarkMeta(id, language)?.city?.[language]).filter(Boolean).join(' / '),
+      detail: day.stops.map((id) => {
+        const landmark = landmarks.find((item) => item.id === id);
+        return landmark ? getLandmarkDisplayName(landmark, language) : id;
+      }).join(' -> '),
+    })),
+    drive: [
+      { title: isZh ? '路线里程' : 'Route distance', value: `${formatDistanceKm(totalKm)} km`, detail: isZh ? '将用于 3D 场景路线预览。' : 'Used for the 3D scene route preview.' },
+      { title: isZh ? '停靠点' : 'Stops', value: String(stops.length), detail: isZh ? '可从任意地标进入聚焦视角。' : 'Open focus mode from any landmark.' },
+      { title: isZh ? '模型覆盖' : '3D model coverage', value: `${stops.filter(({ landmark }) => landmark.modelPath).length}/${stops.length}`, detail: isZh ? '无模型的地标会以位置标记显示。' : 'Stops without models appear as spatial markers.' },
+    ],
+  };
+
+  const [title, body] = commonTitles[serviceId] ?? commonTitles.hotels;
+  return { title, body, items: itemsByService[serviceId] ?? itemsByService.hotels };
+}
+
+function TravelServicePanel({
+  serviceId,
+  language,
+  copy,
+  routeIds,
+  itinerary,
+  itineraryStats,
+  leadWeather,
+  onClose,
+  onOpenPlanner,
+  onOpenDrive,
+  onExport,
+}) {
+  const isZh = language === 'zh';
+  const content = buildServiceContent({ serviceId, language, routeIds, itinerary, itineraryStats, leadWeather });
+  const isDrive = serviceId === 'drive';
+  const isAi = serviceId === 'ai';
+
+  return (
+    <div className="travel-service-modal" role="dialog" aria-modal="true" onClick={(event) => event.target === event.currentTarget && onClose()}>
+      <aside className="travel-service-panel">
+        <div className="travel-service-panel__head">
+          <div>
+            <p>{isZh ? '旅行服务' : 'Travel service'}</p>
+            <h2>{content.title}</h2>
+            <span>{content.body}</span>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close">x</button>
+        </div>
+
+        <div className="travel-service-panel__list">
+          {content.items.map((item, index) => (
+            <article key={`${item.title}-${index}`} className={index === content.items.length - 1 && serviceId === 'budget' ? 'is-total' : ''}>
+              <div>
+                <h3>{item.title}</h3>
+                <p>{item.detail}</p>
+              </div>
+              <strong>{item.value}</strong>
+            </article>
+          ))}
+        </div>
+
+        <div className="travel-service-panel__actions">
+          <button className="travel-btn travel-btn--primary" type="button" onClick={isDrive ? onOpenDrive : onOpenPlanner}>
+            {isDrive ? copy.actions.open3d : (isZh ? '打开行程' : 'Open trip')}
+          </button>
+          <button className="travel-btn travel-btn--ghost" type="button" onClick={isAi ? onExport : onOpenDrive}>
+            {isAi ? copy.actions.export : copy.actions.open3d}
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function TripHeroGallery({ language, liveIndex, routeIds, onOpenDrive }) {
+  const isZh = language === 'zh';
+  const galleryItems = routeIds
+    .map((id) => landmarks.find((item) => item.id === id))
+    .filter(Boolean)
+    .map((landmark) => {
+      const live = liveIndex?.get(landmark.id);
+      const meta = getLandmarkMeta(landmark.id, language);
+      return {
+        id: landmark.id,
+        name: getLandmarkDisplayName(landmark, language),
+        city: meta?.city?.[language] ?? landmark.name,
+        image: getLiveImage(live, language),
+      };
+    })
+    .filter((item) => item.image)
+    .slice(0, 5);
+
+  if (galleryItems.length === 0) return null;
+
+  return (
+    <section className="travel-hero-gallery" aria-label={isZh ? '目的地图片' : 'Destination photos'}>
+      {galleryItems.map((item, index) => (
+        <button
+          key={item.id}
+          type="button"
+          className={`travel-hero-gallery__tile travel-hero-gallery__tile--${index}`}
+          onClick={() => onOpenDrive(item.id)}
+        >
+          <img src={item.image} alt="" loading={index === 0 ? 'eager' : 'lazy'} />
+          <span>{item.city}</span>
+          <strong>{item.name}</strong>
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function AccountCachePanel({ copy, userSession, favoritesCount, routeCount, onSignIn, onSignOut, onClearRoute }) {
+  return (
+    <section className="travel-panel travel-panel--account-cache">
+      <div className="travel-account-card">
+        <div>
+          <p className="travel-panel__eyebrow">{copy.account.title}</p>
+          <h2>{userSession ? userSession.name : copy.account.guest}</h2>
+          <p>{copy.account.body}</p>
+        </div>
+        <button className="travel-btn travel-btn--ghost travel-btn--compact" type="button" onClick={userSession ? onSignOut : onSignIn}>
+          {userSession ? copy.actions.signOut : copy.actions.signIn}
+        </button>
+      </div>
+      <dl className="travel-cache-grid">
+        <div><dt>{copy.cache.route}</dt><dd>{routeCount}</dd></div>
+        <div><dt>{copy.cache.favorites}</dt><dd>{favoritesCount}</dd></div>
+        <div><dt>{copy.cache.mode}</dt><dd>{copy.cache.local}</dd></div>
+      </dl>
+      <p className="travel-cache-note">{copy.cache.body}</p>
+      <button className="travel-cache-clear" type="button" onClick={onClearRoute}>{copy.cache.clear}</button>
+    </section>
+  );
+}
+
+function LoginModal({ copy, onClose, onLogin }) {
+  const [email, setEmail] = useState('traveler@example.com');
+  const [name, setName] = useState('');
+
+  return (
+    <div className="travel-modal" role="dialog" aria-modal="true" onClick={(event) => event.target === event.currentTarget && onClose()}>
+      <form className="travel-login-dialog" onSubmit={(event) => { event.preventDefault(); onLogin({ email, name }); }}>
+        <div className="travel-modal__head">
+          <div>
+            <p className="travel-modal__eyebrow">{copy.account.cached}</p>
+            <h2>{copy.account.title}</h2>
+          </div>
+          <button className="travel-modal__close" type="button" onClick={onClose} aria-label="Close">x</button>
+        </div>
+        <p>{copy.account.body}</p>
+        <label>
+          <span>{copy.account.email}</span>
+          <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+        </label>
+        <label>
+          <span>{copy.account.name}</span>
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder={copy.account.demo} />
+        </label>
+        <button className="travel-btn travel-btn--primary" type="submit">{copy.account.submit}</button>
+      </form>
+    </div>
+  );
+}
+
+function ModernHeroTelemetryFixed({ language, routeIds, distanceKm, durationHours }) {
+  const isZh = language === 'zh';
+  const labels = isZh
+    ? { status: '路线状态', distance: '路线里程', eta: '预计时间', stops: '停靠点' }
+    : { status: 'Route status', distance: 'Route distance', eta: 'ETA', stops: 'Stops' };
+  const visibleStops = routeIds
+    .map((id) => getLandmarkMeta(id, language))
+    .filter(Boolean)
+    .slice(0, 6);
+  const durationLabel = isZh
+    ? `${Math.floor(durationHours || 0)} 小时${Math.round(((durationHours || 0) % 1) * 60) ? ` ${Math.round(((durationHours || 0) % 1) * 60)} 分钟` : ''}`
+    : formatDurationHours(durationHours, language);
+
+  return (
+    <section className="travel-hero-telemetry" aria-label={labels.status}>
+      <div className="travel-hero-telemetry__rail" aria-hidden="true">
+        {visibleStops.map((stop, index) => (
+          <span key={`${stop.name.en}-${index}`} style={{ ['--rail-index']: index }} />
+        ))}
+        <i />
+      </div>
+      <div className="travel-hero-telemetry__stats">
+        <article>
+          <span>{labels.distance}</span>
+          <strong>{formatDistanceKm(distanceKm)} km</strong>
+        </article>
+        <article>
+          <span>{labels.eta}</span>
+          <strong>{durationLabel}</strong>
+        </article>
+        <article>
+          <span>{labels.stops}</span>
+          <strong>{routeIds.length}</strong>
+        </article>
+      </div>
+    </section>
   );
 }
 
 function ModernHeroTelemetry({ language, routeIds, distanceKm, durationHours }) {
   const isZh = language === 'zh';
   const visibleStops = routeIds
-    .map((id) => travelLandmarkMeta[id])
+    .map((id) => getLandmarkMeta(id, language))
     .filter(Boolean)
     .slice(0, 6);
 
@@ -1026,6 +1782,156 @@ function ModernHeroTelemetry({ language, routeIds, distanceKm, durationHours }) 
   );
 }
 
+function getAccountInitial(userSession, language) {
+  if (!userSession?.name) return language === 'zh' ? '我' : 'U';
+  return userSession.name.trim().slice(0, 1).toUpperCase();
+}
+
+function AccountAvatar({ copy, language, userSession, onOpen }) {
+  return (
+    <button
+      className={`travel-account-avatar ${userSession ? 'is-signed-in' : ''}`}
+      type="button"
+      onClick={onOpen}
+      aria-label={userSession ? `${copy.account.title}: ${userSession.name}` : copy.actions.signIn}
+      title={userSession ? userSession.name : copy.actions.signIn}
+    >
+      <span>{getAccountInitial(userSession, language)}</span>
+    </button>
+  );
+}
+
+function AccountCenter({
+  copy,
+  language,
+  userSession,
+  favoritesCount,
+  compareCount,
+  routeCount,
+  itineraryDays,
+  onClose,
+  onSignIn,
+  onSignOut,
+  onOpenPlanner,
+  onOpenFavorites,
+  onResetRoute,
+  onOpenService,
+}) {
+  const isZh = language === 'zh';
+  const displayName = userSession?.name || (isZh ? '游客' : 'Guest');
+  const email = userSession?.email || (isZh ? '登录后同步你的旅行资料' : 'Sign in to keep your travel profile');
+  const accountServices = isZh
+    ? [
+        { id: 'hotels', label: '酒店', detail: '住宿落点' },
+        { id: 'tickets', label: '门票', detail: '预约清单' },
+        { id: 'budget', label: '预算', detail: '费用估算' },
+        { id: 'ai', label: 'AI', detail: '行程草案' },
+      ]
+    : [
+        { id: 'hotels', label: 'Hotels', detail: 'Stay bases' },
+        { id: 'tickets', label: 'Tickets', detail: 'Entry watchlist' },
+        { id: 'budget', label: 'Budget', detail: 'Cost estimate' },
+        { id: 'ai', label: 'AI', detail: 'Itinerary draft' },
+      ];
+
+  return (
+    <aside className="travel-account-center" role="dialog" aria-label={isZh ? '个人中心' : 'Profile center'}>
+      <div className="travel-account-center__head">
+        <div className="travel-account-center__avatar">{getAccountInitial(userSession, language)}</div>
+        <div>
+          <h2>{displayName}</h2>
+          <p>{email}</p>
+        </div>
+        <button type="button" className="travel-account-center__close" onClick={onClose} aria-label="Close">x</button>
+      </div>
+
+      <div className="travel-account-center__stats">
+        <button type="button" onClick={onOpenFavorites}>
+          <strong>{favoritesCount}</strong>
+          <span>{copy.actions.favorites}</span>
+        </button>
+        <button type="button" onClick={onOpenPlanner}>
+          <strong>{routeCount}</strong>
+          <span>{copy.nav[1].label}</span>
+        </button>
+        <button type="button" onClick={onOpenFavorites}>
+          <strong>{compareCount}</strong>
+          <span>{copy.actions.compare}</span>
+        </button>
+      </div>
+
+      <div className="travel-account-center__section">
+        <h3>{isZh ? '我的旅行' : 'My trip'}</h3>
+        <button type="button" onClick={onOpenPlanner}>
+          <span>{isZh ? '当前行程' : 'Current itinerary'}</span>
+          <strong>{routeCount} {isZh ? '站' : 'stops'} / {itineraryDays} {isZh ? '天' : 'days'}</strong>
+        </button>
+        <button type="button" onClick={onOpenFavorites}>
+          <span>{isZh ? '收藏夹' : 'Saved places'}</span>
+          <strong>{favoritesCount}</strong>
+        </button>
+        <button type="button" onClick={onResetRoute}>
+          <span>{copy.cache.clear}</span>
+          <strong>{copy.cache.local}</strong>
+        </button>
+      </div>
+
+      <div className="travel-account-center__section">
+        <h3>{isZh ? '服务' : 'Services'}</h3>
+        <div className="travel-account-center__chips travel-account-center__chips--actions">
+          {accountServices.map((item) => (
+            <button key={item.id} type="button" onClick={() => onOpenService(item.id)}>
+              <span>{item.label}</span>
+              <strong>{item.detail}</strong>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="travel-account-center__actions">
+        {userSession
+          ? <button type="button" className="travel-btn travel-btn--ghost" onClick={onSignOut}>{copy.actions.signOut}</button>
+          : <button type="button" className="travel-btn travel-btn--primary" onClick={onSignIn}>{copy.actions.signIn}</button>}
+      </div>
+    </aside>
+  );
+}
+
+function getNavIcon(id) {
+  const icons = {
+    destinations: 'D',
+    planner: 'T',
+    reviews: 'R',
+    drive: '3D',
+  };
+  return icons[id] ?? id.slice(0, 1).toUpperCase();
+}
+
+function getTravelServices(language) {
+  if (language === 'zh') {
+    return [
+      { id: 'hotels', label: '酒店', detail: '住宿推荐', target: 'destinations' },
+      { id: 'tickets', label: '门票', detail: '景点预约', target: 'destinations' },
+      { id: 'food', label: '美食', detail: '餐厅灵感', target: 'reviews' },
+      { id: 'transit', label: '交通', detail: '路线接驳', target: 'planner' },
+      { id: 'weather', label: '天气', detail: '出发参考', target: 'destinations' },
+      { id: 'budget', label: '预算', detail: '花费估算', target: 'planner' },
+      { id: 'guides', label: '攻略', detail: '城市贴士', target: 'reviews' },
+      { id: 'ai', label: 'AI', detail: '智能行程', target: 'planner' },
+    ];
+  }
+  return [
+    { id: 'hotels', label: 'Hotels', detail: 'Stay ideas', target: 'destinations' },
+    { id: 'tickets', label: 'Tickets', detail: 'Attraction entry', target: 'destinations' },
+    { id: 'food', label: 'Food', detail: 'Restaurant notes', target: 'reviews' },
+    { id: 'transit', label: 'Transit', detail: 'Route transfers', target: 'planner' },
+    { id: 'weather', label: 'Weather', detail: 'Trip timing', target: 'destinations' },
+    { id: 'budget', label: 'Budget', detail: 'Cost outline', target: 'planner' },
+    { id: 'guides', label: 'Guides', detail: 'City tips', target: 'reviews' },
+    { id: 'ai', label: 'AI', detail: 'Smart plan', target: 'planner' },
+  ];
+}
+
 function SiteNav({
   copy,
   activePage,
@@ -1038,20 +1944,43 @@ function SiteNav({
   routeCount,
   onOpenDrive,
   onOpenAmsterdam,
+  collapsed,
+  onToggleCollapsed,
+  onOpenService,
 }) {
   const navIndex = Math.max(0, copy.nav.findIndex((item) => item.id === activePage));
 
   return (
-    <aside className="travel-site-nav">
+    <aside className={`travel-site-nav ${collapsed ? 'is-collapsed' : ''}`}>
+      <button
+        className="travel-nav-collapse"
+        type="button"
+        onClick={onToggleCollapsed}
+        aria-label={collapsed ? (language === 'zh' ? '展开侧边栏' : 'Expand sidebar') : (language === 'zh' ? '收起侧边栏' : 'Collapse sidebar')}
+      >
+        <span>{collapsed ? '>' : '<'}</span>
+      </button>
       <button className="travel-brand" type="button" onClick={() => setActivePage('destinations')} aria-label="Web3D Italy Drive home">
         <span>{copy.brand.eyebrow}</span>
         <strong>{copy.brand.title}</strong>
       </button>
 
-      <div className="travel-nav-links" style={{ ['--nav-count']: copy.nav.length, ['--nav-index']: navIndex }}>
+      <div className="travel-nav-links travel-neo-nav-links" style={{ ['--nav-count']: copy.nav.length, ['--nav-index']: navIndex }}>
         <span className="travel-nav-links__indicator" aria-hidden="true" />
         {copy.nav.map((item) => (
-          <button key={item.id} type="button" className={item.id === activePage ? 'is-active' : ''} onClick={() => setActivePage(item.id)}>{item.label}</button>
+          <button key={item.id} type="button" className={item.id === activePage ? 'is-active' : ''} onClick={() => setActivePage(item.id)} title={item.label}>
+            <span className="travel-nav-icon">{getNavIcon(item.id)}</span>
+            <span className="travel-nav-label">{item.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="travel-sidebar-services" aria-label={language === 'zh' ? '旅行服务' : 'Travel services'}>
+        {getTravelServices(language).map((service) => (
+          <button key={service.label} type="button" onClick={() => onOpenService(service.id)} title={`${service.label} · ${service.detail}`}>
+            <strong>{service.label}</strong>
+            <span>{service.detail}</span>
+          </button>
         ))}
       </div>
 
@@ -1276,7 +2205,7 @@ function DestinationGrid({
   return (
     <section className="travel-showcase">
       {landmarkList.map((landmark, index) => {
-        const meta = travelLandmarkMeta[landmark.id];
+        const meta = getLandmarkMeta(landmark.id, language);
         const tags = buildKeywordTags(meta?.blurb?.[language] ?? '', language);
         return (
           <article key={landmark.id} className={`travel-destination-card travel-destination-card--${landmark.id}`}>
@@ -1348,7 +2277,7 @@ function RouteEditor({
         />
         <div className="travel-route-search__results">
           {routeSearchResults.map((landmark) => {
-            const meta = travelLandmarkMeta[landmark.id];
+            const meta = getLandmarkMeta(landmark.id, language);
             return (
               <button key={landmark.id} type="button" onClick={() => onAdd(landmark.id)}>
                 <strong>{getLandmarkDisplayName(landmark, language)}</strong>
@@ -1368,7 +2297,7 @@ function RouteEditor({
         {routeIds.map((id, index) => {
           const landmark = landmarks.find((l) => l.id === id);
           if (!landmark) return null;
-          const meta = travelLandmarkMeta[id];
+          const meta = getLandmarkMeta(id, language);
           return (
             <div key={`${id}-${index}`} className="travel-route-row">
               <div>
@@ -1401,7 +2330,7 @@ function RouteEditor({
 function RoutePreview({ language, copy, routeIds, routeMetrics }) {
   const points = routeIds
     .map((id) => {
-      const meta = travelLandmarkMeta[id];
+      const meta = getLandmarkMeta(id, language);
       if (!meta) return null;
       return { id, point: lngLatToMapPoint(meta.lon, meta.lat), label: meta.city?.[language] ?? meta.name?.[language] ?? id };
     })
@@ -1483,7 +2412,7 @@ function ItineraryBuilder({ copy, days, setDays, pace, setPace, itinerary, langu
               {day.stops.map((id) => {
                 const landmark = landmarks.find((l) => l.id === id);
                 if (!landmark) return null;
-                const meta = travelLandmarkMeta[id];
+                const meta = getLandmarkMeta(id, language);
                 return (
                   <li key={`${day.dayIndex}-${id}`}>{getLandmarkDisplayName(landmark, language)} <span>{meta.city[language]}</span></li>
                 );
@@ -1629,7 +2558,7 @@ function DestinationCardV2({
   onAddToRoute,
   onOpenDrive,
 }) {
-  const meta = travelLandmarkMeta[landmark.id];
+  const meta = getLandmarkMeta(landmark.id, language);
   const wiki = useWikipediaSummary(landmark.id, language);
   const liveDescription = getLiveSummary(liveLandmark, language);
   const description = liveDescription || ((wiki.data?.extract && wiki.data.extract.trim()) ? wiki.data.extract : meta.blurb[language]);
@@ -1675,7 +2604,7 @@ function ReviewsPanel({ language, pageCopy, liveIndex, favorites, onToggleFavori
   return (
     <div className="travel-reviews-grid">
       {landmarks.map((landmark) => {
-        const meta = travelLandmarkMeta[landmark.id];
+        const meta = getLandmarkMeta(landmark.id, language);
         const liveLandmark = liveIndex?.get(landmark.id);
         const liveDescription = getLiveSummary(liveLandmark, language);
         const tags = buildKeywordTags(liveDescription || `${meta?.blurb?.[language] ?? ''}`, language);
@@ -1726,7 +2655,7 @@ function CompareModalV2({ language, copy, compareIds, onClose, onOpenDrive }) {
   const selected = compareIds.map((id) => landmarks.find((l) => l.id === id)).filter(Boolean);
   const columns = selected.map((landmark) => ({
     landmark,
-    meta: travelLandmarkMeta[landmark.id],
+    meta: getLandmarkMeta(landmark.id, language),
   }));
 
   return (
@@ -1755,7 +2684,7 @@ function CompareModal({ language, copy, compareIds, onClose, onOpenDrive }) {
   const selected = compareIds.map((id) => landmarks.find((l) => l.id === id)).filter(Boolean);
   const columns = selected.map((landmark) => ({
     landmark,
-    meta: travelLandmarkMeta[landmark.id],
+    meta: getLandmarkMeta(landmark.id, language),
   }));
 
   return (
