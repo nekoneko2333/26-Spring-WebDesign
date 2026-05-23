@@ -1254,7 +1254,7 @@ export function HomePage({ onOpenDrive, onOpenAmsterdam }) {
               onSignOut={() => setUserSession(null)}
               onClearRoute={resetRoute}
             />
-            <HighlightsPanel cards={liveHighlights} />
+            <HighlightsPanel cards={liveHighlights} language={language} />
             {leadStopId && leadWeather.data && (
               <section className="travel-panel travel-panel--weather" aria-label="Weather">
                 <p className="travel-panel__eyebrow">{language === 'zh' ? '实时天气' : 'Live weather'}</p>
@@ -2173,10 +2173,10 @@ function TravelSelect({ label, value, onChange, options }) {
   );
 }
 
-function HighlightsPanel({ cards }) {
+function HighlightsPanel({ cards, language }) {
   return (
     <section className="travel-panel travel-panel--highlights">
-      <p className="travel-panel__eyebrow">Highlights</p>
+      <p className="travel-panel__eyebrow">{language === 'zh' ? '亮点' : 'Highlights'}</p>
       <div className="travel-highlights">
         {cards.map((item) => (
           <article key={item.label} className="travel-highlight">

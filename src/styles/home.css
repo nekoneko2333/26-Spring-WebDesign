@@ -7063,6 +7063,83 @@
   padding: 0;
 }
 
+/* Sidebar collapse animation polish */
+.travel-home--neo {
+  transition: none;
+}
+
+.travel-home--neo .travel-site-nav {
+  will-change: width;
+  transition:
+    width 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    padding 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.18s ease;
+}
+
+.travel-home--neo .travel-site-nav .travel-neo-nav-links > button,
+.travel-sidebar-services button,
+.travel-home--neo .travel-brand,
+.travel-home--neo .travel-brand span,
+.travel-home--neo .travel-brand strong,
+.travel-home--neo .travel-nav-label,
+.travel-home--neo .travel-sidebar-brief,
+.travel-home--neo .travel-lang-toggle {
+  transition:
+    opacity 0.1s ease,
+    transform 0.14s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.14s ease,
+    color 0.14s ease;
+}
+
+.travel-home--neo .travel-brand span,
+.travel-home--neo .travel-nav-label {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.travel-home--neo .travel-sidebar-brief,
+.travel-home--neo .travel-lang-toggle {
+  max-height: 220px;
+  opacity: 1;
+  transform: translateY(0);
+  overflow: hidden;
+  transition:
+    max-height 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.12s ease,
+    transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.travel-home--neo.is-nav-collapsed .travel-brand span,
+.travel-home--neo.is-nav-collapsed .travel-nav-label {
+  display: block !important;
+  opacity: 0 !important;
+  transform: translateX(-6px);
+  pointer-events: none;
+}
+
+.travel-home--neo.is-nav-collapsed .travel-sidebar-brief,
+.travel-home--neo.is-nav-collapsed .travel-lang-toggle {
+  display: grid !important;
+  max-height: 0;
+  margin-block: 0;
+  padding-block: 0;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+}
+
+.travel-home--neo.is-nav-collapsed .travel-lang-toggle {
+  display: flex !important;
+}
+
+.travel-home--neo.is-nav-collapsed .travel-sidebar-services span {
+  display: block;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-2px);
+  overflow: hidden;
+}
+
 .travel-home--neo .travel-hero {
   grid-template-columns: minmax(0, 1fr) minmax(360px, 424px);
   gap: clamp(34px, 4vw, 72px);
