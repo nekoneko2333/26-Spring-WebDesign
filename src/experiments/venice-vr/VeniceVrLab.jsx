@@ -1,11 +1,15 @@
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Html, OrbitControls, PerspectiveCamera, useGLTF } from '@react-three/drei';
-import { Suspense, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import '../amsterdam-vr/amsterdam-vr.css';
 import './venice-vr.css';
 
 const VENICE_MODEL = '/models/venice.glb';
+const NAV_GRID_URL = '/models/venice-nav-grid.json';
+const WORLD_SCALE = 42;
+const PERSON_HEIGHT = 1.6;
+const PERSON_RADIUS = 0.28;
+const GROUND_Y = 0.012;
 
 const MODEL_BOUNDS = {
   min: { x: 0, y: -0.009610905063611416, z: 0 },
@@ -14,166 +18,265 @@ const MODEL_BOUNDS = {
   size: { x: 22.691758567816578, y: 0.3097186267577585, z: 12.377322855172512 },
 };
 
-const VENICE_GEO = {
-  center: { lon: 12.3353, lat: 45.4386 },
-  bounds: {
-    west: 12.3000,
-    east: 12.3706,
-    south: 45.4250,
-    north: 45.4522,
-  },
+const VENICE_GEO = { center: { lon: 12.3353, lat: 45.4386 } };
+
+const DEFAULT_REFERENCE_PINS = {
+  rialto: { x: 0.038362853996892925, z: -1.2239481107094976 },
+  'accademia-bridge': { x: -2.045, z: 1.875 },
+  scalzi: { x: -4.360312328037477, z: -2.044472058351952 },
 };
 
-const SATELLITE_FIT_NOTE = 'Manual top-down fit: building mass, flat canal bands, and Grand Canal bridge anchors are matched against the Venice satellite footprint.';
-
-const VISUAL_FIT_CONTROLS = [
-  { id: 'rialto', target: { x: 575, y: 320 } },
-  { id: 'san-marco', target: { x: 675, y: 425 } },
-  { id: 'doge-palace', target: { x: 695, y: 445 } },
-  { id: 'accademia', target: { x: 475, y: 430 } },
-  { id: 'santa-maria-salute', target: { x: 595, y: 475 } },
-  { id: 'arsenale', target: { x: 855, y: 385 } },
+const REFERENCE_POINTS = [
+  { id: 'scalzi', lon: 12.3227238, lat: 45.441159 },
+  { id: 'rialto', lon: 12.3359784, lat: 45.4380821 },
+  { id: 'accademia-bridge', lon: 12.328924, lat: 45.431657 },
 ];
 
 const VENICE_POIS = [
   {
+    id: 'scalzi',
+    name: 'Ponte degli Scalzi',
+    lon: 12.3227238,
+    lat: 45.441159,
+    type: 'bridge',
+    duration: 8,
+    description: 'A western Grand Canal crossing beside Santa Lucia station.',
+  },
+  {
     id: 'rialto',
     name: 'Rialto Bridge',
-    zh: '里亚托桥',
-    lon: 12.3359,
-    lat: 45.4380,
+    lon: 12.3359784,
+    lat: 45.4380821,
     type: 'bridge',
-    description: 'Historic bridge crossing the Grand Canal.',
+    duration: 12,
+    description: "Venice's classic stone bridge and the route midpoint.",
+  },
+  {
+    id: 'accademia-bridge',
+    name: 'Ponte dell Accademia',
+    lon: 12.328924,
+    lat: 45.431657,
+    type: 'bridge',
+    duration: 10,
+    description: 'A southern bridge with a long view across the Grand Canal.',
   },
   {
     id: 'san-marco',
     name: "St Mark's Basilica",
-    zh: '圣马可圣殿',
     lon: 12.3397,
     lat: 45.4346,
     type: 'landmark',
-    description: 'Venice landmark on Piazza San Marco.',
+    duration: 18,
+    description: 'The ceremonial heart of Venice, close to Piazza San Marco.',
   },
   {
     id: 'doge-palace',
     name: "Doge's Palace",
-    zh: '总督宫',
     lon: 12.3404,
     lat: 45.4337,
     type: 'palace',
-    description: 'Gothic palace beside the lagoon.',
-  },
-  {
-    id: 'accademia',
-    name: 'Gallerie dell Accademia',
-    zh: '学院美术馆',
-    lon: 12.3281,
-    lat: 45.4310,
-    type: 'museum',
-    description: 'Museum and bridge district on the Grand Canal.',
+    duration: 16,
+    description: 'A Gothic palace facing the lagoon and the civic center.',
   },
   {
     id: 'santa-maria-salute',
     name: 'Santa Maria della Salute',
-    zh: '安康圣母圣殿',
     lon: 12.3342,
     lat: 45.4307,
     type: 'church',
-    description: 'Domed basilica at the mouth of the Grand Canal.',
+    duration: 12,
+    description: 'The domed basilica at the mouth of the Grand Canal.',
   },
   {
     id: 'arsenale',
     name: 'Venetian Arsenal',
-    zh: '威尼斯军械库',
     lon: 12.3499,
     lat: 45.4354,
     type: 'district',
-    description: 'Historic shipyard and eastern city anchor.',
+    duration: 14,
+    description: 'Historic shipyards and a quieter eastern anchor.',
   },
 ];
 
-const DEFAULT_ROUTE = ['rialto', 'san-marco', 'doge-palace', 'santa-maria-salute', 'accademia'];
-const GRAND_CANAL_REFERENCE = [
-  [12.3204, 45.4349],
-  [12.3266, 45.4323],
-  [12.3312, 45.4331],
-  [12.3359, 45.4380],
-  [12.3382, 45.4363],
-  [12.3397, 45.4346],
+const PRESETS = [
+  { id: 'classic', name: 'Grand Canal Classic', stops: ['scalzi', 'rialto', 'accademia-bridge', 'santa-maria-salute', 'san-marco'] },
+  { id: 'civic', name: 'San Marco Focus', stops: ['rialto', 'san-marco', 'doge-palace', 'santa-maria-salute'] },
+  { id: 'east', name: 'Eastward Walk', stops: ['rialto', 'san-marco', 'doge-palace', 'arsenale'] },
 ];
 
-function lngLatToModelPlane(lon, lat) {
-  const u = (lon - VENICE_GEO.bounds.west) / (VENICE_GEO.bounds.east - VENICE_GEO.bounds.west);
-  const v = (VENICE_GEO.bounds.north - lat) / (VENICE_GEO.bounds.north - VENICE_GEO.bounds.south);
+const DEFAULT_ROUTE = PRESETS[0].stops;
+
+function lngLatToLocalMeters(lon, lat) {
+  const metersPerDegree = 111320;
+  const centerLatRad = (VENICE_GEO.center.lat * Math.PI) / 180;
   return {
-    x: (u - 0.5) * MODEL_BOUNDS.size.x,
-    z: (v - 0.5) * MODEL_BOUNDS.size.z,
+    x: (lon - VENICE_GEO.center.lon) * metersPerDegree * Math.cos(centerLatRad),
+    z: (VENICE_GEO.center.lat - lat) * metersPerDegree,
   };
 }
 
-function topDownPixelToModel({ x, y }) {
-  return {
-    x: (x / 1200 - 0.5) * MODEL_BOUNDS.size.x,
-    z: (y / 655 - 0.5) * MODEL_BOUNDS.size.z,
-  };
-}
+function createVisualFit() {
+  const controls = REFERENCE_POINTS.map((point) => ({
+    source: lngLatToLocalMeters(point.lon, point.lat),
+    target: DEFAULT_REFERENCE_PINS[point.id],
+  }));
+  const sourceCenter = controls.reduce((sum, control) => ({ x: sum.x + control.source.x, z: sum.z + control.source.z }), { x: 0, z: 0 });
+  const targetCenter = controls.reduce((sum, control) => ({ x: sum.x + control.target.x, z: sum.z + control.target.z }), { x: 0, z: 0 });
+  sourceCenter.x /= controls.length;
+  sourceCenter.z /= controls.length;
+  targetCenter.x /= controls.length;
+  targetCenter.z /= controls.length;
 
-function solveLeastSquaresAffine(axis) {
-  const controls = VISUAL_FIT_CONTROLS.map((control) => {
-    const poi = VENICE_POIS.find((item) => item.id === control.id);
-    return {
-      source: lngLatToModelPlane(poi.lon, poi.lat),
-      target: topDownPixelToModel(control.target),
-    };
-  });
-  const normal = new THREE.Matrix3().set(0, 0, 0, 0, 0, 0, 0, 0, 0);
-  const rhs = new THREE.Vector3();
-
+  let a = 0;
+  let b = 0;
+  let denominator = 0;
   controls.forEach(({ source, target }) => {
-    const row = [source.x, source.z, 1];
-    for (let r = 0; r < 3; r += 1) {
-      rhs.setComponent(r, rhs.getComponent(r) + row[r] * target[axis]);
-      for (let c = 0; c < 3; c += 1) {
-        normal.elements[c * 3 + r] += row[r] * row[c];
+    const sx = source.x - sourceCenter.x;
+    const sz = source.z - sourceCenter.z;
+    const tx = target.x - targetCenter.x;
+    const tz = target.z - targetCenter.z;
+    a += sx * tx + sz * tz;
+    b += sx * tz - sz * tx;
+    denominator += sx * sx + sz * sz;
+  });
+  a /= denominator || 1;
+  b /= denominator || 1;
+
+  return {
+    a,
+    b,
+    tx: targetCenter.x - a * sourceCenter.x + b * sourceCenter.z,
+    tz: targetCenter.z - b * sourceCenter.x - a * sourceCenter.z,
+  };
+}
+
+const VISUAL_FIT = createVisualFit();
+
+function geoToModel(lon, lat) {
+  const point = lngLatToLocalMeters(lon, lat);
+  return {
+    x: VISUAL_FIT.a * point.x - VISUAL_FIT.b * point.z + VISUAL_FIT.tx,
+    z: VISUAL_FIT.b * point.x + VISUAL_FIT.a * point.z + VISUAL_FIT.tz,
+  };
+}
+
+function useNavGrid() {
+  const [navGrid, setNavGrid] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(NAV_GRID_URL)
+      .then((response) => response.json())
+      .then((payload) => {
+        if (!cancelled) setNavGrid(payload);
+      })
+      .catch(() => {
+        if (!cancelled) setNavGrid(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return navGrid;
+}
+
+function cellIndex(navGrid, point) {
+  const x = point.x + MODEL_BOUNDS.center.x;
+  const z = point.z + MODEL_BOUNDS.center.z;
+  const u = (x - navGrid.bounds.minX) / (navGrid.bounds.maxX - navGrid.bounds.minX);
+  const v = (z - navGrid.bounds.minZ) / (navGrid.bounds.maxZ - navGrid.bounds.minZ);
+  return {
+    x: THREE.MathUtils.clamp(Math.floor(u * navGrid.width), 0, navGrid.width - 1),
+    z: THREE.MathUtils.clamp(Math.floor(v * navGrid.height), 0, navGrid.height - 1),
+  };
+}
+
+function cellCenter(navGrid, x, z) {
+  const worldX = navGrid.bounds.minX + ((x + 0.5) / navGrid.width) * (navGrid.bounds.maxX - navGrid.bounds.minX);
+  const worldZ = navGrid.bounds.minZ + ((z + 0.5) / navGrid.height) * (navGrid.bounds.maxZ - navGrid.bounds.minZ);
+  return new THREE.Vector3(worldX - MODEL_BOUNDS.center.x, GROUND_Y, worldZ - MODEL_BOUNDS.center.z);
+}
+
+function toScenePoint(point) {
+  return new THREE.Vector3(point.x * WORLD_SCALE, point.y * WORLD_SCALE, point.z * WORLD_SCALE);
+}
+
+function nearestWalkableCell(navGrid, point) {
+  const start = cellIndex(navGrid, point);
+  let best = null;
+  let bestScore = Infinity;
+  for (let radius = 0; radius < 18; radius += 1) {
+    for (let z = Math.max(0, start.z - radius); z <= Math.min(navGrid.height - 1, start.z + radius); z += 1) {
+      for (let x = Math.max(0, start.x - radius); x <= Math.min(navGrid.width - 1, start.x + radius); x += 1) {
+        const cell = navGrid.grid[z * navGrid.width + x];
+        if (!cell?.w) continue;
+        const score = Math.abs(x - start.x) + Math.abs(z - start.z);
+        if (score < bestScore) {
+          best = { x, z };
+          bestScore = score;
+        }
       }
     }
-  });
-
-  return rhs.applyMatrix3(normal.clone().invert());
+    if (best) return best;
+  }
+  return start;
 }
 
-const VISUAL_FIT = {
-  x: solveLeastSquaresAffine('x'),
-  z: solveLeastSquaresAffine('z'),
-};
+function findPath(navGrid, startPoint, endPoint) {
+  if (!navGrid) return [startPoint, endPoint];
+  const start = nearestWalkableCell(navGrid, startPoint);
+  const end = nearestWalkableCell(navGrid, endPoint);
+  const key = (x, z) => `${x},${z}`;
+  const open = new Set([key(start.x, start.z)]);
+  const cameFrom = new Map();
+  const g = new Map([[key(start.x, start.z), 0]]);
+  const h = (x, z) => Math.hypot(x - end.x, z - end.z);
+  const f = new Map([[key(start.x, start.z), h(start.x, start.z)]]);
+  const dirs = [
+    [1, 0], [-1, 0], [0, 1], [0, -1],
+    [1, 1], [1, -1], [-1, 1], [-1, -1],
+  ];
 
-function applyVisualFit(point) {
-  return {
-    x: VISUAL_FIT.x.x * point.x + VISUAL_FIT.x.y * point.z + VISUAL_FIT.x.z,
-    z: VISUAL_FIT.z.x * point.x + VISUAL_FIT.z.y * point.z + VISUAL_FIT.z.z,
-  };
-}
+  while (open.size) {
+    let current = null;
+    let score = Infinity;
+    for (const id of open) {
+      const value = f.get(id) ?? Infinity;
+      if (value < score) {
+        score = value;
+        current = id;
+      }
+    }
+    const [cx, cz] = current.split(',').map(Number);
+    if (cx === end.x && cz === end.z) {
+      const cells = [{ x: cx, z: cz }];
+      let cursor = current;
+      while (cameFrom.has(cursor)) {
+        cursor = cameFrom.get(cursor);
+        const [x, z] = cursor.split(',').map(Number);
+        cells.push({ x, z });
+      }
+      return cells.reverse().filter((_, index) => index % 3 === 0 || index === cells.length - 1).map((cell) => cellCenter(navGrid, cell.x, cell.z));
+    }
+    open.delete(current);
 
-function applyCalibration(point, calibration) {
-  const visualPoint = applyVisualFit(point);
-  const angle = (calibration.rotationDeg * Math.PI) / 180;
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  const x = visualPoint.x * calibration.geoScale;
-  const z = visualPoint.z * calibration.geoScale;
-  return new THREE.Vector3(
-    x * cos - z * sin + calibration.offsetX,
-    calibration.poiHeight,
-    x * sin + z * cos + calibration.offsetZ,
-  );
-}
-
-function poiToWorld(poi, calibration) {
-  return applyCalibration(lngLatToModelPlane(poi.lon, poi.lat), calibration);
-}
-
-function createGrandCanalRoute(calibration) {
-  return GRAND_CANAL_REFERENCE.map(([lon, lat]) => applyCalibration(lngLatToModelPlane(lon, lat), calibration));
+    for (const [dx, dz] of dirs) {
+      const nx = cx + dx;
+      const nz = cz + dz;
+      if (nx < 0 || nz < 0 || nx >= navGrid.width || nz >= navGrid.height) continue;
+      const cell = navGrid.grid[nz * navGrid.width + nx];
+      if (!cell?.w) continue;
+      const nid = key(nx, nz);
+      const step = dx && dz ? 1.414 : 1;
+      const tentative = (g.get(current) ?? Infinity) + step + (cell.b ? 4 : 0);
+      if (tentative < (g.get(nid) ?? Infinity)) {
+        cameFrom.set(nid, current);
+        g.set(nid, tentative);
+        f.set(nid, tentative + h(nx, nz));
+        open.add(nid);
+      }
+    }
+  }
+  return [startPoint, endPoint];
 }
 
 function measureRoute(points) {
@@ -183,7 +286,7 @@ function measureRoute(points) {
 }
 
 function sampleRoute(points, progress) {
-  if (!points.length) return { position: new THREE.Vector3(), direction: new THREE.Vector3(0, 0, -1), done: true };
+  if (!points.length) return { position: new THREE.Vector3(), direction: new THREE.Vector3(0, 0, -1), done: true, total: 0 };
   const total = measureRoute(points);
   const target = Math.max(0, Math.min(progress, total));
   let walked = 0;
@@ -195,51 +298,67 @@ function sampleRoute(points, progress) {
       const t = segment > 0 ? (target - walked) / segment : 0;
       const position = a.clone().lerp(b, t);
       const direction = b.clone().sub(a).normalize();
-      return { position, direction, done: target >= total, total };
+      return { position, direction: direction.lengthSq() ? direction : new THREE.Vector3(0, 0, -1), done: target >= total, total };
     }
     walked += segment;
   }
   return { position: points.at(-1).clone(), direction: new THREE.Vector3(0, 0, -1), done: true, total };
 }
 
-function VeniceModel({ calibration }) {
+function formatMeters(value) {
+  if (!Number.isFinite(value)) return '-';
+  return value >= 1000 ? `${(value / 1000).toFixed(2)} km` : `${Math.round(value)} m`;
+}
+
+function VeniceModel() {
   const { scene } = useGLTF(VENICE_MODEL);
   const model = useMemo(() => scene.clone(true), [scene]);
-
   return (
     <group
-      rotation={[0, (calibration.modelRotationDeg * Math.PI) / 180, 0]}
-      position={[
-        calibration.modelOffsetX - MODEL_BOUNDS.center.x * calibration.modelScale,
-        -MODEL_BOUNDS.min.y * calibration.modelScale,
-        calibration.modelOffsetZ - MODEL_BOUNDS.center.z * calibration.modelScale,
-      ]}
-      scale={calibration.modelScale}
+      scale={WORLD_SCALE}
+      position={[-MODEL_BOUNDS.center.x * WORLD_SCALE, -MODEL_BOUNDS.min.y * WORLD_SCALE, -MODEL_BOUNDS.center.z * WORLD_SCALE]}
     >
       <primitive object={model} />
     </group>
   );
 }
 
-function PoiMarkers({ pois, selectedId, calibration, onSelect }) {
+function RouteLine({ points }) {
+  const positions = useMemo(() => {
+    const arr = new Float32Array(points.length * 3);
+    points.forEach((point, index) => {
+      arr[index * 3] = point.x;
+      arr[index * 3 + 1] = point.y + 0.03;
+      arr[index * 3 + 2] = point.z;
+    });
+    return arr;
+  }, [points]);
+  if (points.length < 2) return null;
+  return (
+    <line>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <lineBasicMaterial color="#f08b4f" transparent opacity={0.95} />
+    </line>
+  );
+}
+
+function PoiMarkers({ pois, selectedId, navGrid, onSelect }) {
   return (
     <>
       {pois.map((poi) => {
-        const position = poiToWorld(poi, calibration);
+        const base = geoToModel(poi.lon, poi.lat);
+        const cell = navGrid ? nearestWalkableCell(navGrid, base) : null;
+        const position = toScenePoint(cell ? cellCenter(navGrid, cell.x, cell.z) : new THREE.Vector3(base.x, 0.2, base.z));
         const isSelected = poi.id === selectedId;
         return (
           <group key={poi.id} position={position}>
-            <mesh position={[0, 0.035, 0]}>
-              <sphereGeometry args={[isSelected ? 0.045 : 0.028, 14, 10]} />
-              <meshStandardMaterial color={isSelected ? '#f08b4f' : '#167ca4'} emissive={isSelected ? '#7a2b0d' : '#07324a'} emissiveIntensity={0.35} />
+            <mesh>
+              <sphereGeometry args={[isSelected ? 1.35 : 0.9, 14, 10]} />
+              <meshStandardMaterial color={isSelected ? '#f08b4f' : '#167ca4'} emissive={isSelected ? '#7a2b0d' : '#07324a'} emissiveIntensity={0.28} />
             </mesh>
-            <line>
-              <bufferGeometry>
-                <bufferAttribute attach="attributes-position" args={[new Float32Array([-0.09, 0.04, 0, 0.09, 0.04, 0, 0, 0.04, -0.09, 0, 0.04, 0.09]), 3]} />
-              </bufferGeometry>
-              <lineBasicMaterial color={isSelected ? '#f08b4f' : '#167ca4'} transparent opacity={0.9} />
-            </line>
-            <Html center distanceFactor={6} position={[0, 0.24, 0]}>
+            <Html center distanceFactor={80} position={[0, 5.4, 0]}>
               <button className={`venice-vr__poi-label ${isSelected ? 'is-active' : ''}`} type="button" onClick={() => onSelect(poi.id)}>
                 {poi.name}
               </button>
@@ -251,159 +370,159 @@ function PoiMarkers({ pois, selectedId, calibration, onSelect }) {
   );
 }
 
-function RouteLine({ points, color = '#0b81aa', opacity = 0.82, yOffset = 0.12 }) {
-  const positions = useMemo(() => {
-    const arr = new Float32Array(points.length * 3);
-    points.forEach((point, index) => {
-      arr[index * 3] = point.x;
-      arr[index * 3 + 1] = point.y + yOffset;
-      arr[index * 3 + 2] = point.z;
-    });
-    return arr;
-  }, [points, yOffset]);
-
-  return (
-    <line>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-      </bufferGeometry>
-      <lineBasicMaterial color={color} transparent opacity={opacity} />
-    </line>
-  );
-}
-
-function VeniceTourController({ active, routePoints, speed, onProgress }) {
+function AutoTour({ active, routePoints, speed, onProgress, onNearPoi }) {
+  const { camera } = useThree();
   const markerRef = useRef(null);
   const progressRef = useRef(0);
   const lastReportRef = useRef(0);
+  const lastPoiRef = useRef(null);
 
-  useFrame(({ camera }, delta) => {
+  useFrame((_, delta) => {
     if (!routePoints.length) return;
     const total = measureRoute(routePoints);
     if (active) progressRef.current = (progressRef.current + speed * delta) % Math.max(total, 1);
     const sample = sampleRoute(routePoints, progressRef.current);
-    const direction = sample.direction.lengthSq() ? sample.direction : new THREE.Vector3(0, 0, -1);
-
+    const direction = sample.direction;
     if (markerRef.current) {
       markerRef.current.position.copy(sample.position);
       markerRef.current.rotation.y = Math.atan2(direction.x, direction.z);
     }
-
     if (active) {
-      const side = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(0.75);
-      const cameraPos = sample.position.clone().add(direction.clone().multiplyScalar(-2.8)).add(side).add(new THREE.Vector3(0, 2.2, 0));
-      const target = sample.position.clone().add(direction.clone().multiplyScalar(1.8));
-      target.y = 0.36;
-      camera.position.lerp(cameraPos, 0.08);
+      const side = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(0.65);
+      const desiredCamera = sample.position.clone().add(direction.clone().multiplyScalar(-36)).add(side.multiplyScalar(10)).add(new THREE.Vector3(0, 18, 0));
+      const target = sample.position.clone().add(direction.clone().multiplyScalar(24));
+      target.y += 7;
+      camera.position.lerp(desiredCamera, 0.08);
       camera.lookAt(target);
     }
-
     const now = performance.now();
-    if (now - lastReportRef.current > 160) {
+    if (now - lastReportRef.current > 150) {
       lastReportRef.current = now;
       onProgress?.({ meters: progressRef.current, total });
+      const nearest = routePoints.find((point) => point.distanceTo(sample.position) < 0.18);
+      if (nearest && nearest !== lastPoiRef.current) lastPoiRef.current = nearest;
+      onNearPoi?.(sample.position);
     }
   });
 
   return (
     <group ref={markerRef}>
-      <mesh position={[0, 0.16, 0]}>
-        <coneGeometry args={[0.06, 0.16, 4]} />
-        <meshStandardMaterial color="#f08b4f" roughness={0.45} />
+      <mesh position={[0, PERSON_HEIGHT / 2, 0]}>
+        <capsuleGeometry args={[PERSON_RADIUS, PERSON_HEIGHT - PERSON_RADIUS * 2, 5, 10]} />
+        <meshStandardMaterial color="#f08b4f" roughness={0.42} />
       </mesh>
     </group>
   );
 }
 
-function VeniceScene({ calibration, selectedPoiId, routeIds, tourActive, speed, onProgress, onSelectPoi }) {
-  const routePois = routeIds.map((id) => VENICE_POIS.find((poi) => poi.id === id)).filter(Boolean);
-  const routePoints = routePois.length > 1
-    ? routePois.map((poi) => poiToWorld(poi, calibration))
-    : createGrandCanalRoute(calibration);
-  const canalPoints = createGrandCanalRoute(calibration);
+function ManualWalk({ active, start, routePoints, speed, onProgress }) {
+  const { camera } = useThree();
+  const keysRef = useRef(new Set());
+  const positionRef = useRef(start.clone());
+  const headingRef = useRef(0);
+  const avatarRef = useRef(null);
 
+  useEffect(() => {
+    positionRef.current.copy(start);
+    headingRef.current = 0;
+    if (avatarRef.current) avatarRef.current.position.copy(start);
+  }, [start]);
+
+  useEffect(() => {
+    const down = (event) => {
+      if (!active) return;
+      keysRef.current.add(event.key.toLowerCase());
+    };
+    const up = (event) => keysRef.current.delete(event.key.toLowerCase());
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+    };
+  }, [active]);
+
+  useFrame((_, delta) => {
+    if (!active || !routePoints.length) return;
+    const keys = keysRef.current;
+    const forward = (keys.has('w') || keys.has('arrowup') ? 1 : 0) - (keys.has('s') || keys.has('arrowdown') ? 1 : 0);
+    const turn = (keys.has('a') || keys.has('arrowleft') ? 1 : 0) - (keys.has('d') || keys.has('arrowright') ? 1 : 0);
+    headingRef.current += turn * delta * 2.4;
+    const direction = new THREE.Vector3(Math.sin(headingRef.current), 0, Math.cos(headingRef.current));
+    if (forward) positionRef.current.add(direction.multiplyScalar(forward * speed * delta * 0.42));
+    const nearest = routePoints.reduce((best, point) => (point.distanceTo(positionRef.current) < best.distance ? { point, distance: point.distanceTo(positionRef.current) } : best), { point: routePoints[0], distance: Infinity });
+    positionRef.current.lerp(nearest.point, 0.08);
+    if (avatarRef.current) {
+      avatarRef.current.position.copy(positionRef.current);
+      avatarRef.current.rotation.y = headingRef.current;
+    }
+    const cam = positionRef.current.clone().add(new THREE.Vector3(-Math.sin(headingRef.current) * 24, 14, -Math.cos(headingRef.current) * 24));
+    camera.position.lerp(cam, 0.16);
+    camera.lookAt(positionRef.current.clone().add(new THREE.Vector3(0, 7, 0)));
+    onProgress?.({ meters: 0, total: measureRoute(routePoints) });
+  });
+
+  if (!active) return null;
+  return (
+    <group ref={avatarRef}>
+      <mesh position={[0, PERSON_HEIGHT / 2, 0]}>
+        <capsuleGeometry args={[PERSON_RADIUS, PERSON_HEIGHT - PERSON_RADIUS * 2, 5, 10]} />
+        <meshStandardMaterial color="#167ca4" />
+      </mesh>
+    </group>
+  );
+}
+
+function VeniceScene({ pois, selectedId, routePoints, navGrid, mode, speed, onSelect, onProgress }) {
+  const start = routePoints[0] ?? new THREE.Vector3();
   return (
     <>
-      <PerspectiveCamera makeDefault position={[0, 18, 26]} fov={42} />
+      <PerspectiveCamera makeDefault position={[0, 95, 135]} fov={46} />
       <ambientLight intensity={1.2} />
-      <directionalLight position={[14, 26, 16]} intensity={2.2} />
+      <directionalLight position={[12, 24, 14]} intensity={2.1} />
       <Suspense fallback={null}>
-        <VeniceModel calibration={calibration} />
+        <VeniceModel />
       </Suspense>
-      <gridHelper args={[34, 34, '#93b8c7', '#d7e5e8']} position={[0, -0.02, 0]} />
-      <RouteLine points={canalPoints} color="#247fa8" opacity={0.38} yOffset={0.018} />
-      <RouteLine points={routePoints} color="#f08b4f" opacity={0.9} yOffset={0.032} />
-      <PoiMarkers pois={VENICE_POIS} selectedId={selectedPoiId} calibration={calibration} onSelect={onSelectPoi} />
-      <VeniceTourController active={tourActive} routePoints={routePoints} speed={speed} onProgress={onProgress} />
-      {!tourActive && <OrbitControls makeDefault target={[0, 0, 0]} maxDistance={70} maxPolarAngle={Math.PI * 0.48} />}
+      <RouteLine points={routePoints} />
+      <PoiMarkers pois={pois} selectedId={selectedId} navGrid={navGrid} onSelect={onSelect} />
+      <AutoTour active={mode === 'auto'} routePoints={routePoints} speed={speed} onProgress={onProgress} />
+      <ManualWalk active={mode === 'manual'} start={start} routePoints={routePoints} speed={speed} onProgress={onProgress} />
+      {mode === 'free' && <OrbitControls makeDefault target={[0, 0.15, 0]} maxDistance={28} maxPolarAngle={Math.PI * 0.48} />}
     </>
   );
 }
 
-function formatMeters(value) {
-  if (!Number.isFinite(value)) return '-';
-  return value >= 1000 ? `${(value / 1000).toFixed(2)} km` : `${Math.round(value)} m`;
-}
-
-function modelPointToMiniMap(point) {
-  return {
-    x: ((point.x / MODEL_BOUNDS.size.x) + 0.5) * 100,
-    y: ((point.z / MODEL_BOUNDS.size.z) + 0.5) * 62,
-  };
-}
-
-function MiniCalibrationMap({ calibration, selectedPoiId }) {
-  const canal = GRAND_CANAL_REFERENCE
-    .map(([lon, lat]) => modelPointToMiniMap(applyCalibration(lngLatToModelPlane(lon, lat), { ...calibration, offsetX: 0, offsetZ: 0, poiHeight: 0 })))
-    .map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
-    .join(' ');
-
-  return (
-    <section className="venice-vr__mini-map">
-      <h2>Top-down calibration</h2>
-      <svg viewBox="0 0 100 62" role="img" aria-label="Venice coordinate calibration preview">
-        <rect x="0.8" y="0.8" width="98.4" height="60.4" rx="2" />
-        <path className="is-canal" d={canal} />
-        {VENICE_POIS.map((poi) => {
-          const point = modelPointToMiniMap(applyCalibration(lngLatToModelPlane(poi.lon, poi.lat), { ...calibration, offsetX: 0, offsetZ: 0, poiHeight: 0 }));
-          return (
-            <g key={poi.id} className={poi.id === selectedPoiId ? 'is-active' : ''}>
-              <circle cx={point.x} cy={point.y} r={poi.id === selectedPoiId ? 1.9 : 1.25} />
-              <title>{poi.name}</title>
-            </g>
-          );
-        })}
-      </svg>
-      <p>{SATELLITE_FIT_NOTE} Blue line is the Grand Canal reference; dots are real POI coordinates projected through the same fit.</p>
-    </section>
-  );
+function buildRoute(navGrid, routeIds) {
+  const stops = routeIds.map((id) => VENICE_POIS.find((poi) => poi.id === id)).filter(Boolean);
+  const anchors = stops.map((poi) => {
+    const model = geoToModel(poi.lon, poi.lat);
+    const cell = navGrid ? nearestWalkableCell(navGrid, model) : null;
+    return cell ? cellCenter(navGrid, cell.x, cell.z) : new THREE.Vector3(model.x, 0.18, model.z);
+  });
+  if (!navGrid || anchors.length < 2) return anchors.map(toScenePoint);
+  const points = [];
+  for (let index = 1; index < anchors.length; index += 1) {
+    const segment = findPath(navGrid, anchors[index - 1], anchors[index]);
+    if (index > 1) segment.shift();
+    points.push(...segment);
+  }
+  return points.map(toScenePoint);
 }
 
 export function VeniceVrLab() {
+  const navGrid = useNavGrid();
   const [selectedPoiId, setSelectedPoiId] = useState('rialto');
   const [routeIds, setRouteIds] = useState(DEFAULT_ROUTE);
-  const [tourActive, setTourActive] = useState(false);
+  const [mode, setMode] = useState('auto');
+  const [speed, setSpeed] = useState(28);
   const [progress, setProgress] = useState({ meters: 0, total: 0 });
-  const [speed, setSpeed] = useState(8);
-  const [calibration, setCalibration] = useState({
-    geoScale: 1,
-    rotationDeg: 0,
-    offsetX: 0,
-    offsetZ: 0,
-    poiHeight: 0.34,
-    modelScale: 1,
-    modelRotationDeg: 0,
-    modelOffsetX: 0,
-    modelOffsetZ: 0,
-  });
 
+  const routePoints = useMemo(() => buildRoute(navGrid, routeIds), [navGrid, routeIds]);
   const selectedPoi = VENICE_POIS.find((poi) => poi.id === selectedPoiId) ?? VENICE_POIS[0];
+  const routePois = routeIds.map((id) => VENICE_POIS.find((poi) => poi.id === id)).filter(Boolean);
+  const totalVisit = routePois.reduce((sum, poi) => sum + poi.duration, 0);
 
-  const updateCalibration = (key, value) => {
-    setCalibration((current) => ({ ...current, [key]: Number(value) }));
-  };
-
-  const toggleRouteStop = (id) => {
+  const toggleStop = (id) => {
     setRouteIds((current) => {
       if (current.includes(id)) return current.length > 2 ? current.filter((item) => item !== id) : current;
       return [...current, id];
@@ -411,92 +530,91 @@ export function VeniceVrLab() {
   };
 
   return (
-    <main className="venice-vr">
-      <header className="venice-vr__topbar">
-        <a className="venice-vr__back" href="#/concepts">Back to 04</a>
-        <div className="venice-vr__topbar-title">
-          <span>Experimental city roaming</span>
-          <strong>Venice VR Lab</strong>
+    <main className="venice-tour">
+      <header className="venice-tour__topbar">
+        <a className="venice-tour__back" href="#/concepts">Back to 04</a>
+        <div>
+          <span>Immersive city demo</span>
+          <strong>Venice Walking Lab</strong>
         </div>
-        <div className="venice-vr__topbar-actions">
-          <button type="button" onClick={() => setTourActive((value) => !value)}>{tourActive ? 'Pause tour' : 'Start tour'}</button>
+        <div className="venice-tour__modes">
+          {['auto', 'manual', 'free'].map((item) => (
+            <button key={item} type="button" className={mode === item ? 'is-active' : ''} onClick={() => setMode(item)}>
+              {item}
+            </button>
+          ))}
         </div>
       </header>
 
-      <section className="venice-vr__scene">
-        <Canvas dpr={[1, 1.6]} gl={{ antialias: true }}>
-          <color attach="background" args={['#eef7f8']} />
-          <fog attach="fog" args={['#eef7f8', 110, 360]} />
+      <section className="venice-tour__scene">
+        <Canvas dpr={[1, 1.35]} gl={{ antialias: true }}>
+          <color attach="background" args={['#edf7f8']} />
           <VeniceScene
-            calibration={calibration}
-            selectedPoiId={selectedPoiId}
-            routeIds={routeIds}
-            tourActive={tourActive}
+            pois={VENICE_POIS}
+            selectedId={selectedPoiId}
+            routePoints={routePoints}
+            navGrid={navGrid}
+            mode={mode}
             speed={speed}
+            onSelect={setSelectedPoiId}
             onProgress={setProgress}
-            onSelectPoi={setSelectedPoiId}
           />
         </Canvas>
-        <div className="venice-vr__hud">
-          <span>Route progress</span>
-          <strong>{formatMeters(progress.meters)} / {formatMeters(progress.total)}</strong>
-          <small>Model: /models/venice.glb</small>
+        <div className="venice-tour__hud">
+          <span>{mode === 'manual' ? 'Manual walk' : mode === 'auto' ? 'Guided route' : 'Free camera'}</span>
+          <strong>{formatMeters(progress.meters)} / {formatMeters(progress.total || measureRoute(routePoints))}</strong>
+          <small>{navGrid ? 'Building-aware walk grid active' : 'Loading walk grid...'}</small>
         </div>
       </section>
 
-      <aside className="venice-vr__panel">
-        <p className="venice-vr__eyebrow">Coordinate binding</p>
-        <h1>Venice city model</h1>
-        <p>
-          This page maps real Venice coordinates onto the local model plane with a manual top-down satellite fit. Use the calibration controls only for final visual trimming.
-        </p>
+      <aside className="venice-tour__panel">
+        <p className="venice-tour__eyebrow">Route planner</p>
+        <h1>Small Venice tour</h1>
+        <p className="venice-tour__lede">A compact route demo over the Venice model. Stops are projected from real coordinates, snapped to a horizontal walk plane, and routed through gaps between buildings.</p>
 
-        <section className="venice-vr__metrics">
-          <article><span>POIs</span><strong>{VENICE_POIS.length}</strong></article>
-          <article><span>Route</span><strong>{routeIds.length}</strong></article>
-          <article><span>Fit anchors</span><strong>{VISUAL_FIT_CONTROLS.length}</strong></article>
-          <article><span>Speed</span><strong>{speed} m/s</strong></article>
+        <section className="venice-tour__metrics">
+          <article><span>Stops</span><strong>{routeIds.length}</strong></article>
+          <article><span>Path</span><strong>{formatMeters(measureRoute(routePoints))}</strong></article>
+          <article><span>Visit</span><strong>{totalVisit} min</strong></article>
+          <article><span>Grid</span><strong>{navGrid ? `${navGrid.width}x${navGrid.height}` : '-'}</strong></article>
         </section>
 
-        <section className="venice-vr__planner">
-          <h2>Selected anchor</h2>
-          <p><strong>{selectedPoi.name}</strong><br />{selectedPoi.description}</p>
-          <code>{selectedPoi.lon.toFixed(5)}, {selectedPoi.lat.toFixed(5)}</code>
-        </section>
-
-        <MiniCalibrationMap calibration={calibration} selectedPoiId={selectedPoiId} />
-
-        <section className="venice-vr__poi-list">
-          <h2>Venice POIs</h2>
-          {VENICE_POIS.map((poi) => (
-            <button key={poi.id} type="button" className={poi.id === selectedPoiId ? 'is-active' : ''} onClick={() => setSelectedPoiId(poi.id)}>
-              <span>{poi.type}</span>
-              <strong>{poi.name}</strong>
-              <small>{poi.lon.toFixed(5)}, {poi.lat.toFixed(5)}</small>
+        <section className="venice-tour__presets">
+          <h2>Preset routes</h2>
+          {PRESETS.map((preset) => (
+            <button key={preset.id} type="button" onClick={() => setRouteIds(preset.stops)}>
+              <strong>{preset.name}</strong>
+              <span>{preset.stops.length} stops</span>
             </button>
           ))}
         </section>
 
-        <section className="venice-vr__route-editor">
-          <h2>Route stops</h2>
+        <section className="venice-tour__focus">
+          <h2>Selected stop</h2>
+          <strong>{selectedPoi.name}</strong>
+          <p>{selectedPoi.description}</p>
+          <code>{selectedPoi.lon.toFixed(5)}, {selectedPoi.lat.toFixed(5)}</code>
+        </section>
+
+        <section className="venice-tour__poi-list">
+          <h2>Stops</h2>
           {VENICE_POIS.map((poi) => (
-            <label key={poi.id}>
-              <input type="checkbox" checked={routeIds.includes(poi.id)} onChange={() => toggleRouteStop(poi.id)} />
-              {poi.name}
-            </label>
+            <button key={poi.id} type="button" className={selectedPoiId === poi.id ? 'is-active' : ''} onClick={() => setSelectedPoiId(poi.id)}>
+              <input type="checkbox" checked={routeIds.includes(poi.id)} onChange={() => toggleStop(poi.id)} onClick={(event) => event.stopPropagation()} />
+              <span>{poi.type}</span>
+              <strong>{poi.name}</strong>
+            </button>
           ))}
         </section>
 
-        <section className="venice-vr__calibration">
-          <h2>Calibration</h2>
-          <label>Geo scale <input type="range" min="0.72" max="1.32" step="0.01" value={calibration.geoScale} onChange={(event) => updateCalibration('geoScale', event.target.value)} /><span>{calibration.geoScale}</span></label>
-          <label>Geo rotation <input type="range" min="-180" max="180" step="1" value={calibration.rotationDeg} onChange={(event) => updateCalibration('rotationDeg', event.target.value)} /><span>{calibration.rotationDeg} deg</span></label>
-          <label>Geo X <input type="range" min="-8" max="8" step="0.1" value={calibration.offsetX} onChange={(event) => updateCalibration('offsetX', event.target.value)} /><span>{calibration.offsetX}</span></label>
-          <label>Geo Z <input type="range" min="-8" max="8" step="0.1" value={calibration.offsetZ} onChange={(event) => updateCalibration('offsetZ', event.target.value)} /><span>{calibration.offsetZ}</span></label>
-          <label>POI height <input type="range" min="0.08" max="0.8" step="0.01" value={calibration.poiHeight} onChange={(event) => updateCalibration('poiHeight', event.target.value)} /><span>{calibration.poiHeight}</span></label>
-          <label>Model scale <input type="range" min="0.72" max="1.32" step="0.01" value={calibration.modelScale} onChange={(event) => updateCalibration('modelScale', event.target.value)} /><span>{calibration.modelScale}</span></label>
-          <label>Model rotation <input type="range" min="-180" max="180" step="1" value={calibration.modelRotationDeg} onChange={(event) => updateCalibration('modelRotationDeg', event.target.value)} /><span>{calibration.modelRotationDeg} deg</span></label>
-          <label>Tour speed <input type="range" min="2" max="24" step="1" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /><span>{speed} m/s</span></label>
+        <section className="venice-tour__controls">
+          <h2>Movement</h2>
+          <label>
+            Speed
+            <input type="range" min="8" max="70" step="1" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} />
+            <span>{Math.round(speed)}</span>
+          </label>
+          <p>Manual mode: W/S move, A/D turn. Auto mode follows the planned path.</p>
         </section>
       </aside>
     </main>

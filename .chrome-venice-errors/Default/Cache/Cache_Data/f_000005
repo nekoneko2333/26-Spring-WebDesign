@@ -1,0 +1,293 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/App.jsx");import { Canvas } from "/node_modules/.vite/deps/@react-three_fiber.js?v=8c9d6053";
+import { PerspectiveCamera } from "/node_modules/.vite/deps/@react-three_drei.js?v=8c9d6053";
+import __vite__cjsImport2_react from "/node_modules/.vite/deps/react.js?v=8c9d6053"; const Suspense = __vite__cjsImport2_react["Suspense"]; const useCallback = __vite__cjsImport2_react["useCallback"]; const useEffect = __vite__cjsImport2_react["useEffect"]; const useRef = __vite__cjsImport2_react["useRef"]; const useState = __vite__cjsImport2_react["useState"];
+import { AppShell } from "/src/components/layout/AppShell.jsx";
+import { HomePage } from "/src/components/home/HomePage.jsx";
+import { HomeShowcase } from "/src/components/home/HomeShowcase.jsx";
+import { SceneLights } from "/src/components/scene/SceneLights.jsx";
+import { GroundPlane } from "/src/components/scene/GroundPlane.jsx";
+import { FollowCamera } from "/src/components/camera/FollowCamera.jsx";
+import { MapSurface } from "/src/components/scene/MapSurface.jsx";
+import { RoadRibbon } from "/src/components/scene/RoadRibbon.jsx";
+import { TilesLayer } from "/src/components/scene/TilesLayer.jsx";
+import { LandmarkModels } from "/src/components/landmarks/LandmarkModels.jsx";
+import { VehicleController, VehicleChassis } from "/src/components/vehicle/VehicleController.jsx";
+import { THEME } from "/src/config/theme.js";
+import { useAppStore } from "/src/state/useAppStore.js";
+import { AmsterdamVrLab } from "/src/experiments/amsterdam-vr/AmsterdamVrLab.jsx";
+import { VeniceVrLab } from "/src/experiments/venice-vr/VeniceVrLab.jsx?t=1779688411762";
+import { RouteV2Page, RouteV3Page } from "/src/experiments/route-versions/RouteVersions.jsx";
+var _jsxFileName = "C:/Dev/workspaces/Web/web3d-project/src/App.jsx";
+import __vite__cjsImport19_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=8c9d6053"; const _jsxDEV = __vite__cjsImport19_react_jsxDevRuntime["jsxDEV"]; const _Fragment = __vite__cjsImport19_react_jsxDevRuntime["Fragment"];
+var _s = $RefreshSig$(), _s2 = $RefreshSig$(), _s3 = $RefreshSig$();
+function Experience({ isStarted, initialLandmarkId }) {
+	_s();
+	const vehicleRef = useRef(null);
+	return /* @__PURE__ */ _jsxDEV(_Fragment, { children: [
+		/* @__PURE__ */ _jsxDEV(PerspectiveCamera, {
+			makeDefault: true,
+			position: [
+				0,
+				95,
+				120
+			],
+			fov: 42
+		}, void 0, false, {
+			fileName: _jsxFileName,
+			lineNumber: 26,
+			columnNumber: 7
+		}, this),
+		/* @__PURE__ */ _jsxDEV(FollowCamera, { targetRef: vehicleRef }, void 0, false, {
+			fileName: _jsxFileName,
+			lineNumber: 27,
+			columnNumber: 7
+		}, this),
+		/* @__PURE__ */ _jsxDEV(Suspense, {
+			fallback: null,
+			children: [
+				/* @__PURE__ */ _jsxDEV(SceneLights, {}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 30,
+					columnNumber: 9
+				}, this),
+				/* @__PURE__ */ _jsxDEV(GroundPlane, {}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 31,
+					columnNumber: 9
+				}, this),
+				/* @__PURE__ */ _jsxDEV(VehicleChassis, { bodyRef: vehicleRef }, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 32,
+					columnNumber: 9
+				}, this),
+				/* @__PURE__ */ _jsxDEV(VehicleController, {
+					bodyRef: vehicleRef,
+					drivingEnabled: isStarted,
+					initialLandmarkId
+				}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 33,
+					columnNumber: 9
+				}, this),
+				/* @__PURE__ */ _jsxDEV(MapSurface, {}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 34,
+					columnNumber: 9
+				}, this),
+				/* @__PURE__ */ _jsxDEV(TilesLayer, {}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 35,
+					columnNumber: 9
+				}, this),
+				/* @__PURE__ */ _jsxDEV(RoadRibbon, {}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 36,
+					columnNumber: 9
+				}, this),
+				/* @__PURE__ */ _jsxDEV(LandmarkModels, {}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 37,
+					columnNumber: 9
+				}, this)
+			]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 29,
+			columnNumber: 7
+		}, this)
+	] }, void 0, true);
+}
+_s(Experience, "0YRVaG7bgB4A2esZQtiwkxZwUoM=");
+_c = Experience;
+function DriveExperience({ onClose, initialLandmarkId }) {
+	_s2();
+	const [isStarted, setIsStarted] = useState(Boolean(initialLandmarkId));
+	const handleStart = useCallback(() => setIsStarted(true), []);
+	const clearLandmark = useAppStore((state) => state.clearLandmark);
+	const openLandmarkFocus = useAppStore((state) => state.openLandmarkFocus);
+	const setCameraMode = useAppStore((state) => state.setCameraMode);
+	useEffect(() => {
+		setIsStarted(Boolean(initialLandmarkId));
+		if (initialLandmarkId) {
+			openLandmarkFocus(initialLandmarkId);
+			return;
+		}
+		clearLandmark();
+		setCameraMode("map");
+	}, [
+		clearLandmark,
+		initialLandmarkId,
+		openLandmarkFocus,
+		setCameraMode
+	]);
+	return /* @__PURE__ */ _jsxDEV(AppShell, {
+		isStarted,
+		onStart: handleStart,
+		onClose,
+		children: /* @__PURE__ */ _jsxDEV(Canvas, {
+			shadows: true,
+			dpr: [1, 2],
+			gl: { antialias: true },
+			children: [
+				/* @__PURE__ */ _jsxDEV("color", {
+					attach: "background",
+					args: [THEME.sky]
+				}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 63,
+					columnNumber: 9
+				}, this),
+				/* @__PURE__ */ _jsxDEV("fog", {
+					attach: "fog",
+					args: [
+						THEME.haze,
+						75,
+						220
+					]
+				}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 64,
+					columnNumber: 9
+				}, this),
+				/* @__PURE__ */ _jsxDEV(Experience, {
+					isStarted,
+					initialLandmarkId
+				}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 65,
+					columnNumber: 9
+				}, this)
+			]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 62,
+			columnNumber: 7
+		}, this)
+	}, void 0, false, {
+		fileName: _jsxFileName,
+		lineNumber: 61,
+		columnNumber: 5
+	}, this);
+}
+_s2(DriveExperience, "W/pLQRFT/8HfDhEVPZUrQEaOYuw=", false, function() {
+	return [
+		useAppStore,
+		useAppStore,
+		useAppStore
+	];
+});
+_c2 = DriveExperience;
+export default function App() {
+	_s3();
+	const [hashRoute, setHashRoute] = useState(() => window.location.hash);
+	const [driveOpen, setDriveOpen] = useState(false);
+	const [initialLandmarkId, setInitialLandmarkId] = useState(null);
+	useEffect(() => {
+		const onHashChange = () => setHashRoute(window.location.hash);
+		window.addEventListener("hashchange", onHashChange);
+		return () => window.removeEventListener("hashchange", onHashChange);
+	}, []);
+	const handleOpenDrive = useCallback((landmarkId = null) => {
+		setInitialLandmarkId(landmarkId);
+		setDriveOpen(true);
+	}, []);
+	const handleOpenAmsterdam = useCallback(() => {
+		setDriveOpen(false);
+		setInitialLandmarkId(null);
+		window.location.hash = "#/amsterdam-vr";
+	}, []);
+	const handleCloseDrive = useCallback(() => {
+		setDriveOpen(false);
+		setInitialLandmarkId(null);
+	}, []);
+	if (hashRoute === "#/amsterdam-vr") {
+		return /* @__PURE__ */ _jsxDEV(AmsterdamVrLab, {}, void 0, false, {
+			fileName: _jsxFileName,
+			lineNumber: 99,
+			columnNumber: 12
+		}, this);
+	}
+	if (hashRoute === "#/venice-vr") {
+		return /* @__PURE__ */ _jsxDEV(VeniceVrLab, {}, void 0, false, {
+			fileName: _jsxFileName,
+			lineNumber: 103,
+			columnNumber: 12
+		}, this);
+	}
+	if (hashRoute === "#/v2") {
+		return /* @__PURE__ */ _jsxDEV(RouteV2Page, {}, void 0, false, {
+			fileName: _jsxFileName,
+			lineNumber: 107,
+			columnNumber: 12
+		}, this);
+	}
+	if (hashRoute === "#/v3") {
+		return /* @__PURE__ */ _jsxDEV(RouteV3Page, {}, void 0, false, {
+			fileName: _jsxFileName,
+			lineNumber: 111,
+			columnNumber: 12
+		}, this);
+	}
+	if (hashRoute === "#/concepts") {
+		return /* @__PURE__ */ _jsxDEV(_Fragment, { children: [/* @__PURE__ */ _jsxDEV(HomeShowcase, {
+			onOpenDrive: handleOpenDrive,
+			onOpenAmsterdam: handleOpenAmsterdam
+		}, void 0, false, {
+			fileName: _jsxFileName,
+			lineNumber: 117,
+			columnNumber: 9
+		}, this), driveOpen && /* @__PURE__ */ _jsxDEV(DriveExperience, {
+			onClose: handleCloseDrive,
+			initialLandmarkId
+		}, void 0, false, {
+			fileName: _jsxFileName,
+			lineNumber: 118,
+			columnNumber: 23
+		}, this)] }, void 0, true);
+	}
+	return /* @__PURE__ */ _jsxDEV(_Fragment, { children: [/* @__PURE__ */ _jsxDEV(HomePage, {
+		onOpenDrive: handleOpenDrive,
+		onOpenAmsterdam: handleOpenAmsterdam
+	}, void 0, false, {
+		fileName: _jsxFileName,
+		lineNumber: 125,
+		columnNumber: 7
+	}, this), driveOpen && /* @__PURE__ */ _jsxDEV(DriveExperience, {
+		onClose: handleCloseDrive,
+		initialLandmarkId
+	}, void 0, false, {
+		fileName: _jsxFileName,
+		lineNumber: 126,
+		columnNumber: 21
+	}, this)] }, void 0, true);
+}
+_s3(App, "EhZQsqDvVg6R6ER2mccWufG86gg=");
+_c3 = App;
+var _c, _c2, _c3;
+$RefreshReg$(_c, "Experience");
+$RefreshReg$(_c2, "DriveExperience");
+$RefreshReg$(_c3, "App");
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope;
+import * as __vite_react_currentExports from "/src/App.jsx?t=1779688411762";
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+
+  const currentExports = __vite_react_currentExports;
+  queueMicrotask(() => {
+    RefreshRuntime.registerExportsForReactRefresh("C:/Dev/workspaces/Web/web3d-project/src/App.jsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("C:/Dev/workspaces/Web/web3d-project/src/App.jsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+function $RefreshReg$(type, id) { return RefreshRuntime.register(type, "C:/Dev/workspaces/Web/web3d-project/src/App.jsx" + ' ' + id); }
+function $RefreshSig$() { return RefreshRuntime.createSignatureFunctionForTransform(); }
+
+//# sourceMappingURL=data:application/json;base64,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QkFBaUIsY0FBYyxhQUFhO0FBQ25ELGVBQWEsT0FBTyxvQkFBb0IsY0FBYyxhQUFhO0lBQ2xFLEVBQUUsQ0FBQztDQUVOLE1BQU0sa0JBQWtCLGFBQWEsYUFBYSxTQUFTO0FBQ3pELHVCQUFxQixXQUFXO0FBQ2hDLGVBQWEsS0FBSztJQUNqQixFQUFFLENBQUM7Q0FFTixNQUFNLHNCQUFzQixrQkFBa0I7QUFDNUMsZUFBYSxNQUFNO0FBQ25CLHVCQUFxQixLQUFLO0FBQzFCLFNBQU8sU0FBUyxPQUFPO0lBQ3RCLEVBQUUsQ0FBQztDQUVOLE1BQU0sbUJBQW1CLGtCQUFrQjtBQUN6QyxlQUFhLE1BQU07QUFDbkIsdUJBQXFCLEtBQUs7SUFDekIsRUFBRSxDQUFDO0FBRU4sS0FBSSxjQUFjLGtCQUFrQjtBQUNsQyxTQUFPLHdCQUFDLGdCQUFELEVBQWtCOzs7Ozs7QUFHM0IsS0FBSSxjQUFjLGVBQWU7QUFDL0IsU0FBTyx3QkFBQyxhQUFELEVBQWU7Ozs7OztBQUd4QixLQUFJLGNBQWMsUUFBUTtBQUN4QixTQUFPLHdCQUFDLGFBQUQsRUFBZTs7Ozs7O0FBR3hCLEtBQUksY0FBYyxRQUFRO0FBQ3hCLFNBQU8sd0JBQUMsYUFBRCxFQUFlOzs7Ozs7QUFHeEIsS0FBSSxjQUFjLGNBQWM7QUFDOUIsU0FDRSxnREFDRSx3QkFBQyxjQUFEO0dBQWMsYUFBYTtHQUFpQixpQkFBaUI7R0FBdUI7Ozs7WUFDbkYsYUFBYSx3QkFBQyxpQkFBRDtHQUFpQixTQUFTO0dBQXFDO0dBQXFCOzs7O1dBQ2pHOztBQUlQLFFBQ0UsZ0RBQ0Usd0JBQUMsVUFBRDtFQUFVLGFBQWE7RUFBaUIsaUJBQWlCO0VBQXVCOzs7O1dBQy9FLGFBQWEsd0JBQUMsaUJBQUQ7RUFBaUIsU0FBUztFQUFxQztFQUFxQjs7OztVQUNqRzs7d0NBRU4iLCJuYW1lcyI6W10sInNvdXJjZXMiOlsiQXBwLmpzeCJdLCJ2ZXJzaW9uIjozLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgeyBDYW52YXMgfSBmcm9tICdAcmVhY3QtdGhyZWUvZmliZXInO1xyXG5pbXBvcnQgeyBQZXJzcGVjdGl2ZUNhbWVyYSB9IGZyb20gJ0ByZWFjdC10aHJlZS9kcmVpJztcclxuaW1wb3J0IHsgU3VzcGVuc2UsIHVzZUNhbGxiYWNrLCB1c2VFZmZlY3QsIHVzZVJlZiwgdXNlU3RhdGUgfSBmcm9tICdyZWFjdCc7XHJcbmltcG9ydCB7IEFwcFNoZWxsIH0gZnJvbSAnLi9jb21wb25lbnRzL2xheW91dC9BcHBTaGVsbC5qc3gnO1xuaW1wb3J0IHsgSG9tZVBhZ2UgfSBmcm9tICcuL2NvbXBvbmVudHMvaG9tZS9Ib21lUGFnZS5qc3gnO1xuaW1wb3J0IHsgSG9tZVNob3djYXNlIH0gZnJvbSAnLi9jb21wb25lbnRzL2hvbWUvSG9tZVNob3djYXNlLmpzeCc7XG5pbXBvcnQgeyBTY2VuZUxpZ2h0cyB9IGZyb20gJy4vY29tcG9uZW50cy9zY2VuZS9TY2VuZUxpZ2h0cy5qc3gnO1xyXG5pbXBvcnQgeyBHcm91bmRQbGFuZSB9IGZyb20gJy4vY29tcG9uZW50cy9zY2VuZS9Hcm91bmRQbGFuZS5qc3gnO1xyXG5pbXBvcnQgeyBGb2xsb3dDYW1lcmEgfSBmcm9tICcuL2NvbXBvbmVudHMvY2FtZXJhL0ZvbGxvd0NhbWVyYS5qc3gnO1xyXG5pbXBvcnQgeyBNYXBTdXJmYWNlIH0gZnJvbSAnLi9jb21wb25lbnRzL3NjZW5lL01hcFN1cmZhY2UuanN4JztcclxuaW1wb3J0IHsgUm9hZFJpYmJvbiB9IGZyb20gJy4vY29tcG9uZW50cy9zY2VuZS9Sb2FkUmliYm9uLmpzeCc7XHJcbmltcG9ydCB7IFRpbGVzTGF5ZXIgfSBmcm9tICcuL2NvbXBvbmVudHMvc2NlbmUvVGlsZXNMYXllci5qc3gnO1xyXG5pbXBvcnQgeyBMYW5kbWFya01vZGVscyB9IGZyb20gJy4vY29tcG9uZW50cy9sYW5kbWFya3MvTGFuZG1hcmtNb2RlbHMuanN4JztcclxuaW1wb3J0IHsgVmVoaWNsZUNvbnRyb2xsZXIsIFZlaGljbGVDaGFzc2lzIH0gZnJvbSAnLi9jb21wb25lbnRzL3ZlaGljbGUvVmVoaWNsZUNvbnRyb2xsZXIuanN4JztcbmltcG9ydCB7IFRIRU1FIH0gZnJvbSAnLi9jb25maWcvdGhlbWUuanMnO1xuaW1wb3J0IHsgdXNlQXBwU3RvcmUgfSBmcm9tICcuL3N0YXRlL3VzZUFwcFN0b3JlLmpzJztcbmltcG9ydCB7IEFtc3RlcmRhbVZyTGFiIH0gZnJvbSAnLi9leHBlcmltZW50cy9hbXN0ZXJkYW0tdnIvQW1zdGVyZGFtVnJMYWIuanN4JztcbmltcG9ydCB7IFZlbmljZVZyTGFiIH0gZnJvbSAnLi9leHBlcmltZW50cy92ZW5pY2UtdnIvVmVuaWNlVnJMYWIuanN4JztcbmltcG9ydCB7IFJvdXRlVjJQYWdlLCBSb3V0ZVYzUGFnZSB9IGZyb20gJy4vZXhwZXJpbWVudHMvcm91dGUtdmVyc2lvbnMvUm91dGVWZXJzaW9ucy5qc3gnO1xuXHJcbmZ1bmN0aW9uIEV4cGVyaWVuY2UoeyBpc1N0YXJ0ZWQsIGluaXRpYWxMYW5kbWFya0lkIH0pIHtcclxuICBjb25zdCB2ZWhpY2xlUmVmID0gdXNlUmVmKG51bGwpO1xyXG5cclxuICByZXR1cm4gKFxyXG4gICAgPD5cclxuICAgICAgPFBlcnNwZWN0aXZlQ2FtZXJhIG1ha2VEZWZhdWx0IHBvc2l0aW9uPXtbMCwgOTUsIDEyMF19IGZvdj17NDJ9IC8+XHJcbiAgICAgIDxGb2xsb3dDYW1lcmEgdGFyZ2V0UmVmPXt2ZWhpY2xlUmVmfSAvPlxyXG5cclxuICAgICAgPFN1c3BlbnNlIGZhbGxiYWNrPXtudWxsfT5cclxuICAgICAgICA8U2NlbmVMaWdodHMgLz5cclxuICAgICAgICA8R3JvdW5kUGxhbmUgLz5cclxuICAgICAgICA8VmVoaWNsZUNoYXNzaXMgYm9keVJlZj17dmVoaWNsZVJlZn0gLz5cclxuICAgICAgICA8VmVoaWNsZUNvbnRyb2xsZXIgYm9keVJlZj17dmVoaWNsZVJlZn0gZHJpdmluZ0VuYWJsZWQ9e2lzU3RhcnRlZH0gaW5pdGlhbExhbmRtYXJrSWQ9e2luaXRpYWxMYW5kbWFya0lkfSAvPlxyXG4gICAgICAgIDxNYXBTdXJmYWNlIC8+XHJcbiAgICAgICAgPFRpbGVzTGF5ZXIgLz5cclxuICAgICAgICA8Um9hZFJpYmJvbiAvPlxyXG4gICAgICAgIDxMYW5kbWFya01vZGVscyAvPlxyXG4gICAgICA8L1N1c3BlbnNlPlxyXG4gICAgPC8+XHJcbiAgKTtcclxufVxyXG5cclxuZnVuY3Rpb24gRHJpdmVFeHBlcmllbmNlKHsgb25DbG9zZSwgaW5pdGlhbExhbmRtYXJrSWQgfSkge1xyXG4gIGNvbnN0IFtpc1N0YXJ0ZWQsIHNldElzU3RhcnRlZF0gPSB1c2VTdGF0ZShCb29sZWFuKGluaXRpYWxMYW5kbWFya0lkKSk7XHJcbiAgY29uc3QgaGFuZGxlU3RhcnQgPSB1c2VDYWxsYmFjaygoKSA9PiBzZXRJc1N0YXJ0ZWQodHJ1ZSksIFtdKTtcclxuICBjb25zdCBjbGVhckxhbmRtYXJrID0gdXNlQXBwU3RvcmUoKHN0YXRlKSA9PiBzdGF0ZS5jbGVhckxhbmRtYXJrKTtcclxuICBjb25zdCBvcGVuTGFuZG1hcmtGb2N1cyA9IHVzZUFwcFN0b3JlKChzdGF0ZSkgPT4gc3RhdGUub3BlbkxhbmRtYXJrRm9jdXMpO1xyXG4gIGNvbnN0IHNldENhbWVyYU1vZGUgPSB1c2VBcHBTdG9yZSgoc3RhdGUpID0+IHN0YXRlLnNldENhbWVyYU1vZGUpO1xyXG5cclxuICB1c2VFZmZlY3QoKCkgPT4ge1xyXG4gICAgc2V0SXNTdGFydGVkKEJvb2xlYW4oaW5pdGlhbExhbmRtYXJrSWQpKTtcclxuICAgIGlmIChpbml0aWFsTGFuZG1hcmtJZCkge1xyXG4gICAgICBvcGVuTGFuZG1hcmtGb2N1cyhpbml0aWFsTGFuZG1hcmtJZCk7XHJcbiAgICAgIHJldHVybjtcclxuICAgIH1cclxuICAgIGNsZWFyTGFuZG1hcmsoKTtcclxuICAgIHNldENhbWVyYU1vZGUoJ21hcCcpO1xyXG4gIH0sIFtjbGVhckxhbmRtYXJrLCBpbml0aWFsTGFuZG1hcmtJZCwgb3BlbkxhbmRtYXJrRm9jdXMsIHNldENhbWVyYU1vZGVdKTtcclxuXHJcbiAgcmV0dXJuIChcclxuICAgIDxBcHBTaGVsbCBpc1N0YXJ0ZWQ9e2lzU3RhcnRlZH0gb25TdGFydD17aGFuZGxlU3RhcnR9IG9uQ2xvc2U9e29uQ2xvc2V9PlxyXG4gICAgICA8Q2FudmFzIHNoYWRvd3MgZHByPXtbMSwgMl19IGdsPXt7IGFudGlhbGlhczogdHJ1ZSB9fT5cclxuICAgICAgICA8Y29sb3IgYXR0YWNoPVwiYmFja2dyb3VuZFwiIGFyZ3M9e1tUSEVNRS5za3ldfSAvPlxyXG4gICAgICAgIDxmb2cgYXR0YWNoPVwiZm9nXCIgYXJncz17W1RIRU1FLmhhemUsIDc1LCAyMjBdfSAvPlxyXG4gICAgICAgIDxFeHBlcmllbmNlIGlzU3RhcnRlZD17aXNTdGFydGVkfSBpbml0aWFsTGFuZG1hcmtJZD17aW5pdGlhbExhbmRtYXJrSWR9IC8+XHJcbiAgICAgIDwvQ2FudmFzPlxyXG4gICAgPC9BcHBTaGVsbD5cclxuICApO1xyXG59XHJcblxyXG5leHBvcnQgZGVmYXVsdCBmdW5jdGlvbiBBcHAoKSB7XG4gIGNvbnN0IFtoYXNoUm91dGUsIHNldEhhc2hSb3V0ZV0gPSB1c2VTdGF0ZSgoKSA9PiB3aW5kb3cubG9jYXRpb24uaGFzaCk7XG4gIGNvbnN0IFtkcml2ZU9wZW4sIHNldERyaXZlT3Blbl0gPSB1c2VTdGF0ZShmYWxzZSk7XG4gIGNvbnN0IFtpbml0aWFsTGFuZG1hcmtJZCwgc2V0SW5pdGlhbExhbmRtYXJrSWRdID0gdXNlU3RhdGUobnVsbCk7XG5cbiAgdXNlRWZmZWN0KCgpID0+IHtcbiAgICBjb25zdCBvbkhhc2hDaGFuZ2UgPSAoKSA9PiBzZXRIYXNoUm91dGUod2luZG93LmxvY2F0aW9uLmhhc2gpO1xuICAgIHdpbmRvdy5hZGRFdmVudExpc3RlbmVyKCdoYXNoY2hhbmdlJywgb25IYXNoQ2hhbmdlKTtcbiAgICByZXR1cm4gKCkgPT4gd2luZG93LnJlbW92ZUV2ZW50TGlzdGVuZXIoJ2hhc2hjaGFuZ2UnLCBvbkhhc2hDaGFuZ2UpO1xuICB9LCBbXSk7XG5cbiAgY29uc3QgaGFuZGxlT3BlbkRyaXZlID0gdXNlQ2FsbGJhY2soKGxhbmRtYXJrSWQgPSBudWxsKSA9PiB7XG4gICAgc2V0SW5pdGlhbExhbmRtYXJrSWQobGFuZG1hcmtJZCk7XG4gICAgc2V0RHJpdmVPcGVuKHRydWUpO1xuICB9LCBbXSk7XG5cbiAgY29uc3QgaGFuZGxlT3BlbkFtc3RlcmRhbSA9IHVzZUNhbGxiYWNrKCgpID0+IHtcbiAgICBzZXREcml2ZU9wZW4oZmFsc2UpO1xuICAgIHNldEluaXRpYWxMYW5kbWFya0lkKG51bGwpO1xuICAgIHdpbmRvdy5sb2NhdGlvbi5oYXNoID0gJyMvYW1zdGVyZGFtLXZyJztcbiAgfSwgW10pO1xuXG4gIGNvbnN0IGhhbmRsZUNsb3NlRHJpdmUgPSB1c2VDYWxsYmFjaygoKSA9PiB7XG4gICAgc2V0RHJpdmVPcGVuKGZhbHNlKTtcbiAgICBzZXRJbml0aWFsTGFuZG1hcmtJZChudWxsKTtcbiAgfSwgW10pO1xuXG4gIGlmIChoYXNoUm91dGUgPT09ICcjL2Ftc3RlcmRhbS12cicpIHtcbiAgICByZXR1cm4gPEFtc3RlcmRhbVZyTGFiIC8+O1xuICB9XG5cbiAgaWYgKGhhc2hSb3V0ZSA9PT0gJyMvdmVuaWNlLXZyJykge1xuICAgIHJldHVybiA8VmVuaWNlVnJMYWIgLz47XG4gIH1cblxuICBpZiAoaGFzaFJvdXRlID09PSAnIy92MicpIHtcbiAgICByZXR1cm4gPFJvdXRlVjJQYWdlIC8+O1xuICB9XG5cbiAgaWYgKGhhc2hSb3V0ZSA9PT0gJyMvdjMnKSB7XG4gICAgcmV0dXJuIDxSb3V0ZVYzUGFnZSAvPjtcbiAgfVxuXG4gIGlmIChoYXNoUm91dGUgPT09ICcjL2NvbmNlcHRzJykge1xuICAgIHJldHVybiAoXG4gICAgICA8PlxuICAgICAgICA8SG9tZVNob3djYXNlIG9uT3BlbkRyaXZlPXtoYW5kbGVPcGVuRHJpdmV9IG9uT3BlbkFtc3RlcmRhbT17aGFuZGxlT3BlbkFtc3RlcmRhbX0gLz5cbiAgICAgICAge2RyaXZlT3BlbiAmJiA8RHJpdmVFeHBlcmllbmNlIG9uQ2xvc2U9e2hhbmRsZUNsb3NlRHJpdmV9IGluaXRpYWxMYW5kbWFya0lkPXtpbml0aWFsTGFuZG1hcmtJZH0gLz59XG4gICAgICA8Lz5cbiAgICApO1xuICB9XG5cbiAgcmV0dXJuIChcbiAgICA8PlxuICAgICAgPEhvbWVQYWdlIG9uT3BlbkRyaXZlPXtoYW5kbGVPcGVuRHJpdmV9IG9uT3BlbkFtc3RlcmRhbT17aGFuZGxlT3BlbkFtc3RlcmRhbX0gLz5cbiAgICAgIHtkcml2ZU9wZW4gJiYgPERyaXZlRXhwZXJpZW5jZSBvbkNsb3NlPXtoYW5kbGVDbG9zZURyaXZlfSBpbml0aWFsTGFuZG1hcmtJZD17aW5pdGlhbExhbmRtYXJrSWR9IC8+fVxuICAgIDwvPlxuICApO1xufVxuIl19

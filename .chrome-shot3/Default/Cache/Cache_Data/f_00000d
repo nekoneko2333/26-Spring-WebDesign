@@ -1,0 +1,762 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/components/landmarks/LandmarkModels.jsx");import { Clone, Html, useGLTF } from "/node_modules/.vite/deps/@react-three_drei.js?v=8c9d6053";
+import __vite__cjsImport1_react from "/node_modules/.vite/deps/react.js?v=8c9d6053"; const useMemo = __vite__cjsImport1_react["useMemo"];
+import * as THREE from "/node_modules/.vite/deps/three.js?v=8c9d6053";
+import { landmarks } from "/src/data/landmarks.js";
+import { worldPosToHeight } from "/src/data/terrain.js";
+import { useTerrainData } from "/src/hooks/useTerrainData.js";
+import { useAppStore } from "/src/state/useAppStore.js";
+import { travelLandmarkMeta } from "/src/data/travelGuide.js";
+var _jsxFileName = "C:/Dev/workspaces/Web/web3d-project/src/components/landmarks/LandmarkModels.jsx";
+import __vite__cjsImport8_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=8c9d6053"; const _jsxDEV = __vite__cjsImport8_react_jsxDevRuntime["jsxDEV"]; const _Fragment = __vite__cjsImport8_react_jsxDevRuntime["Fragment"];
+var _s = $RefreshSig$(), _s2 = $RefreshSig$(), _s3 = $RefreshSig$();
+function LoadedLandmarkModel({ landmark }) {
+	_s();
+	const { scene } = useGLTF(landmark.modelPath);
+	const fittedScene = useMemo(() => {
+		const clone = scene.clone(true);
+		const box = new THREE.Box3().setFromObject(clone);
+		const size = new THREE.Vector3();
+		const center = new THREE.Vector3();
+		box.getSize(size);
+		box.getCenter(center);
+		const maxDimension = Math.max(size.x, size.y, size.z) || 1;
+		const targetSize = landmark.scale;
+		const fitScale = targetSize / maxDimension;
+		clone.scale.setScalar(fitScale);
+		clone.position.set(-center.x * fitScale, -box.min.y * fitScale, -center.z * fitScale);
+		return clone;
+	}, [landmark.scale, scene]);
+	return /* @__PURE__ */ _jsxDEV(Clone, {
+		object: fittedScene,
+		castShadow: true,
+		receiveShadow: true
+	}, void 0, false, {
+		fileName: _jsxFileName,
+		lineNumber: 28,
+		columnNumber: 10
+	}, this);
+}
+_s(LoadedLandmarkModel, "nAAPT0zzVxmRjzHpVyLSBGgUQ4U=", false, function() {
+	return [useGLTF];
+});
+_c = LoadedLandmarkModel;
+function PlaceholderLandmarkModel({ landmark }) {
+	const color = {
+		dome: "#c47b58",
+		bridge: "#d7c2a2",
+		cathedral: "#d9d2bd",
+		ruins: "#b99b72",
+		arena: "#c7a070",
+		fountain: "#9fc5cf",
+		palace: "#d6c4a8",
+		tower: "#d7d0bd",
+		temple: "#d2b98f",
+		castle: "#b9a58a",
+		coast: "#8fb9a7",
+		lake: "#7eaec1",
+		mountain: "#9a8f7c",
+		village: "#d8c8a6"
+	}[landmark.modelKind] ?? "#c7a070";
+	return /* @__PURE__ */ _jsxDEV("group", { children: [
+		/* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			receiveShadow: true,
+			position: [
+				0,
+				.35,
+				0
+			],
+			children: [/* @__PURE__ */ _jsxDEV("boxGeometry", { args: [
+				landmark.scale * .86,
+				.7,
+				landmark.scale * .54
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 52,
+				columnNumber: 9
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color,
+				roughness: .72,
+				metalness: .03
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 53,
+				columnNumber: 9
+			}, this)]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 51,
+			columnNumber: 7
+		}, this),
+		landmark.modelKind === "dome" && /* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			position: [
+				0,
+				1.16,
+				0
+			],
+			children: [/* @__PURE__ */ _jsxDEV("sphereGeometry", { args: [
+				landmark.scale * .32,
+				16,
+				8,
+				0,
+				Math.PI * 2,
+				0,
+				Math.PI / 2
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 57,
+				columnNumber: 11
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color: "#b95f46",
+				roughness: .68
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 58,
+				columnNumber: 11
+			}, this)]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 56,
+			columnNumber: 9
+		}, this),
+		landmark.modelKind === "bridge" && /* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			position: [
+				0,
+				.95,
+				0
+			],
+			rotation: [
+				0,
+				0,
+				Math.PI / 2
+			],
+			children: [/* @__PURE__ */ _jsxDEV("torusGeometry", { args: [
+				landmark.scale * .32,
+				.18,
+				8,
+				18,
+				Math.PI
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 63,
+				columnNumber: 11
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color,
+				roughness: .66
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 64,
+				columnNumber: 11
+			}, this)]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 62,
+			columnNumber: 9
+		}, this),
+		landmark.modelKind === "arena" && /* @__PURE__ */ _jsxDEV(_Fragment, { children: [/* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			position: [
+				0,
+				.9,
+				0
+			],
+			children: [/* @__PURE__ */ _jsxDEV("torusGeometry", { args: [
+				landmark.scale * .38,
+				.22,
+				12,
+				48
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 70,
+				columnNumber: 13
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color,
+				roughness: .78
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 71,
+				columnNumber: 13
+			}, this)]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 69,
+			columnNumber: 11
+		}, this), /* @__PURE__ */ _jsxDEV("mesh", {
+			position: [
+				0,
+				.92,
+				0
+			],
+			children: [/* @__PURE__ */ _jsxDEV("torusGeometry", { args: [
+				landmark.scale * .25,
+				.05,
+				8,
+				48
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 74,
+				columnNumber: 13
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color: "#eadbbf",
+				roughness: .72
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 75,
+				columnNumber: 13
+			}, this)]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 73,
+			columnNumber: 11
+		}, this)] }, void 0, true),
+		landmark.modelKind === "cathedral" && [
+			-1.8,
+			0,
+			1.8
+		].map((x) => /* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			position: [
+				x,
+				1.3,
+				0
+			],
+			children: [/* @__PURE__ */ _jsxDEV("coneGeometry", { args: [
+				.42,
+				1.9,
+				5
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 81,
+				columnNumber: 11
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color: "#eee4ce",
+				roughness: .62
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 82,
+				columnNumber: 11
+			}, this)]
+		}, x, true, {
+			fileName: _jsxFileName,
+			lineNumber: 80,
+			columnNumber: 9
+		}, this)),
+		landmark.modelKind === "tower" && /* @__PURE__ */ _jsxDEV(_Fragment, { children: [/* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			position: [
+				0,
+				2.15,
+				0
+			],
+			children: [/* @__PURE__ */ _jsxDEV("cylinderGeometry", { args: [
+				landmark.scale * .18,
+				landmark.scale * .24,
+				landmark.scale * .72,
+				12
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 88,
+				columnNumber: 13
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color,
+				roughness: .64
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 89,
+				columnNumber: 13
+			}, this)]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 87,
+			columnNumber: 11
+		}, this), /* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			position: [
+				0,
+				4.55,
+				0
+			],
+			children: [/* @__PURE__ */ _jsxDEV("coneGeometry", { args: [
+				landmark.scale * .16,
+				landmark.scale * .34,
+				12
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 92,
+				columnNumber: 13
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color: "#b98257",
+				roughness: .58
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 93,
+				columnNumber: 13
+			}, this)]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 91,
+			columnNumber: 11
+		}, this)] }, void 0, true),
+		landmark.modelKind === "fountain" && /* @__PURE__ */ _jsxDEV(_Fragment, { children: [/* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			position: [
+				0,
+				.86,
+				0
+			],
+			children: [/* @__PURE__ */ _jsxDEV("cylinderGeometry", { args: [
+				landmark.scale * .38,
+				landmark.scale * .42,
+				.32,
+				32
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 100,
+				columnNumber: 13
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color: "#c8d6d7",
+				roughness: .42
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 101,
+				columnNumber: 13
+			}, this)]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 99,
+			columnNumber: 11
+		}, this), /* @__PURE__ */ _jsxDEV("mesh", {
+			position: [
+				0,
+				1.12,
+				0
+			],
+			children: [/* @__PURE__ */ _jsxDEV("cylinderGeometry", { args: [
+				landmark.scale * .3,
+				landmark.scale * .3,
+				.08,
+				32
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 104,
+				columnNumber: 13
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color: "#72b9d3",
+				emissive: "#3f9fc0",
+				emissiveIntensity: .18,
+				transparent: true,
+				opacity: .72
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 105,
+				columnNumber: 13
+			}, this)]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 103,
+			columnNumber: 11
+		}, this)] }, void 0, true),
+		["palace", "castle"].includes(landmark.modelKind) && [-2.4, 2.4].map((x) => /* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			position: [
+				x,
+				1.45,
+				0
+			],
+			children: [/* @__PURE__ */ _jsxDEV("cylinderGeometry", { args: [
+				.46,
+				.54,
+				2.2,
+				10
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 111,
+				columnNumber: 11
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color,
+				roughness: .7
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 112,
+				columnNumber: 11
+			}, this)]
+		}, x, true, {
+			fileName: _jsxFileName,
+			lineNumber: 110,
+			columnNumber: 9
+		}, this)),
+		landmark.modelKind === "temple" && [
+			-2.2,
+			-1.1,
+			0,
+			1.1,
+			2.2
+		].map((x) => /* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			position: [
+				x,
+				1.12,
+				-.15
+			],
+			children: [/* @__PURE__ */ _jsxDEV("cylinderGeometry", { args: [
+				.16,
+				.18,
+				1.9,
+				10
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 117,
+				columnNumber: 11
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color: "#e5d2a7",
+				roughness: .78
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 118,
+				columnNumber: 11
+			}, this)]
+		}, x, true, {
+			fileName: _jsxFileName,
+			lineNumber: 116,
+			columnNumber: 9
+		}, this)),
+		landmark.modelKind === "village" && [
+			-1.8,
+			-.55,
+			.8,
+			2
+		].map((x, index) => /* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			position: [
+				x,
+				1.15,
+				index % 2 * .7 - .25
+			],
+			children: [/* @__PURE__ */ _jsxDEV("coneGeometry", { args: [
+				.5,
+				1.2,
+				12
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 123,
+				columnNumber: 11
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color: "#d8c8a6",
+				roughness: .72
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 124,
+				columnNumber: 11
+			}, this)]
+		}, x, true, {
+			fileName: _jsxFileName,
+			lineNumber: 122,
+			columnNumber: 9
+		}, this)),
+		[
+			"coast",
+			"lake",
+			"mountain"
+		].includes(landmark.modelKind) && /* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			position: [
+				0,
+				1.35,
+				0
+			],
+			children: [/* @__PURE__ */ _jsxDEV("coneGeometry", { args: [
+				landmark.scale * .42,
+				landmark.scale * .48,
+				6
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 129,
+				columnNumber: 11
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color,
+				roughness: .84
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 130,
+				columnNumber: 11
+			}, this)]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 128,
+			columnNumber: 9
+		}, this),
+		landmark.modelKind === "ruins" && [
+			-2.1,
+			-.7,
+			.8,
+			2.2
+		].map((x, index) => /* @__PURE__ */ _jsxDEV("mesh", {
+			castShadow: true,
+			position: [
+				x,
+				1 + index % 2 * .22,
+				-.1
+			],
+			children: [/* @__PURE__ */ _jsxDEV("cylinderGeometry", { args: [
+				.18,
+				.22,
+				1.8 + index % 2 * .35,
+				8
+			] }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 135,
+				columnNumber: 11
+			}, this), /* @__PURE__ */ _jsxDEV("meshStandardMaterial", {
+				color: "#d1b58d",
+				roughness: .8
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 136,
+				columnNumber: 11
+			}, this)]
+		}, x, true, {
+			fileName: _jsxFileName,
+			lineNumber: 134,
+			columnNumber: 9
+		}, this))
+	] }, void 0, true, {
+		fileName: _jsxFileName,
+		lineNumber: 50,
+		columnNumber: 5
+	}, this);
+}
+_c2 = PlaceholderLandmarkModel;
+function LandmarkModel({ landmark }) {
+	_s2();
+	const selectLandmark = useAppStore((state) => state.selectLandmark);
+	const language = useAppStore((state) => state.language);
+	useTerrainData();
+	const baseY = worldPosToHeight(landmark.position[0], landmark.position[2]);
+	const displayName = travelLandmarkMeta[landmark.id]?.name?.[language] ?? landmark.name;
+	return /* @__PURE__ */ _jsxDEV("group", {
+		position: [
+			landmark.position[0],
+			baseY,
+			landmark.position[2]
+		],
+		rotation: landmark.rotation,
+		onClick: () => selectLandmark(landmark.id),
+		children: [
+			/* @__PURE__ */ _jsxDEV("mesh", {
+				position: [
+					0,
+					.05,
+					0
+				],
+				rotation: [
+					-Math.PI / 2,
+					0,
+					0
+				],
+				children: [/* @__PURE__ */ _jsxDEV("ringGeometry", { args: [
+					landmark.triggerRadius * .28,
+					landmark.triggerRadius * .42,
+					64
+				] }, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 153,
+					columnNumber: 9
+				}, this), /* @__PURE__ */ _jsxDEV("meshBasicMaterial", {
+					color: "#7ed0e4",
+					transparent: true,
+					opacity: .28,
+					depthWrite: false,
+					blending: THREE.AdditiveBlending,
+					side: THREE.DoubleSide
+				}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 154,
+					columnNumber: 9
+				}, this)]
+			}, void 0, true, {
+				fileName: _jsxFileName,
+				lineNumber: 152,
+				columnNumber: 7
+			}, this),
+			/* @__PURE__ */ _jsxDEV("mesh", {
+				position: [
+					0,
+					.04,
+					0
+				],
+				rotation: [
+					-Math.PI / 2,
+					0,
+					0
+				],
+				children: [/* @__PURE__ */ _jsxDEV("circleGeometry", { args: [landmark.triggerRadius * .24, 48] }, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 157,
+					columnNumber: 9
+				}, this), /* @__PURE__ */ _jsxDEV("meshBasicMaterial", {
+					color: "#f0d490",
+					transparent: true,
+					opacity: .08,
+					depthWrite: false
+				}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 158,
+					columnNumber: 9
+				}, this)]
+			}, void 0, true, {
+				fileName: _jsxFileName,
+				lineNumber: 156,
+				columnNumber: 7
+			}, this),
+			landmark.modelPath ? /* @__PURE__ */ _jsxDEV(LoadedLandmarkModel, { landmark }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 160,
+				columnNumber: 29
+			}, this) : /* @__PURE__ */ _jsxDEV(PlaceholderLandmarkModel, { landmark }, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 160,
+				columnNumber: 75
+			}, this),
+			/* @__PURE__ */ _jsxDEV("pointLight", {
+				position: [
+					0,
+					4.8,
+					0
+				],
+				color: "#f0d490",
+				distance: 18,
+				intensity: .42
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 161,
+				columnNumber: 7
+			}, this),
+			/* @__PURE__ */ _jsxDEV("mesh", {
+				position: [
+					0,
+					2.8,
+					0
+				],
+				visible: false,
+				onClick: () => selectLandmark(landmark.id),
+				children: [/* @__PURE__ */ _jsxDEV("cylinderGeometry", { args: [
+					landmark.triggerRadius * .45,
+					landmark.triggerRadius * .45,
+					6,
+					20
+				] }, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 163,
+					columnNumber: 9
+				}, this), /* @__PURE__ */ _jsxDEV("meshBasicMaterial", {
+					transparent: true,
+					opacity: 0
+				}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 164,
+					columnNumber: 9
+				}, this)]
+			}, void 0, true, {
+				fileName: _jsxFileName,
+				lineNumber: 162,
+				columnNumber: 7
+			}, this),
+			/* @__PURE__ */ _jsxDEV(Html, {
+				position: [
+					0,
+					4.2,
+					0
+				],
+				center: true,
+				distanceFactor: 28,
+				transform: false,
+				sprite: true,
+				children: /* @__PURE__ */ _jsxDEV("div", {
+					className: "landmark-chip",
+					children: displayName
+				}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 167,
+					columnNumber: 9
+				}, this)
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 166,
+				columnNumber: 7
+			}, this)
+		]
+	}, void 0, true, {
+		fileName: _jsxFileName,
+		lineNumber: 151,
+		columnNumber: 5
+	}, this);
+}
+_s2(LandmarkModel, "4rgdhpBPwG8SIoWaYtDVO6Fwh4M=", false, function() {
+	return [
+		useAppStore,
+		useAppStore,
+		useTerrainData
+	];
+});
+_c3 = LandmarkModel;
+export function LandmarkModels() {
+	_s3();
+	const activeRouteIds = useAppStore((state) => state.activeRouteIds);
+	const visibleLandmarks = useMemo(() => {
+		const ids = activeRouteIds?.length ? new Set(activeRouteIds) : new Set([
+			"milan_duomo",
+			"venice_rialto",
+			"florence_duomo",
+			"pisa",
+			"colosseum",
+			"pompeii"
+		]);
+		return landmarks.filter((landmark) => ids.has(landmark.id));
+	}, [activeRouteIds]);
+	return /* @__PURE__ */ _jsxDEV("group", { children: visibleLandmarks.map((landmark) => /* @__PURE__ */ _jsxDEV(LandmarkModel, { landmark }, landmark.id, false, {
+		fileName: _jsxFileName,
+		lineNumber: 183,
+		columnNumber: 9
+	}, this)) }, void 0, false, {
+		fileName: _jsxFileName,
+		lineNumber: 181,
+		columnNumber: 5
+	}, this);
+}
+_s3(LandmarkModels, "4B2pVC5JPN9A6ijCAsoN1Vjbo3o=", false, function() {
+	return [useAppStore];
+});
+_c4 = LandmarkModels;
+useGLTF.preload("/models/colosseum.glb");
+useGLTF.preload("/models/leaning_tower_of_pisa.glb");
+var _c, _c2, _c3, _c4;
+$RefreshReg$(_c, "LoadedLandmarkModel");
+$RefreshReg$(_c2, "PlaceholderLandmarkModel");
+$RefreshReg$(_c3, "LandmarkModel");
+$RefreshReg$(_c4, "LandmarkModels");
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope;
+import * as __vite_react_currentExports from "/src/components/landmarks/LandmarkModels.jsx";
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+
+  const currentExports = __vite_react_currentExports;
+  queueMicrotask(() => {
+    RefreshRuntime.registerExportsForReactRefresh("C:/Dev/workspaces/Web/web3d-project/src/components/landmarks/LandmarkModels.jsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("C:/Dev/workspaces/Web/web3d-project/src/components/landmarks/LandmarkModels.jsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+function $RefreshReg$(type, id) { return RefreshRuntime.register(type, "C:/Dev/workspaces/Web/web3d-project/src/components/landmarks/LandmarkModels.jsx" + ' ' + id); }
+function $RefreshSig$() { return RefreshRuntime.createSignatureFunctionForTransform(); }
+
+//# sourceMappingURL=data:application/json;base64,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anN4Il0sInZlcnNpb24iOjMsInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IENsb25lLCBIdG1sLCB1c2VHTFRGIH0gZnJvbSAnQHJlYWN0LXRocmVlL2RyZWknO1xyXG5pbXBvcnQgeyB1c2VNZW1vIH0gZnJvbSAncmVhY3QnO1xyXG5pbXBvcnQgKiBhcyBUSFJFRSBmcm9tICd0aHJlZSc7XHJcbmltcG9ydCB7IGxhbmRtYXJrcyB9IGZyb20gJy4uLy4uL2RhdGEvbGFuZG1hcmtzLmpzJztcclxuaW1wb3J0IHsgd29ybGRQb3NUb0hlaWdodCB9IGZyb20gJy4uLy4uL2RhdGEvdGVycmFpbi5qcyc7XHJcbmltcG9ydCB7IHVzZVRlcnJhaW5EYXRhIH0gZnJvbSAnLi4vLi4vaG9va3MvdXNlVGVycmFpbkRhdGEuanMnO1xyXG5pbXBvcnQgeyB1c2VBcHBTdG9yZSB9IGZyb20gJy4uLy4uL3N0YXRlL3VzZUFwcFN0b3JlLmpzJztcclxuaW1wb3J0IHsgdHJhdmVsTGFuZG1hcmtNZXRhIH0gZnJvbSAnLi4vLi4vZGF0YS90cmF2ZWxHdWlkZS5qcyc7XHJcblxyXG5mdW5jdGlvbiBMb2FkZWRMYW5kbWFya01vZGVsKHsgbGFuZG1hcmsgfSkge1xyXG4gIGNvbnN0IHsgc2NlbmUgfSA9IHVzZUdMVEYobGFuZG1hcmsubW9kZWxQYXRoKTtcclxuICBjb25zdCBmaXR0ZWRTY2VuZSA9IHVzZU1lbW8oKCkgPT4ge1xyXG4gICAgY29uc3QgY2xvbmUgPSBzY2VuZS5jbG9uZSh0cnVlKTtcclxuICAgIGNvbnN0IGJveCA9IG5ldyBUSFJFRS5Cb3gzKCkuc2V0RnJvbU9iamVjdChjbG9uZSk7XHJcbiAgICBjb25zdCBzaXplID0gbmV3IFRIUkVFLlZlY3RvcjMoKTtcclxuICAgIGNvbnN0IGNlbnRlciA9IG5ldyBUSFJFRS5WZWN0b3IzKCk7XHJcbiAgICBib3guZ2V0U2l6ZShzaXplKTtcclxuICAgIGJveC5nZXRDZW50ZXIoY2VudGVyKTtcclxuICAgIGNvbnN0IG1heERpbWVuc2lvbiA9IE1hdGgubWF4KHNpemUueCwgc2l6ZS55LCBzaXplLnopIHx8IDE7XHJcbiAgICBjb25zdCB0YXJnZXRTaXplID0gbGFuZG1hcmsuc2NhbGU7XHJcbiAgICBjb25zdCBmaXRTY2FsZSA9IHRhcmdldFNpemUgLyBtYXhEaW1lbnNpb247XHJcblxyXG4gICAgY2xvbmUuc2NhbGUuc2V0U2NhbGFyKGZpdFNjYWxlKTtcclxuICAgIGNsb25lLnBvc2l0aW9uLnNldCgtY2VudGVyLnggKiBmaXRTY2FsZSwgLWJveC5taW4ueSAqIGZpdFNjYWxlLCAtY2VudGVyLnogKiBmaXRTY2FsZSk7XHJcbiAgICByZXR1cm4gY2xvbmU7XHJcbiAgfSwgW2xhbmRtYXJrLnNjYWxlLCBzY2VuZV0pO1xyXG5cclxuICByZXR1cm4gPENsb25lIG9iamVjdD17Zml0dGVkU2NlbmV9IGNhc3RTaGFkb3cgcmVjZWl2ZVNoYWRvdyAvPjtcclxufVxyXG5cclxuZnVuY3Rpb24gUGxhY2Vob2xkZXJMYW5kbWFya01vZGVsKHsgbGFuZG1hcmsgfSkge1xyXG4gIGNvbnN0IGNvbG9yID0ge1xuICAgIGRvbWU6ICcjYzQ3YjU4JyxcbiAgICBicmlkZ2U6ICcjZDdjMmEyJyxcbiAgICBjYXRoZWRyYWw6ICcjZDlkMmJkJyxcbiAgICBydWluczogJyNiOTliNzInLFxuICAgIGFyZW5hOiAnI2M3YTA3MCcsXG4gICAgZm91bnRhaW46ICcjOWZjNWNmJyxcbiAgICBwYWxhY2U6ICcjZDZjNGE4JyxcbiAgICB0b3dlcjogJyNkN2QwYmQnLFxuICAgIHRlbXBsZTogJyNkMmI5OGYnLFxuICAgIGNhc3RsZTogJyNiOWE1OGEnLFxuICAgIGNvYXN0OiAnIzhmYjlhNycsXG4gICAgbGFrZTogJyM3ZWFlYzEnLFxuICAgIG1vdW50YWluOiAnIzlhOGY3YycsXG4gICAgdmlsbGFnZTogJyNkOGM4YTYnLFxuICB9W2xhbmRtYXJrLm1vZGVsS2luZF0gPz8gJyNjN2EwNzAnO1xuXHJcbiAgcmV0dXJuIChcclxuICAgIDxncm91cD5cclxuICAgICAgPG1lc2ggY2FzdFNoYWRvdyByZWNlaXZlU2hhZG93IHBvc2l0aW9uPXtbMCwgMC4zNSwgMF19PlxyXG4gICAgICAgIDxib3hHZW9tZXRyeSBhcmdzPXtbbGFuZG1hcmsuc2NhbGUgKiAwLjg2LCAwLjcsIGxhbmRtYXJrLnNjYWxlICogMC41NF19IC8+XHJcbiAgICAgICAgPG1lc2hTdGFuZGFyZE1hdGVyaWFsIGNvbG9yPXtjb2xvcn0gcm91Z2huZXNzPXswLjcyfSBtZXRhbG5lc3M9ezAuMDN9IC8+XHJcbiAgICAgIDwvbWVzaD5cclxuICAgICAge2xhbmRtYXJrLm1vZGVsS2luZCA9PT0gJ2RvbWUnICYmIChcclxuICAgICAgICA8bWVzaCBjYXN0U2hhZG93IHBvc2l0aW9uPXtbMCwgMS4xNiwgMF19PlxyXG4gICAgICAgICAgPHNwaGVyZUdlb21ldHJ5IGFyZ3M9e1tsYW5kbWFyay5zY2FsZSAqIDAuMzIsIDE2LCA4LCAwLCBNYXRoLlBJICogMiwgMCwgTWF0aC5QSSAvIDJdfSAvPlxyXG4gICAgICAgICAgPG1lc2hTdGFuZGFyZE1hdGVyaWFsIGNvbG9yPVwiI2I5NWY0NlwiIHJvdWdobmVzcz17MC42OH0gLz5cclxuICAgICAgICA8L21lc2g+XHJcbiAgICAgICl9XHJcbiAgICAgIHtsYW5kbWFyay5tb2RlbEtpbmQgPT09ICdicmlkZ2UnICYmIChcbiAgICAgICAgPG1lc2ggY2FzdFNoYWRvdyBwb3NpdGlvbj17WzAsIDAuOTUsIDBdfSByb3RhdGlvbj17WzAsIDAsIE1hdGguUEkgLyAyXX0+XHJcbiAgICAgICAgICA8dG9ydXNHZW9tZXRyeSBhcmdzPXtbbGFuZG1hcmsuc2NhbGUgKiAwLjMyLCAwLjE4LCA4LCAxOCwgTWF0aC5QSV19IC8+XHJcbiAgICAgICAgICA8bWVzaFN0YW5kYXJkTWF0ZXJpYWwgY29sb3I9e2NvbG9yfSByb3VnaG5lc3M9ezAuNjZ9IC8+XHJcbiAgICAgICAgPC9tZXNoPlxyXG4gICAgICApfVxuICAgICAge2xhbmRtYXJrLm1vZGVsS2luZCA9PT0gJ2FyZW5hJyAmJiAoXG4gICAgICAgIDw+XG4gICAgICAgICAgPG1lc2ggY2FzdFNoYWRvdyBwb3NpdGlvbj17WzAsIDAuOSwgMF19PlxuICAgICAgICAgICAgPHRvcnVzR2VvbWV0cnkgYXJncz17W2xhbmRtYXJrLnNjYWxlICogMC4zOCwgMC4yMiwgMTIsIDQ4XX0gLz5cbiAgICAgICAgICAgIDxtZXNoU3RhbmRhcmRNYXRlcmlhbCBjb2xvcj17Y29sb3J9IHJvdWdobmVzcz17MC43OH0gLz5cbiAgICAgICAgICA8L21lc2g+XG4gICAgICAgICAgPG1lc2ggcG9zaXRpb249e1swLCAwLjkyLCAwXX0+XG4gICAgICAgICAgICA8dG9ydXNHZW9tZXRyeSBhcmdzPXtbbGFuZG1hcmsuc2NhbGUgKiAwLjI1LCAwLjA1LCA4LCA0OF19IC8+XG4gICAgICAgICAgICA8bWVzaFN0YW5kYXJkTWF0ZXJpYWwgY29sb3I9XCIjZWFkYmJmXCIgcm91Z2huZXNzPXswLjcyfSAvPlxuICAgICAgICAgIDwvbWVzaD5cbiAgICAgICAgPC8+XG4gICAgICApfVxuICAgICAge2xhbmRtYXJrLm1vZGVsS2luZCA9PT0gJ2NhdGhlZHJhbCcgJiYgWyAtMS44LCAwLCAxLjggXS5tYXAoKHgpID0+IChcbiAgICAgICAgPG1lc2gga2V5PXt4fSBjYXN0U2hhZG93IHBvc2l0aW9uPXtbeCwgMS4zLCAwXX0+XHJcbiAgICAgICAgICA8Y29uZUdlb21ldHJ5IGFyZ3M9e1swLjQyLCAxLjksIDVdfSAvPlxyXG4gICAgICAgICAgPG1lc2hTdGFuZGFyZE1hdGVyaWFsIGNvbG9yPVwiI2VlZTRjZVwiIHJvdWdobmVzcz17MC42Mn0gLz5cclxuICAgICAgICA8L21lc2g+XHJcbiAgICAgICkpfVxuICAgICAge2xhbmRtYXJrLm1vZGVsS2luZCA9PT0gJ3Rvd2VyJyAmJiAoXG4gICAgICAgIDw+XG4gICAgICAgICAgPG1lc2ggY2FzdFNoYWRvdyBwb3NpdGlvbj17WzAsIDIuMTUsIDBdfT5cbiAgICAgICAgICAgIDxjeWxpbmRlckdlb21ldHJ5IGFyZ3M9e1tsYW5kbWFyay5zY2FsZSAqIDAuMTgsIGxhbmRtYXJrLnNjYWxlICogMC4yNCwgbGFuZG1hcmsuc2NhbGUgKiAwLjcyLCAxMl19IC8+XG4gICAgICAgICAgICA8bWVzaFN0YW5kYXJkTWF0ZXJpYWwgY29sb3I9e2NvbG9yfSByb3VnaG5lc3M9ezAuNjR9IC8+XG4gICAgICAgICAgPC9tZXNoPlxuICAgICAgICAgIDxtZXNoIGNhc3RTaGFkb3cgcG9zaXRpb249e1swLCA0LjU1LCAwXX0+XG4gICAgICAgICAgICA8Y29uZUdlb21ldHJ5IGFyZ3M9e1tsYW5kbWFyay5zY2FsZSAqIDAuMTYsIGxhbmRtYXJrLnNjYWxlICogMC4zNCwgMTJdfSAvPlxuICAgICAgICAgICAgPG1lc2hTdGFuZGFyZE1hdGVyaWFsIGNvbG9yPVwiI2I5ODI1N1wiIHJvdWdobmVzcz17MC41OH0gLz5cbiAgICAgICAgICA8L21lc2g+XG4gICAgICAgIDwvPlxuICAgICAgKX1cbiAgICAgIHtsYW5kbWFyay5tb2RlbEtpbmQgPT09ICdmb3VudGFpbicgJiYgKFxuICAgICAgICA8PlxuICAgICAgICAgIDxtZXNoIGNhc3RTaGFkb3cgcG9zaXRpb249e1swLCAwLjg2LCAwXX0+XG4gICAgICAgICAgICA8Y3lsaW5kZXJHZW9tZXRyeSBhcmdzPXtbbGFuZG1hcmsuc2NhbGUgKiAwLjM4LCBsYW5kbWFyay5zY2FsZSAqIDAuNDIsIDAuMzIsIDMyXX0gLz5cbiAgICAgICAgICAgIDxtZXNoU3RhbmRhcmRNYXRlcmlhbCBjb2xvcj1cIiNjOGQ2ZDdcIiByb3VnaG5lc3M9ezAuNDJ9IC8+XG4gICAgICAgICAgPC9tZXNoPlxuICAgICAgICAgIDxtZXNoIHBvc2l0aW9uPXtbMCwgMS4xMiwgMF19PlxuICAgICAgICAgICAgPGN5bGluZGVyR2VvbWV0cnkgYXJncz17W2xhbmRtYXJrLnNjYWxlICogMC4zLCBsYW5kbWFyay5zY2FsZSAqIDAuMywgMC4wOCwgMzJdfSAvPlxuICAgICAgICAgICAgPG1lc2hTdGFuZGFyZE1hdGVyaWFsIGNvbG9yPVwiIzcyYjlkM1wiIGVtaXNzaXZlPVwiIzNmOWZjMFwiIGVtaXNzaXZlSW50ZW5zaXR5PXswLjE4fSB0cmFuc3BhcmVudCBvcGFjaXR5PXswLjcyfSAvPlxuICAgICAgICAgIDwvbWVzaD5cbiAgICAgICAgPC8+XG4gICAgICApfVxuICAgICAge1sncGFsYWNlJywgJ2Nhc3RsZSddLmluY2x1ZGVzKGxhbmRtYXJrLm1vZGVsS2luZCkgJiYgWyAtMi40LCAyLjQgXS5tYXAoKHgpID0+IChcbiAgICAgICAgPG1lc2gga2V5PXt4fSBjYXN0U2hhZG93IHBvc2l0aW9uPXtbeCwgMS40NSwgMF19PlxuICAgICAgICAgIDxjeWxpbmRlckdlb21ldHJ5IGFyZ3M9e1swLjQ2LCAwLjU0LCAyLjIsIDEwXX0gLz5cbiAgICAgICAgICA8bWVzaFN0YW5kYXJkTWF0ZXJpYWwgY29sb3I9e2NvbG9yfSByb3VnaG5lc3M9ezAuN30gLz5cbiAgICAgICAgPC9tZXNoPlxuICAgICAgKSl9XG4gICAgICB7bGFuZG1hcmsubW9kZWxLaW5kID09PSAndGVtcGxlJyAmJiBbIC0yLjIsIC0xLjEsIDAsIDEuMSwgMi4yIF0ubWFwKCh4KSA9PiAoXG4gICAgICAgIDxtZXNoIGtleT17eH0gY2FzdFNoYWRvdyBwb3NpdGlvbj17W3gsIDEuMTIsIC0wLjE1XX0+XG4gICAgICAgICAgPGN5bGluZGVyR2VvbWV0cnkgYXJncz17WzAuMTYsIDAuMTgsIDEuOSwgMTBdfSAvPlxuICAgICAgICAgIDxtZXNoU3RhbmRhcmRNYXRlcmlhbCBjb2xvcj1cIiNlNWQyYTdcIiByb3VnaG5lc3M9ezAuNzh9IC8+XG4gICAgICAgIDwvbWVzaD5cbiAgICAgICkpfVxuICAgICAge2xhbmRtYXJrLm1vZGVsS2luZCA9PT0gJ3ZpbGxhZ2UnICYmIFsgLTEuOCwgLTAuNTUsIDAuOCwgMi4wIF0ubWFwKCh4LCBpbmRleCkgPT4gKFxuICAgICAgICA8bWVzaCBrZXk9e3h9IGNhc3RTaGFkb3cgcG9zaXRpb249e1t4LCAxLjE1LCAoaW5kZXggJSAyKSAqIDAuNyAtIDAuMjVdfT5cbiAgICAgICAgICA8Y29uZUdlb21ldHJ5IGFyZ3M9e1swLjUsIDEuMiwgMTJdfSAvPlxuICAgICAgICAgIDxtZXNoU3RhbmRhcmRNYXRlcmlhbCBjb2xvcj1cIiNkOGM4YTZcIiByb3VnaG5lc3M9ezAuNzJ9IC8+XG4gICAgICAgIDwvbWVzaD5cbiAgICAgICkpfVxuICAgICAge1snY29hc3QnLCAnbGFrZScsICdtb3VudGFpbiddLmluY2x1ZGVzKGxhbmRtYXJrLm1vZGVsS2luZCkgJiYgKFxuICAgICAgICA8bWVzaCBjYXN0U2hhZG93IHBvc2l0aW9uPXtbMCwgMS4zNSwgMF19PlxuICAgICAgICAgIDxjb25lR2VvbWV0cnkgYXJncz17W2xhbmRtYXJrLnNjYWxlICogMC40MiwgbGFuZG1hcmsuc2NhbGUgKiAwLjQ4LCA2XX0gLz5cbiAgICAgICAgICA8bWVzaFN0YW5kYXJkTWF0ZXJpYWwgY29sb3I9e2NvbG9yfSByb3VnaG5lc3M9ezAuODR9IC8+XG4gICAgICAgIDwvbWVzaD5cbiAgICAgICl9XG4gICAgICB7bGFuZG1hcmsubW9kZWxLaW5kID09PSAncnVpbnMnICYmIFsgLTIuMSwgLTAuNywgMC44LCAyLjIgXS5tYXAoKHgsIGluZGV4KSA9PiAoXHJcbiAgICAgICAgPG1lc2gga2V5PXt4fSBjYXN0U2hhZG93IHBvc2l0aW9uPXtbeCwgMSArIChpbmRleCAlIDIpICogMC4yMiwgLTAuMV19PlxyXG4gICAgICAgICAgPGN5bGluZGVyR2VvbWV0cnkgYXJncz17WzAuMTgsIDAuMjIsIDEuOCArIChpbmRleCAlIDIpICogMC4zNSwgOF19IC8+XHJcbiAgICAgICAgICA8bWVzaFN0YW5kYXJkTWF0ZXJpYWwgY29sb3I9XCIjZDFiNThkXCIgcm91Z2huZXNzPXswLjh9IC8+XHJcbiAgICAgICAgPC9tZXNoPlxyXG4gICAgICApKX1cclxuICAgIDwvZ3JvdXA+XHJcbiAgKTtcclxufVxyXG5cclxuZnVuY3Rpb24gTGFuZG1hcmtNb2RlbCh7IGxhbmRtYXJrIH0pIHtcclxuICBjb25zdCBzZWxlY3RMYW5kbWFyayA9IHVzZUFwcFN0b3JlKChzdGF0ZSkgPT4gc3RhdGUuc2VsZWN0TGFuZG1hcmspO1xyXG4gIGNvbnN0IGxhbmd1YWdlID0gdXNlQXBwU3RvcmUoKHN0YXRlKSA9PiBzdGF0ZS5sYW5ndWFnZSk7XHJcbiAgdXNlVGVycmFpbkRhdGEoKTtcclxuICBjb25zdCBiYXNlWSA9IHdvcmxkUG9zVG9IZWlnaHQobGFuZG1hcmsucG9zaXRpb25bMF0sIGxhbmRtYXJrLnBvc2l0aW9uWzJdKTtcclxuICBjb25zdCBkaXNwbGF5TmFtZSA9IHRyYXZlbExhbmRtYXJrTWV0YVtsYW5kbWFyay5pZF0/Lm5hbWU/LltsYW5ndWFnZV0gPz8gbGFuZG1hcmsubmFtZTtcclxuXHJcbiAgcmV0dXJuIChcclxuICAgIDxncm91cCBwb3NpdGlvbj17W2xhbmRtYXJrLnBvc2l0aW9uWzBdLCBiYXNlWSwgbGFuZG1hcmsucG9zaXRpb25bMl1dfSByb3RhdGlvbj17bGFuZG1hcmsucm90YXRpb259IG9uQ2xpY2s9eygpID0+IHNlbGVjdExhbmRtYXJrKGxhbmRtYXJrLmlkKX0+XHJcbiAgICAgIDxtZXNoIHBvc2l0aW9uPXtbMCwgMC4wNSwgMF19IHJvdGF0aW9uPXtbLU1hdGguUEkgLyAyLCAwLCAwXX0+XHJcbiAgICAgICAgPHJpbmdHZW9tZXRyeSBhcmdzPXtbbGFuZG1hcmsudHJpZ2dlclJhZGl1cyAqIDAuMjgsIGxhbmRtYXJrLnRyaWdnZXJSYWRpdXMgKiAwLjQyLCA2NF19IC8+XHJcbiAgICAgICAgPG1lc2hCYXNpY01hdGVyaWFsIGNvbG9yPVwiIzdlZDBlNFwiIHRyYW5zcGFyZW50IG9wYWNpdHk9ezAuMjh9IGRlcHRoV3JpdGU9e2ZhbHNlfSBibGVuZGluZz17VEhSRUUuQWRkaXRpdmVCbGVuZGluZ30gc2lkZT17VEhSRUUuRG91YmxlU2lkZX0gLz5cclxuICAgICAgPC9tZXNoPlxyXG4gICAgICA8bWVzaCBwb3NpdGlvbj17WzAsIDAuMDQsIDBdfSByb3RhdGlvbj17Wy1NYXRoLlBJIC8gMiwgMCwgMF19PlxyXG4gICAgICAgIDxjaXJjbGVHZW9tZXRyeSBhcmdzPXtbbGFuZG1hcmsudHJpZ2dlclJhZGl1cyAqIDAuMjQsIDQ4XX0gLz5cclxuICAgICAgICA8bWVzaEJhc2ljTWF0ZXJpYWwgY29sb3I9XCIjZjBkNDkwXCIgdHJhbnNwYXJlbnQgb3BhY2l0eT17MC4wOH0gZGVwdGhXcml0ZT17ZmFsc2V9IC8+XHJcbiAgICAgIDwvbWVzaD5cclxuICAgICAge2xhbmRtYXJrLm1vZGVsUGF0aCA/IDxMb2FkZWRMYW5kbWFya01vZGVsIGxhbmRtYXJrPXtsYW5kbWFya30gLz4gOiA8UGxhY2Vob2xkZXJMYW5kbWFya01vZGVsIGxhbmRtYXJrPXtsYW5kbWFya30gLz59XHJcbiAgICAgIDxwb2ludExpZ2h0IHBvc2l0aW9uPXtbMCwgNC44LCAwXX0gY29sb3I9XCIjZjBkNDkwXCIgZGlzdGFuY2U9ezE4fSBpbnRlbnNpdHk9ezAuNDJ9IC8+XHJcbiAgICAgIDxtZXNoIHBvc2l0aW9uPXtbMCwgMi44LCAwXX0gdmlzaWJsZT17ZmFsc2V9IG9uQ2xpY2s9eygpID0+IHNlbGVjdExhbmRtYXJrKGxhbmRtYXJrLmlkKX0+XHJcbiAgICAgICAgPGN5bGluZGVyR2VvbWV0cnkgYXJncz17W2xhbmRtYXJrLnRyaWdnZXJSYWRpdXMgKiAwLjQ1LCBsYW5kbWFyay50cmlnZ2VyUmFkaXVzICogMC40NSwgNiwgMjBdfSAvPlxyXG4gICAgICAgIDxtZXNoQmFzaWNNYXRlcmlhbCB0cmFuc3BhcmVudCBvcGFjaXR5PXswfSAvPlxyXG4gICAgICA8L21lc2g+XHJcbiAgICAgIDxIdG1sIHBvc2l0aW9uPXtbMCwgNC4yLCAwXX0gY2VudGVyIGRpc3RhbmNlRmFjdG9yPXsyOH0gdHJhbnNmb3JtPXtmYWxzZX0gc3ByaXRlPlxyXG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwibGFuZG1hcmstY2hpcFwiPntkaXNwbGF5TmFtZX08L2Rpdj5cclxuICAgICAgPC9IdG1sPlxyXG4gICAgPC9ncm91cD5cclxuICApO1xyXG59XHJcblxyXG5leHBvcnQgZnVuY3Rpb24gTGFuZG1hcmtNb2RlbHMoKSB7XG4gIGNvbnN0IGFjdGl2ZVJvdXRlSWRzID0gdXNlQXBwU3RvcmUoKHN0YXRlKSA9PiBzdGF0ZS5hY3RpdmVSb3V0ZUlkcyk7XG4gIGNvbnN0IHZpc2libGVMYW5kbWFya3MgPSB1c2VNZW1vKCgpID0+IHtcbiAgICBjb25zdCBpZHMgPSBhY3RpdmVSb3V0ZUlkcz8ubGVuZ3RoID8gbmV3IFNldChhY3RpdmVSb3V0ZUlkcykgOiBuZXcgU2V0KFsnbWlsYW5fZHVvbW8nLCAndmVuaWNlX3JpYWx0bycsICdmbG9yZW5jZV9kdW9tbycsICdwaXNhJywgJ2NvbG9zc2V1bScsICdwb21wZWlpJ10pO1xuICAgIHJldHVybiBsYW5kbWFya3MuZmlsdGVyKChsYW5kbWFyaykgPT4gaWRzLmhhcyhsYW5kbWFyay5pZCkpO1xuICB9LCBbYWN0aXZlUm91dGVJZHNdKTtcblxuICByZXR1cm4gKFxuICAgIDxncm91cD5cbiAgICAgIHt2aXNpYmxlTGFuZG1hcmtzLm1hcCgobGFuZG1hcmspID0+IChcbiAgICAgICAgPExhbmRtYXJrTW9kZWwga2V5PXtsYW5kbWFyay5pZH0gbGFuZG1hcms9e2xhbmRtYXJrfSAvPlxuICAgICAgKSl9XG4gICAgPC9ncm91cD5cclxuICApO1xyXG59XHJcblxyXG51c2VHTFRGLnByZWxvYWQoJy9tb2RlbHMvY29sb3NzZXVtLmdsYicpO1xyXG51c2VHTFRGLnByZWxvYWQoJy9tb2RlbHMvbGVhbmluZ190b3dlcl9vZl9waXNhLmdsYicpO1xyXG4iXX0=
