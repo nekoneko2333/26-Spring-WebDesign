@@ -2,7 +2,6 @@ import { Canvas } from '@react-three/fiber';
 import { PerspectiveCamera } from '@react-three/drei';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { AppShell } from './components/layout/AppShell.jsx';
-import { HomePage } from './components/home/HomePage.jsx';
 import { HomeShowcase } from './components/home/HomeShowcase.jsx';
 import { SceneLights } from './components/scene/SceneLights.jsx';
 import { GroundPlane } from './components/scene/GroundPlane.jsx';
@@ -14,9 +13,8 @@ import { LandmarkModels } from './components/landmarks/LandmarkModels.jsx';
 import { VehicleController, VehicleChassis } from './components/vehicle/VehicleController.jsx';
 import { THEME } from './config/theme.js';
 import { useAppStore } from './state/useAppStore.js';
-import { AmsterdamVrLab } from './experiments/amsterdam-vr/AmsterdamVrLab.jsx';
 import { VeniceVrLab } from './experiments/venice-vr/VeniceVrLab.jsx';
-import { RouteV2Page, RouteV3Page } from './experiments/route-versions/RouteVersions.jsx';
+import { RouteV2Page } from './experiments/route-versions/RouteVersions.jsx';
 
 function Experience({ isStarted, initialLandmarkId }) {
   const vehicleRef = useRef(null);
@@ -68,10 +66,70 @@ function DriveExperience({ onClose, initialLandmarkId }) {
   );
 }
 
+function HomeCompareSwitch({ active, onChange }) {
+  return (
+    <div className="home-compare-switch" aria-label="Home version switch">
+      <button type="button" className={active === 'showcase' ? 'is-active' : ''} onClick={() => onChange('showcase')}>
+        04
+      </button>
+      <button type="button" className={active === 'legacy' ? 'is-active' : ''} onClick={() => onChange('legacy')}>
+        原主页
+      </button>
+    </div>
+  );
+}
+
+function LegacyHomeSnapshot({ onOpenDrive, onOpenVenice }) {
+  return (
+    <main className="legacy-home-snapshot">
+      <aside className="legacy-home-snapshot__sidebar">
+        <strong>Italy Drive</strong>
+        <button type="button">Destinations</button>
+        <button type="button">Route Planner</button>
+        <button type="button">Reviews</button>
+        <button type="button">3D Drive</button>
+      </aside>
+      <section className="legacy-home-snapshot__hero">
+        <div>
+          <span>Web3D travel planner</span>
+          <h1>Italy route dashboard</h1>
+          <p>旧主页对比视图：保留原来的侧栏、搜索、服务、路线面板和 3D 入口信息结构，用于和 04 首页快速对照。</p>
+          <div className="legacy-home-snapshot__actions">
+            <button type="button" onClick={() => onOpenDrive()}>Open 3D Drive</button>
+            <button type="button" onClick={onOpenVenice}>Venice VR</button>
+            <a href="#/v2">V2 Map</a>
+          </div>
+        </div>
+        <div className="legacy-home-snapshot__panel">
+          <label>
+            <span>Search & plan</span>
+            <input value="Rome, Florence, Venice" readOnly />
+          </label>
+          <div className="legacy-home-snapshot__stats">
+            <article><span>Stops</span><strong>6</strong></article>
+            <article><span>Distance</span><strong>1,260 km</strong></article>
+            <article><span>Days</span><strong>3</strong></article>
+          </div>
+        </div>
+      </section>
+      <section className="legacy-home-snapshot__grid">
+        {['Destinations', 'Route editor', 'Reviews', 'Travel services', 'Account', 'Model previews'].map((item) => (
+          <article key={item}>
+            <span>{item}</span>
+            <strong>{item === 'Route editor' ? 'Editable stop order' : 'Original module'}</strong>
+            <p>旧主页模块对比占位，方便观察信息密度和布局节奏。</p>
+          </article>
+        ))}
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
   const [hashRoute, setHashRoute] = useState(() => window.location.hash);
   const [driveOpen, setDriveOpen] = useState(false);
   const [initialLandmarkId, setInitialLandmarkId] = useState(null);
+  const [homeVariant, setHomeVariant] = useState('showcase');
 
   useEffect(() => {
     const onHashChange = () => setHashRoute(window.location.hash);
@@ -84,20 +142,16 @@ export default function App() {
     setDriveOpen(true);
   }, []);
 
-  const handleOpenAmsterdam = useCallback(() => {
-    setDriveOpen(false);
-    setInitialLandmarkId(null);
-    window.location.hash = '#/amsterdam-vr';
-  }, []);
-
   const handleCloseDrive = useCallback(() => {
     setDriveOpen(false);
     setInitialLandmarkId(null);
   }, []);
 
-  if (hashRoute === '#/amsterdam-vr') {
-    return <AmsterdamVrLab />;
-  }
+  const handleOpenVenice = useCallback(() => {
+    setDriveOpen(false);
+    setInitialLandmarkId(null);
+    window.location.hash = '#/venice-vr';
+  }, []);
 
   if (hashRoute === '#/venice-vr') {
     return <VeniceVrLab />;
@@ -107,22 +161,14 @@ export default function App() {
     return <RouteV2Page />;
   }
 
-  if (hashRoute === '#/v3') {
-    return <RouteV3Page />;
-  }
-
-  if (hashRoute === '#/concepts') {
-    return (
-      <>
-        <HomeShowcase onOpenDrive={handleOpenDrive} onOpenAmsterdam={handleOpenAmsterdam} />
-        {driveOpen && <DriveExperience onClose={handleCloseDrive} initialLandmarkId={initialLandmarkId} />}
-      </>
-    );
-  }
-
   return (
     <>
-      <HomePage onOpenDrive={handleOpenDrive} onOpenAmsterdam={handleOpenAmsterdam} />
+      <HomeCompareSwitch active={homeVariant} onChange={setHomeVariant} />
+      {homeVariant === 'showcase' ? (
+        <HomeShowcase onOpenDrive={handleOpenDrive} />
+      ) : (
+        <LegacyHomeSnapshot onOpenDrive={handleOpenDrive} onOpenVenice={handleOpenVenice} />
+      )}
       {driveOpen && <DriveExperience onClose={handleCloseDrive} initialLandmarkId={initialLandmarkId} />}
     </>
   );

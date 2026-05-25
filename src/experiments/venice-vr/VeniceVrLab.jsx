@@ -7,8 +7,10 @@ import './venice-vr.css';
 const VENICE_MODEL = '/models/venice.glb';
 const NAV_GRID_URL = '/models/venice-nav-grid.json';
 const WORLD_SCALE = 42;
-const PERSON_HEIGHT = 1.6;
-const PERSON_RADIUS = 0.28;
+const METERS_PER_MODEL_UNIT = 247.02;
+const SCENE_UNITS_PER_METER = WORLD_SCALE / METERS_PER_MODEL_UNIT;
+const PERSON_HEIGHT = 1.6 * SCENE_UNITS_PER_METER;
+const PERSON_RADIUS = 0.28 * SCENE_UNITS_PER_METER;
 const GROUND_Y = 0.012;
 
 const MODEL_BOUNDS = {
@@ -200,11 +202,21 @@ function toScenePoint(point) {
   return new THREE.Vector3(point.x * WORLD_SCALE, point.y * WORLD_SCALE, point.z * WORLD_SCALE);
 }
 
+function toModelPoint(point) {
+  return { x: point.x / WORLD_SCALE, z: point.z / WORLD_SCALE };
+}
+
+function isWalkableModelPoint(navGrid, point) {
+  if (!navGrid) return true;
+  const cell = cellIndex(navGrid, point);
+  return Boolean(navGrid.grid[cell.z * navGrid.width + cell.x]?.w);
+}
+
 function nearestWalkableCell(navGrid, point) {
   const start = cellIndex(navGrid, point);
   let best = null;
   let bestScore = Infinity;
-  for (let radius = 0; radius < 18; radius += 1) {
+  for (let radius = 0; radius < 64; radius += 1) {
     for (let z = Math.max(0, start.z - radius); z <= Math.min(navGrid.height - 1, start.z + radius); z += 1) {
       for (let x = Math.max(0, start.x - radius); x <= Math.min(navGrid.width - 1, start.x + radius); x += 1) {
         const cell = navGrid.grid[z * navGrid.width + x];
@@ -221,32 +233,139 @@ function nearestWalkableCell(navGrid, point) {
   return start;
 }
 
+function isWalkableScenePoint(navGrid, point) {
+  return isWalkableModelPoint(navGrid, toModelPoint(point));
+}
+
+function hasWalkableModelSegment(navGrid, a, b) {
+  if (!navGrid) return true;
+  const cellSize = Math.min(
+    (navGrid.bounds.maxX - navGrid.bounds.minX) / navGrid.width,
+    (navGrid.bounds.maxZ - navGrid.bounds.minZ) / navGrid.height,
+  );
+  const steps = Math.max(2, Math.ceil(a.distanceTo(b) / (cellSize * 0.65)));
+  for (let index = 0; index <= steps; index += 1) {
+    const point = a.clone().lerp(b, index / steps);
+    if (!isWalkableModelPoint(navGrid, point)) return false;
+  }
+  return true;
+}
+
+function smoothPath(navGrid, points) {
+  if (!navGrid || points.length < 3) return points;
+  const visible = [];
+  let cursor = 0;
+  while (cursor < points.length) {
+    visible.push(points[cursor]);
+    if (cursor === points.length - 1) break;
+    let next = points.length - 1;
+    while (next > cursor + 1 && !hasWalkableModelSegment(navGrid, points[cursor], points[next])) next -= 1;
+    cursor = next;
+  }
+
+  let smoothed = visible;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const result = [smoothed[0]];
+    for (let index = 1; index < smoothed.length; index += 1) {
+      const previous = smoothed[index - 1];
+      const current = smoothed[index];
+      const q = previous.clone().lerp(current, 0.35);
+      const r = previous.clone().lerp(current, 0.78);
+      if (hasWalkableModelSegment(navGrid, result.at(-1), q) && hasWalkableModelSegment(navGrid, q, r)) {
+        result.push(q, r);
+      } else {
+        result.push(current);
+      }
+    }
+    result.push(smoothed.at(-1));
+    smoothed = result;
+  }
+  return smoothed;
+}
+
+class MinHeap {
+  constructor() {
+    this.items = [];
+  }
+
+  push(item) {
+    this.items.push(item);
+    this.bubbleUp(this.items.length - 1);
+  }
+
+  pop() {
+    if (!this.items.length) return null;
+    const first = this.items[0];
+    const last = this.items.pop();
+    if (this.items.length && last) {
+      this.items[0] = last;
+      this.sinkDown(0);
+    }
+    return first;
+  }
+
+  get size() {
+    return this.items.length;
+  }
+
+  bubbleUp(index) {
+    const item = this.items[index];
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      const parent = this.items[parentIndex];
+      if (item.score >= parent.score) break;
+      this.items[parentIndex] = item;
+      this.items[index] = parent;
+      index = parentIndex;
+    }
+  }
+
+  sinkDown(index) {
+    const length = this.items.length;
+    const item = this.items[index];
+    while (true) {
+      const leftIndex = index * 2 + 1;
+      const rightIndex = leftIndex + 1;
+      let swapIndex = null;
+      if (leftIndex < length && this.items[leftIndex].score < item.score) swapIndex = leftIndex;
+      if (rightIndex < length && this.items[rightIndex].score < (swapIndex === null ? item.score : this.items[leftIndex].score)) swapIndex = rightIndex;
+      if (swapIndex === null) break;
+      this.items[index] = this.items[swapIndex];
+      this.items[swapIndex] = item;
+      index = swapIndex;
+    }
+  }
+}
+
 function findPath(navGrid, startPoint, endPoint) {
   if (!navGrid) return [startPoint, endPoint];
   const start = nearestWalkableCell(navGrid, startPoint);
   const end = nearestWalkableCell(navGrid, endPoint);
   const key = (x, z) => `${x},${z}`;
-  const open = new Set([key(start.x, start.z)]);
+  const open = new MinHeap();
+  const startKey = key(start.x, start.z);
+  open.push({ x: start.x, z: start.z, id: startKey, score: 0 });
   const cameFrom = new Map();
-  const g = new Map([[key(start.x, start.z), 0]]);
+  const g = new Map([[startKey, 0]]);
   const h = (x, z) => Math.hypot(x - end.x, z - end.z);
-  const f = new Map([[key(start.x, start.z), h(start.x, start.z)]]);
   const dirs = [
-    [1, 0], [-1, 0], [0, 1], [0, -1],
-    [1, 1], [1, -1], [-1, 1], [-1, -1],
+    [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
+    [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2],
   ];
 
+  let closest = startKey;
+  let closestScore = h(start.x, start.z);
+
   while (open.size) {
-    let current = null;
-    let score = Infinity;
-    for (const id of open) {
-      const value = f.get(id) ?? Infinity;
-      if (value < score) {
-        score = value;
-        current = id;
-      }
+    const next = open.pop();
+    if (!next) break;
+    const { x: cx, z: cz, id: current } = next;
+    if (next.score > (g.get(current) ?? Infinity) + h(cx, cz) + 0.001) continue;
+    const currentDistance = h(cx, cz);
+    if (currentDistance < closestScore) {
+      closestScore = currentDistance;
+      closest = current;
     }
-    const [cx, cz] = current.split(',').map(Number);
     if (cx === end.x && cz === end.z) {
       const cells = [{ x: cx, z: cz }];
       let cursor = current;
@@ -255,28 +374,37 @@ function findPath(navGrid, startPoint, endPoint) {
         const [x, z] = cursor.split(',').map(Number);
         cells.push({ x, z });
       }
-      return cells.reverse().filter((_, index) => index % 3 === 0 || index === cells.length - 1).map((cell) => cellCenter(navGrid, cell.x, cell.z));
+      return cells.reverse().map((cell) => cellCenter(navGrid, cell.x, cell.z));
     }
-    open.delete(current);
 
-    for (const [dx, dz] of dirs) {
+    for (const [dx, dz, cost] of dirs) {
       const nx = cx + dx;
       const nz = cz + dz;
       if (nx < 0 || nz < 0 || nx >= navGrid.width || nz >= navGrid.height) continue;
       const cell = navGrid.grid[nz * navGrid.width + nx];
       if (!cell?.w) continue;
+      if (dx && dz) {
+        const sideA = navGrid.grid[cz * navGrid.width + nx];
+        const sideB = navGrid.grid[nz * navGrid.width + cx];
+        if (!sideA?.w || !sideB?.w) continue;
+      }
       const nid = key(nx, nz);
-      const step = dx && dz ? 1.414 : 1;
-      const tentative = (g.get(current) ?? Infinity) + step + (cell.b ? 4 : 0);
+      const tentative = (g.get(current) ?? Infinity) + cost;
       if (tentative < (g.get(nid) ?? Infinity)) {
         cameFrom.set(nid, current);
         g.set(nid, tentative);
-        f.set(nid, tentative + h(nx, nz));
-        open.add(nid);
+        open.push({ x: nx, z: nz, id: nid, score: tentative + h(nx, nz) });
       }
     }
   }
-  return [startPoint, endPoint];
+  const cells = [];
+  let cursor = closest;
+  while (cursor) {
+    const [x, z] = cursor.split(',').map(Number);
+    cells.push({ x, z });
+    cursor = cameFrom.get(cursor);
+  }
+  return cells.reverse().map((cell) => cellCenter(navGrid, cell.x, cell.z));
 }
 
 function measureRoute(points) {
@@ -388,10 +516,9 @@ function AutoTour({ active, routePoints, speed, onProgress, onNearPoi }) {
       markerRef.current.rotation.y = Math.atan2(direction.x, direction.z);
     }
     if (active) {
-      const side = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(0.65);
-      const desiredCamera = sample.position.clone().add(direction.clone().multiplyScalar(-36)).add(side.multiplyScalar(10)).add(new THREE.Vector3(0, 18, 0));
-      const target = sample.position.clone().add(direction.clone().multiplyScalar(24));
-      target.y += 7;
+      const desiredCamera = sample.position.clone().add(direction.clone().multiplyScalar(-2.2)).add(new THREE.Vector3(0, 0.82, 0));
+      const target = sample.position.clone().add(direction.clone().multiplyScalar(4.2));
+      target.y += 0.42;
       camera.position.lerp(desiredCamera, 0.08);
       camera.lookAt(target);
     }
@@ -415,7 +542,7 @@ function AutoTour({ active, routePoints, speed, onProgress, onNearPoi }) {
   );
 }
 
-function ManualWalk({ active, start, routePoints, speed, onProgress }) {
+function ManualWalk({ active, start, routePoints, navGrid, speed, onProgress }) {
   const { camera } = useThree();
   const keysRef = useRef(new Set());
   const positionRef = useRef(start.clone());
@@ -449,16 +576,21 @@ function ManualWalk({ active, start, routePoints, speed, onProgress }) {
     const turn = (keys.has('a') || keys.has('arrowleft') ? 1 : 0) - (keys.has('d') || keys.has('arrowright') ? 1 : 0);
     headingRef.current += turn * delta * 2.4;
     const direction = new THREE.Vector3(Math.sin(headingRef.current), 0, Math.cos(headingRef.current));
-    if (forward) positionRef.current.add(direction.multiplyScalar(forward * speed * delta * 0.42));
+    if (forward) {
+      const nextPosition = positionRef.current.clone().add(direction.multiplyScalar(forward * speed * delta * 0.32));
+      if (isWalkableScenePoint(navGrid, nextPosition)) positionRef.current.copy(nextPosition);
+    }
     const nearest = routePoints.reduce((best, point) => (point.distanceTo(positionRef.current) < best.distance ? { point, distance: point.distanceTo(positionRef.current) } : best), { point: routePoints[0], distance: Infinity });
-    positionRef.current.lerp(nearest.point, 0.08);
+    const guidedPosition = positionRef.current.clone().lerp(nearest.point, 0.035);
+    if (nearest.distance > 1.6 && isWalkableScenePoint(navGrid, guidedPosition)) positionRef.current.copy(guidedPosition);
     if (avatarRef.current) {
       avatarRef.current.position.copy(positionRef.current);
       avatarRef.current.rotation.y = headingRef.current;
     }
-    const cam = positionRef.current.clone().add(new THREE.Vector3(-Math.sin(headingRef.current) * 24, 14, -Math.cos(headingRef.current) * 24));
+    const cam = positionRef.current.clone().add(new THREE.Vector3(-Math.sin(headingRef.current) * 2.2, 0.82, -Math.cos(headingRef.current) * 2.2));
     camera.position.lerp(cam, 0.16);
-    camera.lookAt(positionRef.current.clone().add(new THREE.Vector3(0, 7, 0)));
+    const lookTarget = positionRef.current.clone().add(new THREE.Vector3(Math.sin(headingRef.current) * 4.2, 0.42, Math.cos(headingRef.current) * 4.2));
+    camera.lookAt(lookTarget);
     onProgress?.({ meters: 0, total: measureRoute(routePoints) });
   });
 
@@ -486,7 +618,7 @@ function VeniceScene({ pois, selectedId, routePoints, navGrid, mode, speed, onSe
       <RouteLine points={routePoints} />
       <PoiMarkers pois={pois} selectedId={selectedId} navGrid={navGrid} onSelect={onSelect} />
       <AutoTour active={mode === 'auto'} routePoints={routePoints} speed={speed} onProgress={onProgress} />
-      <ManualWalk active={mode === 'manual'} start={start} routePoints={routePoints} speed={speed} onProgress={onProgress} />
+      <ManualWalk active={mode === 'manual'} start={start} routePoints={routePoints} navGrid={navGrid} speed={speed} onProgress={onProgress} />
       {mode === 'free' && <OrbitControls makeDefault target={[0, 0.15, 0]} maxDistance={28} maxPolarAngle={Math.PI * 0.48} />}
     </>
   );
@@ -506,7 +638,7 @@ function buildRoute(navGrid, routeIds) {
     if (index > 1) segment.shift();
     points.push(...segment);
   }
-  return points.map(toScenePoint);
+  return smoothPath(navGrid, points).map(toScenePoint);
 }
 
 export function VeniceVrLab() {
@@ -514,7 +646,7 @@ export function VeniceVrLab() {
   const [selectedPoiId, setSelectedPoiId] = useState('rialto');
   const [routeIds, setRouteIds] = useState(DEFAULT_ROUTE);
   const [mode, setMode] = useState('auto');
-  const [speed, setSpeed] = useState(28);
+  const [speed, setSpeed] = useState(7);
   const [progress, setProgress] = useState({ meters: 0, total: 0 });
 
   const routePoints = useMemo(() => buildRoute(navGrid, routeIds), [navGrid, routeIds]);
@@ -563,14 +695,14 @@ export function VeniceVrLab() {
         <div className="venice-tour__hud">
           <span>{mode === 'manual' ? 'Manual walk' : mode === 'auto' ? 'Guided route' : 'Free camera'}</span>
           <strong>{formatMeters(progress.meters)} / {formatMeters(progress.total || measureRoute(routePoints))}</strong>
-          <small>{navGrid ? 'Building-aware walk grid active' : 'Loading walk grid...'}</small>
+          <small>{navGrid ? 'Building-only obstacle grid active' : 'Loading walk grid...'}</small>
         </div>
       </section>
 
       <aside className="venice-tour__panel">
         <p className="venice-tour__eyebrow">Route planner</p>
         <h1>Small Venice tour</h1>
-        <p className="venice-tour__lede">A compact route demo over the Venice model. Stops are projected from real coordinates, snapped to a horizontal walk plane, and routed through gaps between buildings.</p>
+        <p className="venice-tour__lede">A compact route demo over the Venice model. Stops are projected from real coordinates, snapped to a horizontal travel plane, and routed around building blocks. Water is passable for boat-style movement.</p>
 
         <section className="venice-tour__metrics">
           <article><span>Stops</span><strong>{routeIds.length}</strong></article>
@@ -611,7 +743,7 @@ export function VeniceVrLab() {
           <h2>Movement</h2>
           <label>
             Speed
-            <input type="range" min="8" max="70" step="1" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} />
+            <input type="range" min="2" max="18" step="1" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} />
             <span>{Math.round(speed)}</span>
           </label>
           <p>Manual mode: W/S move, A/D turn. Auto mode follows the planned path.</p>

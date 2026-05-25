@@ -1,6 +1,7 @@
 import { Canvas, useFrame } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { landmarks } from '../../data/landmarks.js';
 import liveLandmarksData from '../../../public/data/live-landmarks.json';
 
@@ -33,8 +34,12 @@ const versions = [
 */];
 
 const storyModelPaths = {
-  colosseum: '/models/colosseum.glb',
-  pisa: '/models/leaning_tower_of_pisa.glb',
+  colosseum: '/models/romes_colosseum.glb',
+  pisa: '/models/pisas_tower.glb',
+  duomo: '/models/milan_cathedral.glb',
+  pantheon: '/models/pantheon.glb',
+  trevi: '/models/fontana_di_trevi_-_rome_italy_-_1732.glb',
+  florence: '/models/santa-maria-del-fiore/source/Santa%20Maria.glb',
 };
 
 const liveIndex = new Map((liveLandmarksData.items ?? []).map((item) => [item.id, item]));
@@ -85,12 +90,45 @@ const storyScenes = [
       zh: '目标点云包含宽阔教堂立面、中央玫瑰窗、屋顶轮廓和多根尖塔，用清晰的哥特式剪影提升识别度。',
     },
   },
+  {
+    id: 'pantheon',
+    kind: 'pantheon',
+    side: 'left',
+    title: { en: 'Pantheon', zh: 'Pantheon' },
+    kicker: { en: 'Dome and portico model', zh: 'Dome and portico model' },
+    body: {
+      en: 'The preview uses the new Pantheon GLB as a real model reference while the particles keep the opening page light and fluid.',
+      zh: 'The preview uses the new Pantheon GLB as a real model reference while the particles keep the opening page light and fluid.',
+    },
+  },
+  {
+    id: 'trevi',
+    kind: 'trevi',
+    side: 'right',
+    title: { en: 'Trevi Fountain', zh: 'Trevi Fountain' },
+    kicker: { en: 'Baroque fountain scan', zh: 'Baroque fountain scan' },
+    body: {
+      en: 'Trevi is kept as a real model preview rather than a heavy full-page mesh, so the opening still scrolls smoothly.',
+      zh: 'Trevi is kept as a real model preview rather than a heavy full-page mesh, so the opening still scrolls smoothly.',
+    },
+  },
+  {
+    id: 'florence',
+    kind: 'florence',
+    side: 'left',
+    title: { en: 'Santa Maria del Fiore', zh: 'Santa Maria del Fiore' },
+    kicker: { en: 'Florence cathedral asset', zh: 'Florence cathedral asset' },
+    body: {
+      en: 'The Florence cathedral model is included as an alternate cathedral reference beside the Milan Duomo particle silhouette.',
+      zh: 'The Florence cathedral model is included as an alternate cathedral reference beside the Milan Duomo particle silhouette.',
+    },
+  },
 ];
 
 const copy = {
   en: {
     switcher: 'Concept styles',
-    switcherSub: '04 / 08 with full original page workflow',
+    switcherSub: '04 with full original page workflow',
     language: 'Language',
     nav: [
       ['destinations', 'Destinations'],
@@ -100,7 +138,6 @@ const copy = {
     ],
     cta3d: 'Open 3D Drive',
     routeMap: 'Route map',
-    amsterdam: 'Amsterdam VR',
     searchTitle: 'Search & plan',
     searchPlaceholder: 'Search landmarks, cities, regions, or route notes',
     filters: 'Filters',
@@ -155,7 +192,7 @@ const copy = {
   },
   zh: {
     switcher: '首页风格',
-    switcherSub: '04 / 08，保留原主页完整分页流程',
+    switcherSub: '04，保留原主页完整分页流程',
     language: '语言',
     nav: [
       ['destinations', '目的地'],
@@ -165,7 +202,6 @@ const copy = {
     ],
     cta3d: '打开 3D 路线',
     routeMap: '路线地图',
-    amsterdam: '阿姆斯特丹 VR',
     searchTitle: '搜索与规划',
     searchPlaceholder: '搜索景点、城市、区域或路线说明',
     filters: '筛选',
@@ -629,6 +665,33 @@ function sampleModelPointCloud(scene, count, options = {}) {
   return target;
 }
 
+function ModelPointCloudLoader({ onTargetsReady }) {
+  const colosseum = useGLTF(storyModelPaths.colosseum);
+  const pisa = useGLTF(storyModelPaths.pisa);
+  const duomo = useGLTF(storyModelPaths.duomo);
+  const pantheon = useGLTF(storyModelPaths.pantheon);
+  const trevi = useGLTF(storyModelPaths.trevi);
+  const florence = useGLTF(storyModelPaths.florence);
+
+  const targets = useMemo(() => {
+    const count = 12000;
+    return {
+      colosseum: sampleModelPointCloud(colosseum.scene, count, { scale: 6.2, rotateY: -0.32, offsetY: 0.08 }),
+      pisa: sampleModelPointCloud(pisa.scene, count, { scale: 5.8, rotateY: 0.18, tiltZ: 0, offsetY: 0.08 }),
+      duomo: sampleModelPointCloud(duomo.scene, count, { scale: 6.15, rotateY: -0.08, offsetY: 0.02 }),
+      pantheon: sampleModelPointCloud(pantheon.scene, count, { scale: 6.05, rotateY: 0.22, offsetY: -0.02 }),
+      trevi: sampleModelPointCloud(trevi.scene, count, { scale: 6.35, rotateY: -0.18, offsetY: -0.04 }),
+      florence: sampleModelPointCloud(florence.scene, count, { scale: 6.2, rotateY: 0.22, offsetY: 0.04 }),
+    };
+  }, [colosseum.scene, pisa.scene, duomo.scene, pantheon.scene, trevi.scene, florence.scene]);
+
+  useEffect(() => {
+    onTargetsReady(targets);
+  }, [onTargetsReady, targets]);
+
+  return null;
+}
+
 function makeItinerary(routeStops, days) {
   return Array.from({ length: days }, (_, index) => ({
     day: index + 1,
@@ -839,10 +902,10 @@ function LandmarkMorphFallback({ activeScene }) {
   );
 }
 
-function SemanticParticleCanvas2D({ activeScene }) {
+function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
   const canvasRef = useRef(null);
-  const data = useMemo(() => createStoryMorphData(5600), []);
-  const activeTarget = data.proceduralTargets[activeScene.id] ?? data.proceduralTargets.intro;
+  const data = useMemo(() => createStoryMorphData(12000), []);
+  const activeTarget = modelTargets?.[activeScene.kind] ?? data.proceduralTargets[activeScene.id] ?? data.proceduralTargets.intro;
   const activeTargetRef = useRef(activeTarget);
   const morphRef = useRef(0);
   const mouseRef = useRef({ x: 0, y: 0 });
@@ -882,13 +945,13 @@ function SemanticParticleCanvas2D({ activeScene }) {
     const draw = (time) => {
       const t = time * 0.001;
       const shouldAssemble = activeScene.id !== 'intro';
-      morphRef.current = THREE.MathUtils.lerp(morphRef.current, shouldAssemble ? 1 : 0, 0.055);
+      morphRef.current = THREE.MathUtils.lerp(morphRef.current, shouldAssemble ? 1 : 0, 0.105);
       const morph = morphRef.current;
       const target = activeTargetRef.current;
       const side = activeScene.side ?? 'center';
       const centerX = width * (side === 'left' ? 0.34 : side === 'right' ? 0.66 : 0.52);
       const centerY = height * 0.5;
-      const scale = Math.min(width, height) * (shouldAssemble ? 0.27 : 0.21);
+      const scale = Math.min(width, height) * (shouldAssemble ? 0.36 : 0.24);
       const rotateY = t * 0.18 + mouseRef.current.x * 0.22;
       const rotateX = -0.08 + mouseRef.current.y * 0.1;
       const cy = Math.cos(rotateY);
@@ -897,7 +960,7 @@ function SemanticParticleCanvas2D({ activeScene }) {
       const sx = Math.sin(rotateX);
 
       ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = 'rgba(5, 78, 126, 0.82)';
+      ctx.fillStyle = 'rgba(5, 78, 126, 0.76)';
 
       for (let i = 0; i < data.random.length; i += 3) {
         const seed = data.seeds[i / 3];
@@ -914,7 +977,7 @@ function SemanticParticleCanvas2D({ activeScene }) {
         const perspective = 1 / (1 + (rz2 + 3.8) * 0.09);
         const px = centerX + rx * scale * perspective;
         const py = centerY - ry * scale * perspective;
-        const radius = (shouldAssemble ? 1.45 : 1.05) * perspective * (0.85 + localMorph * 0.55);
+        const radius = (shouldAssemble ? 0.92 : 0.72) * perspective * (0.85 + localMorph * 0.36);
 
         ctx.globalAlpha = 0.28 + localMorph * 0.58;
         ctx.beginPath();
@@ -939,6 +1002,7 @@ function SemanticParticleCanvas2D({ activeScene }) {
 
 function SemanticParticleStory({ language, onEnterHome }) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [modelTargets, setModelTargets] = useState(null);
   const storyRef = useRef(null);
   const sectionRefs = useRef([]);
   const activeScene = storyScenes[activeIndex] ?? storyScenes[0];
@@ -978,8 +1042,15 @@ function SemanticParticleStory({ language, onEnterHome }) {
 
   return (
     <section ref={storyRef} className="semantic-story" aria-label="Semantic particle landmark story">
+      <div className="semantic-story__loader" aria-hidden="true">
+        <Canvas frameloop="demand">
+          <Suspense fallback={null}>
+            <ModelPointCloudLoader onTargetsReady={setModelTargets} />
+          </Suspense>
+        </Canvas>
+      </div>
       <div className="semantic-story__canvas">
-        <SemanticParticleCanvas2D activeScene={activeScene} />
+        <SemanticParticleCanvas2D activeScene={activeScene} modelTargets={modelTargets} />
       </div>
       <div className="semantic-story__rail" aria-hidden="true">
         {storyScenes.map((scene, index) => (
@@ -1032,7 +1103,7 @@ function ConceptHeader({ language, setLanguage, activePage, setActivePage }) {
   );
 }
 
-function Hero({ version, language, routeStops, favorites, onOpenDrive, onOpenAmsterdam }) {
+function Hero({ version, language, routeStops, favorites, onOpenDrive }) {
   const c = copy[language];
   return (
     <section className={`concept-hero concept-hero--${version.id}`}>
@@ -1043,9 +1114,7 @@ function Hero({ version, language, routeStops, favorites, onOpenDrive, onOpenAms
         <div className="concept-actions">
           <button className="concept-btn concept-btn--primary" type="button" onClick={() => onOpenDrive()}>{c.cta3d}</button>
           <a className="concept-btn" href="#/v2">{c.routeMap}</a>
-          <a className="concept-btn" href="#/v3">{language === 'zh' ? '拓扑视图' : 'Topology view'}</a>
           <a className="concept-btn" href="#/venice-vr">Venice VR</a>
-          <button className="concept-btn" type="button" onClick={onOpenAmsterdam}>{c.amsterdam}</button>
         </div>
       </div>
       {version.id === 'radial' ? (
@@ -1054,7 +1123,7 @@ function Hero({ version, language, routeStops, favorites, onOpenDrive, onOpenAms
             <strong>{c.cta3d}</strong>
             <button className="radial-drive" type="button" onClick={() => onOpenDrive()}>3D</button>
           </div>
-          {c.nav.concat([['vr', c.amsterdam], ['map', c.routeMap]]).map(([id, label], index) => (
+          {c.nav.concat([['vr', 'Venice VR'], ['map', c.routeMap]]).map(([id, label], index) => (
             <button key={id} className="radial-node" style={{ '--i': index }} type="button">
               {label}
             </button>
@@ -1530,7 +1599,7 @@ function ReviewsPage(props) {
 }
 
 function DrivePage(props) {
-  const { language, routeStops, selectedStop, favorites, compare, routeSegments, userSession, onOpenDrive, onOpenAmsterdam } = props;
+  const { language, routeStops, selectedStop, favorites, compare, routeSegments, userSession, onOpenDrive } = props;
   return (
     <section className="concept-page concept-page--drive">
       <div className="concept-drive-gateway">
@@ -1540,9 +1609,7 @@ function DrivePage(props) {
         <div className="concept-actions">
           <button className="concept-btn concept-btn--primary" type="button" onClick={() => onOpenDrive(selectedStop.id)}>{copy[language].cta3d}</button>
           <a className="concept-btn" href="#/v2">{copy[language].routeMap}</a>
-          <a className="concept-btn" href="#/v3">{language === 'zh' ? '拓扑视图' : 'Topology view'}</a>
           <a className="concept-btn" href="#/venice-vr">Venice VR</a>
-          <button className="concept-btn" type="button" onClick={onOpenAmsterdam}>{copy[language].amsterdam}</button>
         </div>
         <HeroGallery language={language} routeStops={routeStops} onOpenDrive={onOpenDrive} />
       </div>
@@ -1556,7 +1623,7 @@ function DrivePage(props) {
   );
 }
 
-export function HomeShowcase({ onOpenDrive, onOpenAmsterdam }) {
+export function HomeShowcase({ onOpenDrive }) {
   const activeVersion = versions[0];
   const [hasEnteredHome, setHasEnteredHome] = useState(false);
   const [activePage, setActivePage] = useState('destinations');
@@ -1692,7 +1759,6 @@ export function HomeShowcase({ onOpenDrive, onOpenAmsterdam }) {
     onSignIn: () => setUserSession({ name: language === 'zh' ? '旅行者' : 'Traveler' }),
     onSignOut: () => setUserSession(null),
     onOpenDrive,
-    onOpenAmsterdam,
   };
 
   if (!hasEnteredHome) {
@@ -1711,7 +1777,7 @@ export function HomeShowcase({ onOpenDrive, onOpenAmsterdam }) {
         activePage={activePage}
         setActivePage={setActivePage}
       />
-      <Hero version={activeVersion} language={language} routeStops={routeStops} favorites={favorites} onOpenDrive={onOpenDrive} onOpenAmsterdam={onOpenAmsterdam} />
+      <Hero version={activeVersion} language={language} routeStops={routeStops} favorites={favorites} onOpenDrive={onOpenDrive} />
       {activePage === 'destinations' && <DestinationsPage {...commonPageProps} />}
       {activePage === 'planner' && <PlannerPage {...commonPageProps} />}
       {activePage === 'reviews' && <ReviewsPage {...commonPageProps} />}
