@@ -104,5 +104,5 @@ export function ModelViewerOverlay({ landmark, isOpen, onClose }) {
   );
 }
 
-useGLTF.preload('/models/colosseum.glb');
-useGLTF.preload('/models/leaning_tower_of_pisa.glb');
+useGLTF.preload('/models/romes_colosseum.glb');
+useGLTF.preload('/models/pisas_tower.glb');

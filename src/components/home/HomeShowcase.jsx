@@ -8,14 +8,14 @@ import liveLandmarksData from '../../../public/data/live-landmarks.json';
 const versions = [
   {
     id: 'cinema',
-    name: '04 Cinematic Portal',
+    name: 'Italy Journey',
     accent: '#80d7ff',
-    label: { en: 'Cinematic', zh: '电影入口' },
-    detail: { en: 'Immersive portal', zh: '沉浸式入口' },
-    title: { en: 'Enter the Drive', zh: '进入意大利 3D 自驾旅程' },
+    label: { en: 'Journey', zh: '旅程' },
+    detail: { en: 'Start planning', zh: '开始规划' },
+    title: { en: 'Where do you want to begin?', zh: '你想从哪里开始？' },
     summary: {
-      en: 'A cinematic shell for the full travel planner: destinations, route editing, reviews, itinerary generation, live context, and 3D entry.',
-      zh: '电影感视觉壳，内部保留完整旅游规划功能：目的地、路线编辑、点评、行程生成、实时信息和 3D 入口。',
+      en: 'Pick a city, landmark, or route idea. We will help you turn it into a trip through Italy.',
+      zh: '输入城市、景点或一段想法，我们帮你把它变成一条意大利旅程。',
     },
   },
   /*
@@ -28,7 +28,7 @@ const versions = [
     title: { en: 'Navigate Around the Core', zh: '围绕 3D 核心规划路线' },
     summary: {
       en: 'A radial navigation shell with the same destination, planner, review, account, route, and drive workflows.',
-      zh: '环形导航视觉壳，承载同样的目的地、行程、点评、账户、路线和 3D 导览流程。',
+      zh: '围绕你想去的地方，整理目的地、路线、点评和下一步安排。',
     },
   },
 */];
@@ -37,24 +37,24 @@ const storyModelPaths = {
   colosseum: '/models/romes_colosseum.glb',
   pisa: '/models/pisas_tower.glb',
   duomo: '/models/milan_cathedral.glb',
-  pantheon: '/models/pantheon.glb',
-  trevi: '/models/fontana_di_trevi_-_rome_italy_-_1732.glb',
   florence: '/models/santa-maria-del-fiore/source/Santa%20Maria.glb',
 };
 
 const liveIndex = new Map((liveLandmarksData.items ?? []).map((item) => [item.id, item]));
 const initialRouteIds = ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
+const STORY_PARTICLE_COUNT = 7600;
+const STORY_MODEL_SAMPLE_COUNT = 8200;
 
 const storyScenes = [
   {
     id: 'intro',
     kind: 'chaos',
     side: 'center',
-    title: { en: 'Particle Landmark Lab', zh: '粒子景点实验室' },
-    kicker: { en: 'Scroll to assemble', zh: '向下滚动，粒子开始成像' },
+    title: { en: 'Italy, one landmark at a time', zh: '让意大利慢慢出现' },
+    kicker: { en: 'Scroll through the route', zh: '向下探索路线' },
     body: {
-      en: 'The first field is deliberately unordered. Every following scene gives the same particles a semantic target so the cloud assembles into a recognizable landmark.',
-      zh: '第一屏保持杂乱无章。继续滚动后，同一组粒子会获得明确的三维目标坐标，聚合成可辨认的景点轮廓。',
+      en: 'Start with a hint of motion, then watch each stop take shape before you choose where to go next.',
+      zh: '先从一片流动的光点开始，继续向下，每一站都会逐渐显出轮廓。',
     },
   },
   {
@@ -62,10 +62,10 @@ const storyScenes = [
     kind: 'colosseum',
     side: 'right',
     title: { en: 'Colosseum', zh: '罗马斗兽场' },
-    kicker: { en: 'Oval amphitheatre point cloud', zh: '椭圆竞技场点云' },
+    kicker: { en: 'Ancient arena in motion', zh: '古罗马竞技场' },
     body: {
-      en: 'Particles form stacked oval rings, tier lines, and repeated arch voids so the amphitheatre reads as architecture instead of decoration.',
-      zh: '粒子会组成多层椭圆看台、横向层线和连续拱洞，让它看起来像真实斗兽场结构，而不是随机装饰。',
+      en: 'The route opens in Rome, with the arena rising like a first postcard from the trip.',
+      zh: '旅程从罗马展开，斗兽场像第一张明信片一样浮现出来。',
     },
   },
   {
@@ -73,10 +73,10 @@ const storyScenes = [
     kind: 'pisa',
     side: 'left',
     title: { en: 'Leaning Tower of Pisa', zh: '比萨斜塔' },
-    kicker: { en: 'Tilted cylinder with stacked arcades', zh: '倾斜圆塔与层叠拱廊' },
+    kicker: { en: 'The leaning tower takes shape', zh: '斜塔逐渐成形' },
     body: {
-      en: 'The tower is generated as a tilted cylinder with floor bands, small columns, and a wider base so the lean is visible immediately.',
-      zh: '斜塔由倾斜圆柱、楼层环带、细柱和底座组成，第一眼就能看出它的倾斜姿态。',
+      en: 'Pisa adds a slower stop to the journey, a place to pause before heading back onto the road.',
+      zh: '到了比萨，行程可以慢下来，在斜塔前停一停再继续出发。',
     },
   },
   {
@@ -84,32 +84,10 @@ const storyScenes = [
     kind: 'duomo',
     side: 'right',
     title: { en: 'Milan Duomo', zh: '米兰主教座堂' },
-    kicker: { en: 'Facade, rose window, and spires', zh: '立面、玫瑰窗与尖塔' },
+    kicker: { en: 'Cathedral lines rising up', zh: '教堂轮廓升起' },
     body: {
-      en: 'The target cloud combines a broad cathedral facade, central rose window, roofline, and many spires to give the model a clear gothic silhouette.',
-      zh: '目标点云包含宽阔教堂立面、中央玫瑰窗、屋顶轮廓和多根尖塔，用清晰的哥特式剪影提升识别度。',
-    },
-  },
-  {
-    id: 'pantheon',
-    kind: 'pantheon',
-    side: 'left',
-    title: { en: 'Pantheon', zh: 'Pantheon' },
-    kicker: { en: 'Dome and portico model', zh: 'Dome and portico model' },
-    body: {
-      en: 'The preview uses the new Pantheon GLB as a real model reference while the particles keep the opening page light and fluid.',
-      zh: 'The preview uses the new Pantheon GLB as a real model reference while the particles keep the opening page light and fluid.',
-    },
-  },
-  {
-    id: 'trevi',
-    kind: 'trevi',
-    side: 'right',
-    title: { en: 'Trevi Fountain', zh: 'Trevi Fountain' },
-    kicker: { en: 'Baroque fountain scan', zh: 'Baroque fountain scan' },
-    body: {
-      en: 'Trevi is kept as a real model preview rather than a heavy full-page mesh, so the opening still scrolls smoothly.',
-      zh: 'Trevi is kept as a real model preview rather than a heavy full-page mesh, so the opening still scrolls smoothly.',
+      en: 'Milan brings the route north, with cathedral spires cutting into the skyline.',
+      zh: '路线来到北方，米兰大教堂的尖顶把城市天际线勾勒出来。',
     },
   },
   {
@@ -117,10 +95,10 @@ const storyScenes = [
     kind: 'florence',
     side: 'left',
     title: { en: 'Santa Maria del Fiore', zh: 'Santa Maria del Fiore' },
-    kicker: { en: 'Florence cathedral asset', zh: 'Florence cathedral asset' },
+    kicker: { en: 'Florence cathedral stop', zh: '佛罗伦萨教堂' },
     body: {
-      en: 'The Florence cathedral model is included as an alternate cathedral reference beside the Milan Duomo particle silhouette.',
-      zh: 'The Florence cathedral model is included as an alternate cathedral reference beside the Milan Duomo particle silhouette.',
+      en: 'Florence gives the trip a softer rhythm: rooftops, piazzas, and a cathedral at the center.',
+      zh: '佛罗伦萨让旅程变得更从容：屋顶、广场，还有城市中心的教堂。',
     },
   },
 ];
@@ -131,13 +109,16 @@ const copy = {
     switcherSub: '04 with full original page workflow',
     language: 'Language',
     nav: [
+      ['home', 'Home'],
       ['destinations', 'Destinations'],
-      ['planner', 'Route Planner'],
+      ['planner', 'Plan'],
       ['reviews', 'Reviews'],
-      ['drive', '3D Drive'],
+      ['drive', 'Drive'],
+      ['map', 'Map'],
+      ['vr', 'Venice'],
     ],
-    cta3d: 'Open 3D Drive',
-    routeMap: 'Route map',
+    cta3d: 'Start driving',
+    routeMap: 'View route',
     searchTitle: 'Search & plan',
     searchPlaceholder: 'Search landmarks, cities, regions, or route notes',
     filters: 'Filters',
@@ -180,28 +161,35 @@ const copy = {
     export: 'Export itinerary',
     reviews: 'Destination context and reviews',
     read: 'Read background',
-    driveReady: '3D drive gateway',
-    driveBody: 'Enter the 3D scene with the current route order and focused landmark.',
+    driveReady: 'Ready to go',
+    driveBody: 'Follow your selected route and visit the focused stop.',
     nextStop: 'Next stop',
     weather: 'Live weather',
-    kicker: 'Web3D / Particles / Route Planner',
+    kicker: 'Italy travel planner',
     temperature: 'Temperature',
     wind: 'Wind',
-    modelPreview: 'Model previews',
-    keyPoints: 'Key points',
+    modelPreview: 'Landmarks',
+    keyPoints: 'Stops',
+    homeQuestion: 'Where should the day begin?',
+    homePrompt: 'Try Rome, Florence, Venice, Pisa, or a place you have in mind',
+    homeLead: 'Tell us the first place on your mind. We will keep the route, notes, and saved stops close by while you explore.',
+    homeSuggestions: 'Places people start with',
   },
   zh: {
     switcher: '首页风格',
     switcherSub: '04，保留原主页完整分页流程',
     language: '语言',
     nav: [
+      ['home', '首页'],
       ['destinations', '目的地'],
       ['planner', '行程'],
       ['reviews', '点评'],
-      ['drive', '3D 导览'],
+      ['drive', '导览'],
+      ['map', '地图'],
+      ['vr', '威尼斯'],
     ],
-    cta3d: '打开 3D 路线',
-    routeMap: '路线地图',
+    cta3d: '开始导览',
+    routeMap: '查看路线',
     searchTitle: '搜索与规划',
     searchPlaceholder: '搜索景点、城市、区域或路线说明',
     filters: '筛选',
@@ -244,15 +232,19 @@ const copy = {
     export: '导出行程',
     reviews: '目的地背景和点评',
     read: '查看背景资料',
-    driveReady: '3D 导览入口',
-    driveBody: '使用当前路线顺序和聚焦地标进入 3D 场景。',
+    driveReady: '准备出发',
+    driveBody: '跟随你选好的路线，查看当前关注的目的地。',
     nextStop: '下一站',
     weather: '实时天气',
-    kicker: 'Web3D / 粒子效果 / 路线规划',
+    kicker: '意大利旅行规划',
     temperature: '温度',
     wind: '风速',
-    modelPreview: '模型预览',
-    keyPoints: '关键点',
+    modelPreview: '景点',
+    keyPoints: '停靠点',
+    homeQuestion: '今天从哪一站出发？',
+    homePrompt: '试试罗马、佛罗伦萨、威尼斯、比萨，或输入你想去的地方',
+    homeLead: '把第一个想去的地方告诉我们。路线、收藏和沿途信息会随时跟上。',
+    homeSuggestions: '大家常从这里开始',
   },
 };
 
@@ -592,13 +584,13 @@ function sampleStoryTarget(kind) {
   return sampleBox(0, 0, 0, 7, 4, 3);
 }
 
-function createStoryMorphData(count = 7600) {
+function createStoryMorphData(count = STORY_PARTICLE_COUNT) {
   const random = new Float32Array(count * 3);
   const seeds = new Float32Array(count);
   const proceduralTargets = {};
 
   for (let i = 0; i < count; i += 1) {
-    const radius = 2.4 + Math.random() * 4.2;
+    const radius = 2.1 + Math.random() * 3.55;
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(Math.random() * 2 - 1);
     random[i * 3] = Math.sin(phi) * Math.cos(theta) * radius;
@@ -643,10 +635,12 @@ function sampleModelPointCloud(scene, count, options = {}) {
   const size = box.getSize(new THREE.Vector3());
   const largest = Math.max(size.x, size.y, size.z) || 1;
   const scale = options.scale ?? 4.6;
+  const rotateX = options.rotateX ?? 0;
   const rotateY = options.rotateY ?? 0;
   const tiltZ = options.tiltZ ?? 0;
   const matrix = new THREE.Matrix4()
-    .makeRotationY(rotateY)
+    .makeRotationX(rotateX)
+    .multiply(new THREE.Matrix4().makeRotationY(rotateY))
     .multiply(new THREE.Matrix4().makeRotationZ(tiltZ));
 
   const target = new Float32Array(count * 3);
@@ -669,21 +663,17 @@ function ModelPointCloudLoader({ onTargetsReady }) {
   const colosseum = useGLTF(storyModelPaths.colosseum);
   const pisa = useGLTF(storyModelPaths.pisa);
   const duomo = useGLTF(storyModelPaths.duomo);
-  const pantheon = useGLTF(storyModelPaths.pantheon);
-  const trevi = useGLTF(storyModelPaths.trevi);
   const florence = useGLTF(storyModelPaths.florence);
 
   const targets = useMemo(() => {
-    const count = 12000;
+    const count = STORY_MODEL_SAMPLE_COUNT;
     return {
       colosseum: sampleModelPointCloud(colosseum.scene, count, { scale: 6.2, rotateY: -0.32, offsetY: 0.08 }),
-      pisa: sampleModelPointCloud(pisa.scene, count, { scale: 5.8, rotateY: 0.18, tiltZ: 0, offsetY: 0.08 }),
+      pisa: sampleModelPointCloud(pisa.scene, count, { scale: 5.8, rotateX: -Math.PI / 2, rotateY: 0.18, offsetY: 0.08 }),
       duomo: sampleModelPointCloud(duomo.scene, count, { scale: 6.15, rotateY: -0.08, offsetY: 0.02 }),
-      pantheon: sampleModelPointCloud(pantheon.scene, count, { scale: 6.05, rotateY: 0.22, offsetY: -0.02 }),
-      trevi: sampleModelPointCloud(trevi.scene, count, { scale: 6.35, rotateY: -0.18, offsetY: -0.04 }),
       florence: sampleModelPointCloud(florence.scene, count, { scale: 6.2, rotateY: 0.22, offsetY: 0.04 }),
     };
-  }, [colosseum.scene, pisa.scene, duomo.scene, pantheon.scene, trevi.scene, florence.scene]);
+  }, [colosseum.scene, pisa.scene, duomo.scene, florence.scene]);
 
   useEffect(() => {
     onTargetsReady(targets);
@@ -861,7 +851,7 @@ function LandmarkMorphFallback({ activeScene }) {
   const groupRef = useRef(null);
   const morphRef = useRef(0);
   const currentRef = useRef(null);
-  const data = useMemo(() => createStoryMorphData(4200), []);
+  const data = useMemo(() => createStoryMorphData(3200), []);
   const activeTarget = data.proceduralTargets[activeScene.id] ?? data.proceduralTargets.intro;
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry();
@@ -904,7 +894,7 @@ function LandmarkMorphFallback({ activeScene }) {
 
 function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
   const canvasRef = useRef(null);
-  const data = useMemo(() => createStoryMorphData(12000), []);
+  const data = useMemo(() => createStoryMorphData(), []);
   const activeTarget = modelTargets?.[activeScene.kind] ?? data.proceduralTargets[activeScene.id] ?? data.proceduralTargets.intro;
   const activeTargetRef = useRef(activeTarget);
   const morphRef = useRef(0);
@@ -925,7 +915,7 @@ function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
     let dpr = 1;
 
     const resize = () => {
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = Math.min(window.devicePixelRatio || 1, 1.35);
       width = canvas.clientWidth || window.innerWidth;
       height = canvas.clientHeight || window.innerHeight;
       canvas.width = Math.floor(width * dpr);
@@ -945,14 +935,14 @@ function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
     const draw = (time) => {
       const t = time * 0.001;
       const shouldAssemble = activeScene.id !== 'intro';
-      morphRef.current = THREE.MathUtils.lerp(morphRef.current, shouldAssemble ? 1 : 0, 0.105);
+      morphRef.current = THREE.MathUtils.lerp(morphRef.current, shouldAssemble ? 1 : 0, 0.18);
       const morph = morphRef.current;
       const target = activeTargetRef.current;
       const side = activeScene.side ?? 'center';
       const centerX = width * (side === 'left' ? 0.34 : side === 'right' ? 0.66 : 0.52);
       const centerY = height * 0.5;
-      const scale = Math.min(width, height) * (shouldAssemble ? 0.36 : 0.24);
-      const rotateY = t * 0.18 + mouseRef.current.x * 0.22;
+      const scale = Math.min(width, height) * (shouldAssemble ? 0.39 : 0.22);
+      const rotateY = t * 0.34 + mouseRef.current.x * 0.2;
       const rotateX = -0.08 + mouseRef.current.y * 0.1;
       const cy = Math.cos(rotateY);
       const sy = Math.sin(rotateY);
@@ -960,15 +950,15 @@ function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
       const sx = Math.sin(rotateX);
 
       ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = 'rgba(5, 78, 126, 0.76)';
+      ctx.fillStyle = 'rgba(22, 126, 180, 0.84)';
 
       for (let i = 0; i < data.random.length; i += 3) {
         const seed = data.seeds[i / 3];
-        const localMorph = THREE.MathUtils.clamp(morph + (seed - 0.5) * 0.16, 0, 1);
+        const localMorph = THREE.MathUtils.clamp(morph + (seed - 0.5) * 0.12, 0, 1);
         const loose = 1 - localMorph;
-        let x = THREE.MathUtils.lerp(data.random[i], target[i], localMorph) + Math.sin(t * 0.65 + seed * 22) * loose * 0.22;
-        let y = THREE.MathUtils.lerp(data.random[i + 1], target[i + 1], localMorph) + Math.cos(t * 0.52 + seed * 30) * loose * 0.18;
-        let z = THREE.MathUtils.lerp(data.random[i + 2], target[i + 2], localMorph) + Math.sin(t * 0.4 + seed * 18) * loose * 0.2;
+        let x = THREE.MathUtils.lerp(data.random[i], target[i], localMorph) + Math.sin(t * 0.92 + seed * 22) * loose * 0.14;
+        let y = THREE.MathUtils.lerp(data.random[i + 1], target[i + 1], localMorph) + Math.cos(t * 0.78 + seed * 30) * loose * 0.12;
+        let z = THREE.MathUtils.lerp(data.random[i + 2], target[i + 2], localMorph) + Math.sin(t * 0.62 + seed * 18) * loose * 0.13;
 
         const rx = x * cy - z * sy;
         const rz = x * sy + z * cy;
@@ -977,9 +967,9 @@ function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
         const perspective = 1 / (1 + (rz2 + 3.8) * 0.09);
         const px = centerX + rx * scale * perspective;
         const py = centerY - ry * scale * perspective;
-        const radius = (shouldAssemble ? 0.92 : 0.72) * perspective * (0.85 + localMorph * 0.36);
+        const radius = (shouldAssemble ? 1.85 : 1.25) * perspective * (0.92 + localMorph * 0.42);
 
-        ctx.globalAlpha = 0.28 + localMorph * 0.58;
+        ctx.globalAlpha = 0.34 + localMorph * 0.5;
         ctx.beginPath();
         ctx.arc(px, py, radius, 0, Math.PI * 2);
         ctx.fill();
@@ -1086,7 +1076,7 @@ function ConceptHeader({ language, setLanguage, activePage, setActivePage }) {
     <header className="home-version-picker home-version-picker--single">
       <div className="home-version-picker__head">
         <span>{c.switcher}</span>
-        <strong>04 Cinematic Portal</strong>
+        <strong>Italy Journey</strong>
         <div className="home-language-toggle" aria-label={c.language}>
           <button type="button" className={language === 'zh' ? 'is-active' : ''} onClick={() => setLanguage('zh')}>中文</button>
           <button type="button" className={language === 'en' ? 'is-active' : ''} onClick={() => setLanguage('en')}>EN</button>
@@ -1103,12 +1093,77 @@ function ConceptHeader({ language, setLanguage, activePage, setActivePage }) {
   );
 }
 
+function HomeSidebar({ language, setLanguage, activePage, setActivePage, selectedStop, onOpenDrive }) {
+  const c = copy[language];
+  const handleNav = (id) => {
+    if (id === 'map') {
+      window.location.hash = '#/v2';
+      return;
+    }
+    if (id === 'vr') {
+      window.location.hash = '#/venice-vr';
+      return;
+    }
+    if (id === 'drive') {
+      onOpenDrive(selectedStop?.id);
+      return;
+    }
+    setActivePage(id);
+  };
+
+  return (
+    <aside className="home-sidebar">
+      <div className="home-sidebar__brand">
+        <span>{language === 'zh' ? '意大利旅程' : 'Italy Journey'}</span>
+        <strong>{language === 'zh' ? '今天想去哪？' : 'Where to today?'}</strong>
+        <div className="home-language-toggle" aria-label={c.language}>
+          <button type="button" className={language === 'zh' ? 'is-active' : ''} onClick={() => setLanguage('zh')}>中文</button>
+          <button type="button" className={language === 'en' ? 'is-active' : ''} onClick={() => setLanguage('en')}>EN</button>
+        </div>
+      </div>
+      <nav className="concept-page-tabs" aria-label={language === 'zh' ? '主页分页' : 'Home sections'}>
+        {c.nav.map(([id, label]) => (
+          <button key={id} type="button" className={activePage === id ? 'is-active' : ''} onClick={() => handleNav(id)}>
+            {label}
+          </button>
+        ))}
+      </nav>
+    </aside>
+  );
+}
+
+function HomeLanding({ language, query, setQuery, routeStops, onFocus }) {
+  const c = copy[language];
+  const featuredStops = routeStops.filter((stop) => imageFor(stop, language)).slice(0, 4);
+
+  return (
+    <section className="home-landing">
+      <div className="home-landing__copy">
+        <span>{language === 'zh' ? '开始规划' : 'Start planning'}</span>
+        <h1>{c.homeQuestion}</h1>
+        <p>{c.homeLead}</p>
+        <label className="home-landing-search">
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={c.homePrompt} />
+        </label>
+      </div>
+      <div className="home-landing__gallery" aria-label={c.homeSuggestions}>
+        {featuredStops.map((stop) => (
+          <button key={stop.id} type="button" onClick={() => onFocus(stop.id)}>
+            <img src={imageFor(stop, language)} alt="" loading="eager" />
+            <span>{nameFor(stop, language)}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Hero({ version, language, routeStops, favorites, onOpenDrive }) {
   const c = copy[language];
   return (
     <section className={`concept-hero concept-hero--${version.id}`}>
       <div className="concept-hero__copy">
-        <p className="concept-kicker">Web3D / Particles / Route Planner</p>
+        <p className="concept-kicker">{copy[language].kicker}</p>
         <h1>{t(version.title, language)}</h1>
         <p className="concept-summary">{t(version.summary, language)}</p>
         <div className="concept-actions">
@@ -1197,6 +1252,41 @@ function HighlightsPanel({ language, routeStops, favorites, compare, routeSegmen
   );
 }
 
+function JourneyOverviewPanel({ language, routeStops, favorites, compare, routeSegments }) {
+  const km = routeSegments.reduce((sum, segment) => sum + segment.distance, 0);
+  const hours = routeSegments.reduce((sum, segment) => sum + segment.duration, 0);
+  const featuredCount = routeStops.filter((stop) => stop.modelPath).length;
+  const labels = language === 'zh'
+    ? ['路线概览', '值得停留', '收藏对比']
+    : ['Route at a glance', 'Places to linger', 'Saved ideas'];
+  const details = language === 'zh'
+    ? [
+      `${routeStops.length} 个停靠点，约 ${Math.round(km)} km / ${Math.max(1, Math.round(hours))} 小时`,
+      `${featuredCount} 个重点景点可深入查看，其余适合作为沿途停靠`,
+      `${favorites.size} 个收藏，${compare.size} 个正在对比`,
+    ]
+    : [
+      `${routeStops.length} stops, about ${Math.round(km)} km / ${Math.max(1, Math.round(hours))} h`,
+      `${featuredCount} featured stops are ready for a closer look`,
+      `${favorites.size} saved stops and ${compare.size} places in comparison`,
+    ];
+
+  return (
+    <section className="home-module home-module--highlights">
+      <div className="home-module__head"><span>{language === 'zh' ? '旅程概览' : 'Trip overview'}</span><strong>{Math.round(km)} km</strong></div>
+      <div className="home-highlight-grid">
+        {labels.map((label, index) => (
+          <article key={label}>
+            <span>{label}</span>
+            <strong>{index === 0 ? `${Math.round(km)} km` : index === 1 ? featuredCount : `${favorites.size}/${compare.size}`}</strong>
+            <p>{details[index]}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function SearchFilters({ language, query, setQuery, region, setRegion, kind, setKind, season, setSeason, sort, setSort, options }) {
   const c = copy[language];
   return (
@@ -1266,7 +1356,7 @@ function AccountPanel({ language, favorites, compare, routeStops, userSession, o
   );
 }
 
-function DestinationCards({ language, stops, favorites, compare, selectedId, visibleCount, onShowMore, onFavorite, onCompare, onAdd, onFocus, onOpenDrive }) {
+function DestinationCards({ language, stops, favorites, compare, selectedId, visibleCount, onShowMore, onFavorite, onCompare, onAdd, onFocus }) {
   const c = copy[language];
   const visibleStops = stops.slice(0, visibleCount);
   return (
@@ -1286,7 +1376,6 @@ function DestinationCards({ language, stops, favorites, compare, selectedId, vis
               <button className={compare.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => onCompare(stop.id)}>{c.compare}</button>
               <button type="button" onClick={() => onAdd(stop.id)}>{c.addRoute}</button>
               <button type="button" onClick={() => onFocus(stop.id)}>{c.focus}</button>
-              <button type="button" onClick={() => onOpenDrive(stop.id)}>3D</button>
             </div>
           </article>
         ))}
@@ -1331,7 +1420,6 @@ function RouteEditor({ language, routeStops, routeQuery, setRouteQuery, routeMat
         ))}
       </div>
       <div className="concept-actions concept-actions--compact">
-        <button className="concept-btn concept-btn--primary" type="button" onClick={onOpenDrive}>{c.cta3d}</button>
         <button className="concept-btn" type="button" onClick={onOptimize}>{c.optimize}</button>
         <button className="concept-btn" type="button" onClick={onReset}>{c.reset}</button>
       </div>
@@ -1351,7 +1439,6 @@ function MapBoard({ language, routeStops, onOpenDrive }) {
             className="concept-pin"
             type="button"
             style={{ '--x': `${16 + index * 10 + (index % 2) * 7}%`, '--y': `${22 + index * 8 + (index % 3) * 5}%`, '--delay': `${index * 0.14}s` }}
-            onClick={() => onOpenDrive(stop.id)}
           >
             <span />
             <strong>{nameFor(stop, language)}</strong>
@@ -1436,9 +1523,8 @@ function FocusPanel({ language, stop, onOpenDrive }) {
         <dl>
           <div><dt>LAT</dt><dd>{stop.lat.toFixed(3)}</dd></div>
           <div><dt>LON</dt><dd>{stop.lon.toFixed(3)}</dd></div>
-          <div><dt>MODEL</dt><dd>{stop.modelPath ? 'GLB' : 'Procedural'}</dd></div>
+          <div><dt>{language === 'zh' ? '查看' : 'View'}</dt><dd>{stop.modelPath ? (language === 'zh' ? '可深入浏览' : 'Closer look') : (language === 'zh' ? '沿途停靠' : 'Route stop')}</dd></div>
         </dl>
-        <button type="button" onClick={() => onOpenDrive(stop.id)}>{c.cta3d}</button>
       </div>
     </section>
   );
@@ -1461,7 +1547,6 @@ function ReviewsPanel({ language, stops, favorites, onFavorite, onOpenDrive }) {
                 <span>{regionFor(stop)} / {seasonFor(stop)} / 4.{8 + (stop.name.length % 2)}</span>
                 <div className="home-card-actions">
                   <button type="button" className={favorites.has(stop.id) ? 'is-on' : ''} onClick={() => onFavorite(stop.id)}>{c.favorite}</button>
-                  <button type="button" onClick={() => onOpenDrive(stop.id)}>3D</button>
                   {url && <a href={url} target="_blank" rel="noreferrer">{c.read}</a>}
                 </div>
               </div>
@@ -1483,11 +1568,11 @@ function ComparePanel({ language, compareIds, favoriteIds, onOpenDrive }) {
       <div className="home-compare-columns">
         <section>
           <span>{c.compare}</span>
-          {(compared.length ? compared : landmarks.slice(0, 2)).map((stop) => <button key={stop.id} type="button" onClick={() => onOpenDrive(stop.id)}>{nameFor(stop, language)}</button>)}
+          {(compared.length ? compared : landmarks.slice(0, 2)).map((stop) => <button key={stop.id} type="button">{nameFor(stop, language)}</button>)}
         </section>
         <section>
           <span>{c.favorites}</span>
-          {(favorites.length ? favorites : landmarks.slice(2, 4)).map((stop) => <button key={stop.id} type="button" onClick={() => onOpenDrive(stop.id)}>{nameFor(stop, language)}</button>)}
+          {(favorites.length ? favorites : landmarks.slice(2, 4)).map((stop) => <button key={stop.id} type="button">{nameFor(stop, language)}</button>)}
         </section>
       </div>
     </section>
@@ -1546,7 +1631,7 @@ function DestinationsPage(props) {
         <ServicesPanel language={language} />
       </div>
       <div className="concept-page__stack concept-page__stack--wide">
-        <HighlightsPanel language={language} routeStops={routeStops} favorites={favorites} compare={compare} routeSegments={routeSegments} />
+        <JourneyOverviewPanel language={language} routeStops={routeStops} favorites={favorites} compare={compare} routeSegments={routeSegments} />
       <DestinationCards
         language={language}
         stops={filteredStops}
@@ -1626,7 +1711,7 @@ function DrivePage(props) {
 export function HomeShowcase({ onOpenDrive }) {
   const activeVersion = versions[0];
   const [hasEnteredHome, setHasEnteredHome] = useState(false);
-  const [activePage, setActivePage] = useState('destinations');
+  const [activePage, setActivePage] = useState('home');
   const [language, setLanguage] = useState('zh');
   const [query, setQuery] = useState('');
   const [region, setRegion] = useState('any');
@@ -1771,17 +1856,33 @@ export function HomeShowcase({ onOpenDrive }) {
 
   return (
     <main className={`showcase-home showcase-home--${activeVersion.id}`} style={{ '--concept-accent': activeVersion.accent }}>
-      <ConceptHeader
-        language={language}
-        setLanguage={setLanguage}
-        activePage={activePage}
-        setActivePage={setActivePage}
-      />
-      <Hero version={activeVersion} language={language} routeStops={routeStops} favorites={favorites} onOpenDrive={onOpenDrive} />
-      {activePage === 'destinations' && <DestinationsPage {...commonPageProps} />}
-      {activePage === 'planner' && <PlannerPage {...commonPageProps} />}
-      {activePage === 'reviews' && <ReviewsPage {...commonPageProps} />}
-      {activePage === 'drive' && <DrivePage {...commonPageProps} />}
+      <div className="home-shell">
+        <HomeSidebar
+          language={language}
+          setLanguage={setLanguage}
+          activePage={activePage}
+          setActivePage={setActivePage}
+          selectedStop={selectedStop}
+          onOpenDrive={onOpenDrive}
+        />
+        <div className="home-shell__content">
+          {activePage === 'home' && (
+            <HomeLanding
+              language={language}
+              query={query}
+              setQuery={setQuery}
+              routeStops={routeStops}
+              onFocus={(id) => {
+                setSelectedId(id);
+                setActivePage('destinations');
+              }}
+            />
+          )}
+          {activePage === 'destinations' && <DestinationsPage {...commonPageProps} />}
+          {activePage === 'planner' && <PlannerPage {...commonPageProps} />}
+          {activePage === 'reviews' && <ReviewsPage {...commonPageProps} />}
+        </div>
+      </div>
     </main>
   );
 }
