@@ -1,10 +1,17 @@
 import math
 import os
+import json
+import secrets
+import hashlib
+from datetime import datetime, timezone
+from pathlib import Path
+from threading import Lock
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
-app = FastAPI(title='Web3D Mock Landmarks API', version='1.1.0')
+app = FastAPI(title='Web3D Landmarks API', version='1.1.0')
 
 allowed_origins = [
     origin.strip()
@@ -23,6 +30,84 @@ app.add_middleware(
 _LON_MIN, _LON_MAX = 6.6, 18.5
 _LAT_MIN, _LAT_MAX = 36.6, 47.1
 _WORLD = 170
+_STORE_PATH = Path(__file__).with_name('account_store.json')
+_STORE_LOCK = Lock()
+_PBKDF2_ROUNDS = 120_000
+
+
+class AuthPayload(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=6, max_length=128)
+    name: str | None = Field(default=None, max_length=64)
+
+
+class HistoryPayload(BaseModel):
+    action: str = Field(min_length=1, max_length=80)
+    detail: str = Field(default='', max_length=240)
+
+
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _empty_store():
+    return {'users': {}, 'sessions': {}}
+
+
+def _load_store():
+    if not _STORE_PATH.exists():
+        return _empty_store()
+    with _STORE_PATH.open('r', encoding='utf-8') as file:
+        data = json.load(file)
+    data.setdefault('users', {})
+    data.setdefault('sessions', {})
+    return data
+
+
+def _save_store(data):
+    _STORE_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+
+
+def _hash_password(password, salt=None):
+    salt = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), _PBKDF2_ROUNDS).hex()
+    return salt, digest
+
+
+def _verify_password(password, salt, digest):
+    _, candidate = _hash_password(password, salt)
+    return secrets.compare_digest(candidate, digest)
+
+
+def _public_user(email, user):
+    return {
+        'email': email,
+        'name': user['name'],
+        'created_at': user['created_at'],
+        'last_login_at': user.get('last_login_at'),
+    }
+
+
+def _add_history(user, action, detail=''):
+    user.setdefault('history', []).insert(0, {
+        'id': secrets.token_hex(8),
+        'action': action,
+        'detail': detail,
+        'created_at': _now_iso(),
+    })
+    user['history'] = user['history'][:80]
+
+
+def _require_user(authorization):
+    if not authorization or not authorization.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail='Missing auth token')
+    token = authorization.removeprefix('Bearer ').strip()
+    with _STORE_LOCK:
+        store = _load_store()
+        email = store['sessions'].get(token)
+        if not email or email not in store['users']:
+            raise HTTPException(status_code=401, detail='Invalid auth token')
+        return token, email, store, store['users'][email]
 
 
 def _merc_y(lat):
@@ -73,7 +158,7 @@ _RAW_LANDMARKS = [
 MOCK_ROUTE = {
     'id': 'mock_italy_north_to_south',
     'name': 'Milan to Pompeii mock heritage drive',
-    'source': 'mock',
+    'source': 'backend',
     'distance_km': 920,
     'duration_hours': 10.8,
     'notes': 'Schema prepared for OSM, DEM, PostGIS and traffic-aware routing data.',
@@ -95,7 +180,7 @@ LANDMARKS = [
         'coordinates': _lnglat_to_world(item['lon'], item['lat']),
         'lon': item['lon'],
         'lat': item['lat'],
-        'data_source': 'mock',
+        'data_source': 'backend',
     }
     for item in _RAW_LANDMARKS
 ]
@@ -182,7 +267,7 @@ def _review_payload(landmark, language):
     scored_reviews = [item['score'] for item in reviews if item.get('score') is not None]
     average_score = round(sum(scored_reviews) / len(scored_reviews), 2) if scored_reviews else None
     return {
-        'mode': 'mock',
+        'mode': 'backend',
         'landmark_id': landmark['id'],
         'landmark_name': landmark['name'],
         'average_score': average_score,
@@ -195,15 +280,90 @@ def _review_payload(landmark, language):
 def health():
     return {
         'status': 'ok',
-        'mode': 'mock',
+        'mode': 'backend',
         'database_configured': False,
     }
+
+
+@app.post('/api/auth/register')
+def register(payload: AuthPayload):
+    email = payload.email.strip().lower()
+    if '@' not in email or '.' not in email.rsplit('@', 1)[-1]:
+        raise HTTPException(status_code=422, detail='Invalid email')
+    name = (payload.name or email.split('@', 1)[0]).strip()[:64] or 'Traveler'
+    with _STORE_LOCK:
+        store = _load_store()
+        if email in store['users']:
+            raise HTTPException(status_code=409, detail='Account already exists')
+        salt, digest = _hash_password(payload.password)
+        user = {
+            'email': email,
+            'name': name,
+            'salt': salt,
+            'password_hash': digest,
+            'created_at': _now_iso(),
+            'last_login_at': _now_iso(),
+            'history': [],
+        }
+        _add_history(user, 'registered', 'Account created')
+        token = secrets.token_urlsafe(32)
+        store['users'][email] = user
+        store['sessions'][token] = email
+        _save_store(store)
+        return {'token': token, 'user': _public_user(email, user), 'history': user['history']}
+
+
+@app.post('/api/auth/login')
+def login(payload: AuthPayload):
+    email = payload.email.strip().lower()
+    with _STORE_LOCK:
+        store = _load_store()
+        user = store['users'].get(email)
+        if not user or not _verify_password(payload.password, user['salt'], user['password_hash']):
+            raise HTTPException(status_code=401, detail='Invalid email or password')
+        user['last_login_at'] = _now_iso()
+        _add_history(user, 'signed in', 'Session started')
+        token = secrets.token_urlsafe(32)
+        store['sessions'][token] = email
+        _save_store(store)
+        return {'token': token, 'user': _public_user(email, user), 'history': user['history']}
+
+
+@app.get('/api/auth/me')
+def get_me(authorization: str | None = Header(default=None)):
+    _, email, _, user = _require_user(authorization)
+    return {'user': _public_user(email, user), 'history': user.get('history', [])}
+
+
+@app.post('/api/auth/logout')
+def logout(authorization: str | None = Header(default=None)):
+    token, _, store, _ = _require_user(authorization)
+    with _STORE_LOCK:
+        store = _load_store()
+        store['sessions'].pop(token, None)
+        _save_store(store)
+    return {'ok': True}
+
+
+@app.get('/api/account/history')
+def get_account_history(authorization: str | None = Header(default=None)):
+    _, _, _, user = _require_user(authorization)
+    return {'items': user.get('history', [])}
+
+
+@app.post('/api/account/history')
+def add_account_history(payload: HistoryPayload, authorization: str | None = Header(default=None)):
+    _, email, store, user = _require_user(authorization)
+    _add_history(user, payload.action, payload.detail)
+    store['users'][email] = user
+    _save_store(store)
+    return {'items': user.get('history', [])}
 
 
 @app.get('/api/landmarks')
 def get_landmarks():
     return {
-        'mode': 'mock',
+        'mode': 'backend',
         'items': LANDMARKS,
     }
 
@@ -211,7 +371,7 @@ def get_landmarks():
 @app.get('/api/routes/current')
 def get_current_route():
     return {
-        'mode': 'mock',
+        'mode': 'backend',
         'route': MOCK_ROUTE,
     }
 
@@ -248,11 +408,11 @@ def get_nearby_reviews(
             'distance_km': round(distance, 2),
             'average_score': review_payload['average_score'],
             'review_count': review_payload['review_count'],
-            'source': 'mock',
+            'source': 'backend',
         })
 
     items.sort(key=lambda item: item['distance_km'])
     return {
-        'mode': 'mock',
+        'mode': 'backend',
         'items': items,
     }

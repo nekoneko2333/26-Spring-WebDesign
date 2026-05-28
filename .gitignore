@@ -18,6 +18,7 @@ tools/amsterdam-vr/.cache/
 __pycache__/
 *.py[cod]
 *$py.class
+backend/account_store.json
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/

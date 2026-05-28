@@ -44,62 +44,40 @@ const liveIndex = new Map((liveLandmarksData.items ?? []).map((item) => [item.id
 const initialRouteIds = ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
 const STORY_PARTICLE_COUNT = 7600;
 const STORY_MODEL_SAMPLE_COUNT = 8200;
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
+const AUTH_TOKEN_KEY = 'web3d_auth_token';
 
 const storyScenes = [
   {
     id: 'intro',
     kind: 'chaos',
     side: 'center',
-    title: { en: 'Italy, one landmark at a time', zh: '让意大利慢慢出现' },
-    kicker: { en: 'Scroll through the route', zh: '向下探索路线' },
-    body: {
-      en: 'Start with a hint of motion, then watch each stop take shape before you choose where to go next.',
-      zh: '先从一片流动的光点开始，继续向下，每一站都会逐渐显出轮廓。',
-    },
+    title: 'Italy',
   },
   {
     id: 'colosseum',
     kind: 'colosseum',
     side: 'right',
-    title: { en: 'Colosseum', zh: '罗马斗兽场' },
-    kicker: { en: 'Ancient arena in motion', zh: '古罗马竞技场' },
-    body: {
-      en: 'The route opens in Rome, with the arena rising like a first postcard from the trip.',
-      zh: '旅程从罗马展开，斗兽场像第一张明信片一样浮现出来。',
-    },
+    title: 'Colosseum',
   },
   {
     id: 'pisa',
     kind: 'pisa',
     side: 'left',
-    title: { en: 'Leaning Tower of Pisa', zh: '比萨斜塔' },
-    kicker: { en: 'The leaning tower takes shape', zh: '斜塔逐渐成形' },
-    body: {
-      en: 'Pisa adds a slower stop to the journey, a place to pause before heading back onto the road.',
-      zh: '到了比萨，行程可以慢下来，在斜塔前停一停再继续出发。',
-    },
+    title: 'Leaning Tower of Pisa',
+    modelScale: 0.78,
   },
   {
     id: 'duomo',
     kind: 'duomo',
     side: 'right',
-    title: { en: 'Milan Duomo', zh: '米兰主教座堂' },
-    kicker: { en: 'Cathedral lines rising up', zh: '教堂轮廓升起' },
-    body: {
-      en: 'Milan brings the route north, with cathedral spires cutting into the skyline.',
-      zh: '路线来到北方，米兰大教堂的尖顶把城市天际线勾勒出来。',
-    },
+    title: 'Milan Duomo',
   },
   {
     id: 'florence',
     kind: 'florence',
     side: 'left',
-    title: { en: 'Santa Maria del Fiore', zh: 'Santa Maria del Fiore' },
-    kicker: { en: 'Florence cathedral stop', zh: '佛罗伦萨教堂' },
-    body: {
-      en: 'Florence gives the trip a softer rhythm: rooftops, piazzas, and a cathedral at the center.',
-      zh: '佛罗伦萨让旅程变得更从容：屋顶、广场，还有城市中心的教堂。',
-    },
+    title: 'Santa Maria del Fiore',
   },
 ];
 
@@ -941,7 +919,8 @@ function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
       const side = activeScene.side ?? 'center';
       const centerX = width * (side === 'left' ? 0.34 : side === 'right' ? 0.66 : 0.52);
       const centerY = height * 0.5;
-      const scale = Math.min(width, height) * (shouldAssemble ? 0.39 : 0.22);
+      const sceneScale = activeScene.modelScale ?? 1;
+      const scale = Math.min(width, height) * (shouldAssemble ? 0.39 : 0.22) * sceneScale;
       const rotateY = t * 0.34 + mouseRef.current.x * 0.2;
       const rotateX = -0.08 + mouseRef.current.y * 0.1;
       const cy = Math.cos(rotateY);
@@ -1055,12 +1034,10 @@ function SemanticParticleStory({ language, onEnterHome }) {
             data-story-index={index}
             className={`semantic-story__panel semantic-story__panel--${scene.side ?? 'center'} ${index === activeIndex ? 'is-active' : ''}`}
           >
-            <span>{t(scene.kicker, language)}</span>
-            <h2>{t(scene.title, language)}</h2>
-            <p>{t(scene.body, language)}</p>
+            <h2>{scene.title}</h2>
             {index === storyScenes.length - 1 && (
               <button className="semantic-story__enter" type="button" onClick={onEnterHome}>
-                {language === 'zh' ? '进入 04 主页' : 'Enter 04 Home'}
+                enter
               </button>
             )}
           </article>
@@ -1093,7 +1070,7 @@ function ConceptHeader({ language, setLanguage, activePage, setActivePage }) {
   );
 }
 
-function HomeSidebar({ language, setLanguage, activePage, setActivePage, selectedStop, onOpenDrive }) {
+function HomeSidebar({ language, setLanguage, activePage, setActivePage, selectedStop, collapsed, onToggleCollapse, onOpenDrive }) {
   const c = copy[language];
   const handleNav = (id) => {
     if (id === 'map') {
@@ -1112,23 +1089,94 @@ function HomeSidebar({ language, setLanguage, activePage, setActivePage, selecte
   };
 
   return (
-    <aside className="home-sidebar">
+    <aside className={`home-sidebar ${collapsed ? 'is-collapsed' : ''}`}>
       <div className="home-sidebar__brand">
         <span>{language === 'zh' ? '意大利旅程' : 'Italy Journey'}</span>
         <strong>{language === 'zh' ? '今天想去哪？' : 'Where to today?'}</strong>
+        <button className="home-sidebar__collapse" type="button" onClick={onToggleCollapse} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+          {collapsed ? '>' : '<'}
+        </button>
         <div className="home-language-toggle" aria-label={c.language}>
           <button type="button" className={language === 'zh' ? 'is-active' : ''} onClick={() => setLanguage('zh')}>中文</button>
           <button type="button" className={language === 'en' ? 'is-active' : ''} onClick={() => setLanguage('en')}>EN</button>
         </div>
       </div>
       <nav className="concept-page-tabs" aria-label={language === 'zh' ? '主页分页' : 'Home sections'}>
-        {c.nav.map(([id, label]) => (
-          <button key={id} type="button" className={activePage === id ? 'is-active' : ''} onClick={() => handleNav(id)}>
+        {c.nav.map(([id, label], index) => (
+          <button key={id} type="button" className={activePage === id ? 'is-active' : ''} data-index={String(index + 1).padStart(2, '0')} aria-label={label} onClick={() => handleNav(id)}>
             {label}
           </button>
         ))}
       </nav>
     </aside>
+  );
+}
+
+function AccountAvatar({ language, userSession, onOpen }) {
+  const initials = userSession?.name?.slice(0, 1).toUpperCase() ?? 'A';
+  return (
+    <button className={`home-account-avatar ${userSession ? 'is-signed-in' : ''}`} type="button" onClick={onOpen} aria-label={language === 'zh' ? '账户' : 'Account'}>
+      <span>{initials}</span>
+      <strong>{userSession ? userSession.name : (language === 'zh' ? '登录' : 'Sign in')}</strong>
+    </button>
+  );
+}
+
+function AuthDialog({ language, mode, setMode, form, setForm, error, loading, userSession, history, onSubmit, onClose, onSignOut }) {
+  const isRegister = mode === 'register';
+  return (
+    <div className="home-auth" role="dialog" aria-modal="true" aria-label={language === 'zh' ? '账号' : 'Account'}>
+      <div className="home-auth__panel">
+        <button className="home-auth__close" type="button" onClick={onClose}>×</button>
+        {userSession ? (
+          <>
+            <div className="home-auth__head">
+              <span>{language === 'zh' ? '已登录' : 'Signed in'}</span>
+              <strong>{userSession.name}</strong>
+              <p>{userSession.email}</p>
+            </div>
+            <div className="home-auth__history">
+              <h3>{language === 'zh' ? '账号历史' : 'Account history'}</h3>
+              {(history.length ? history : []).slice(0, 8).map((item) => (
+                <section key={item.id}>
+                  <strong>{item.action}</strong>
+                  <span>{item.detail}</span>
+                </section>
+              ))}
+            </div>
+            <button className="home-auth__submit" type="button" onClick={onSignOut}>{language === 'zh' ? '退出登录' : 'Sign out'}</button>
+          </>
+        ) : (
+          <form onSubmit={onSubmit}>
+            <div className="home-auth__head">
+              <span>{isRegister ? (language === 'zh' ? '注册' : 'Register') : (language === 'zh' ? '登录' : 'Login')}</span>
+              <strong>{isRegister ? 'Create account' : 'Welcome back'}</strong>
+            </div>
+            {isRegister && (
+              <label>
+                <span>{language === 'zh' ? '昵称' : 'Name'}</span>
+                <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
+              </label>
+            )}
+            <label>
+              <span>Email</span>
+              <input type="email" required value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
+            </label>
+            <label>
+              <span>{language === 'zh' ? '密码' : 'Password'}</span>
+              <input type="password" required minLength={6} value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} />
+            </label>
+            {error && <p className="home-auth__error">{error}</p>}
+            <button className="home-auth__submit" type="submit" disabled={loading}>
+              {loading ? '...' : (isRegister ? (language === 'zh' ? '注册并登录' : 'Register') : (language === 'zh' ? '登录' : 'Login'))}
+            </button>
+            <button className="home-auth__switch" type="button" onClick={() => setMode(isRegister ? 'login' : 'register')}>
+              {isRegister ? (language === 'zh' ? '已有账号，去登录' : 'Have an account? Login') : (language === 'zh' ? '没有账号，去注册' : 'Create an account')}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1339,7 +1387,7 @@ function ServicesPanel({ language }) {
   );
 }
 
-function AccountPanel({ language, favorites, compare, routeStops, userSession, onSignIn, onSignOut, onReset }) {
+function AccountPanel({ language, favorites, compare, routeStops, userSession, accountHistory = [], onSignIn, onSignOut, onReset }) {
   const c = copy[language];
   const signedIn = Boolean(userSession);
   return (
@@ -1352,6 +1400,14 @@ function AccountPanel({ language, favorites, compare, routeStops, userSession, o
         <button type="button" onClick={signedIn ? onSignOut : onSignIn}>{signedIn ? (language === 'zh' ? '退出' : 'Sign out') : (language === 'zh' ? '登录' : 'Sign in')}</button>
         <button type="button" onClick={onReset}>{language === 'zh' ? '清空路线' : c.reset}</button>
       </div>
+      {signedIn && (
+        <div className="home-account-history">
+          <strong>{language === 'zh' ? '账号历史' : 'Account history'}</strong>
+          {accountHistory.slice(0, 4).map((item) => (
+            <span key={item.id}>{item.action}</span>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -1627,7 +1683,7 @@ function DestinationsPage(props) {
     <section className="concept-page concept-page--destinations">
       <div className="concept-page__aside">
         <SearchFilters {...props} />
-        <AccountPanel language={language} favorites={favorites} compare={compare} routeStops={routeStops} userSession={userSession} onSignIn={props.onSignIn} onSignOut={props.onSignOut} onReset={props.onResetRoute} />
+        <AccountPanel language={language} favorites={favorites} compare={compare} routeStops={routeStops} userSession={userSession} accountHistory={props.accountHistory} onSignIn={props.onSignIn} onSignOut={props.onSignOut} onReset={props.onResetRoute} />
         <ServicesPanel language={language} />
       </div>
       <div className="concept-page__stack concept-page__stack--wide">
@@ -1701,7 +1757,7 @@ function DrivePage(props) {
       <div className="concept-page__stack">
         <FocusPanel language={language} stop={selectedStop} onOpenDrive={onOpenDrive} />
         <StatStrip language={language} routeStops={routeStops} favorites={favorites} />
-        <AccountPanel language={language} favorites={favorites} compare={compare} routeStops={routeStops} userSession={userSession} onSignIn={props.onSignIn} onSignOut={props.onSignOut} onReset={props.onResetRoute} />
+        <AccountPanel language={language} favorites={favorites} compare={compare} routeStops={routeStops} userSession={userSession} accountHistory={props.accountHistory} onSignIn={props.onSignIn} onSignOut={props.onSignOut} onReset={props.onResetRoute} />
         <RouteSchemaPanel language={language} routeStops={routeStops} routeSegments={routeSegments} />
       </div>
     </section>
@@ -1727,6 +1783,14 @@ export function HomeShowcase({ onOpenDrive }) {
   const [days, setDays] = useState(3);
   const [pace, setPace] = useState('Standard');
   const [userSession, setUserSession] = useState(null);
+  const [authToken, setAuthToken] = useState(() => window.localStorage.getItem(AUTH_TOKEN_KEY) ?? '');
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '' });
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [accountHistory, setAccountHistory] = useState([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [visibleCount, setVisibleCount] = useState(12);
 
   const options = useMemo(() => ({
@@ -1755,6 +1819,33 @@ export function HomeShowcase({ onOpenDrive }) {
   useEffect(() => {
     setVisibleCount(12);
   }, [kind, query, region, season, sort]);
+
+  useEffect(() => {
+    if (!authToken) return undefined;
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error('Session expired');
+        return response.json();
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        setUserSession(payload.user);
+        setAccountHistory(payload.history ?? []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        window.localStorage.removeItem(AUTH_TOKEN_KEY);
+        setAuthToken('');
+        setUserSession(null);
+        setAccountHistory([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken]);
 
   const routeStops = useMemo(() => routeIds.map((id) => landmarks.find((stop) => stop.id === id)).filter(Boolean), [routeIds]);
   const routeSegments = useMemo(() => routeSegmentsFor(routeStops), [routeStops]);
@@ -1800,6 +1891,60 @@ export function HomeShowcase({ onOpenDrive }) {
     setRouteIds(initialRouteIds);
     setLockedIds(new Set());
   };
+  const saveAuthPayload = (payload) => {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
+    setAuthToken(payload.token);
+    setUserSession(payload.user);
+    setAccountHistory(payload.history ?? []);
+    setAuthDialogOpen(false);
+    setAuthError('');
+  };
+  const handleAuthSubmit = async (event) => {
+    event.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/${authMode}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(authForm),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail ?? 'Auth failed');
+      saveAuthPayload(payload);
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+  const handleSignOut = async () => {
+    if (authToken) {
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken}` },
+      }).catch(() => {});
+    }
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    setAuthToken('');
+    setUserSession(null);
+    setAccountHistory([]);
+    setAuthDialogOpen(false);
+  };
+  const addAccountHistory = async (action, detail) => {
+    if (!authToken) return;
+    const response = await fetch(`${API_BASE_URL}/api/account/history`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ action, detail }),
+    }).catch(() => null);
+    if (!response?.ok) return;
+    const payload = await response.json();
+    setAccountHistory(payload.items ?? []);
+  };
 
   const commonPageProps = {
     language,
@@ -1827,22 +1972,29 @@ export function HomeShowcase({ onOpenDrive }) {
     selectedId,
     selectedStop,
     userSession,
+    accountHistory,
     days,
     setDays,
     pace,
     setPace,
     setSelectedId,
-    onFavorite: (id) => toggleSet(setFavorites, id),
+    onFavorite: (id) => {
+      toggleSet(setFavorites, id);
+      addAccountHistory('favorite updated', nameFor(landmarks.find((stop) => stop.id === id) ?? {}, language));
+    },
     onCompare: (id) => toggleSet(setCompare, id),
-    onAddRoute: addRoute,
+    onAddRoute: (id) => {
+      addRoute(id);
+      addAccountHistory('route updated', nameFor(landmarks.find((stop) => stop.id === id) ?? {}, language));
+    },
     onRemove: removeRoute,
     onMove: moveRoute,
     onToggleLock: (id) => toggleSet(setLockedIds, id),
     onOptimize: optimizeRoute,
     onResetRoute: resetRoute,
     onShowMore: () => setVisibleCount((count) => Math.min(count + 8, filteredStops.length)),
-    onSignIn: () => setUserSession({ name: language === 'zh' ? '旅行者' : 'Traveler' }),
-    onSignOut: () => setUserSession(null),
+    onSignIn: () => setAuthDialogOpen(true),
+    onSignOut: handleSignOut,
     onOpenDrive,
   };
 
@@ -1856,15 +2008,18 @@ export function HomeShowcase({ onOpenDrive }) {
 
   return (
     <main className={`showcase-home showcase-home--${activeVersion.id}`} style={{ '--concept-accent': activeVersion.accent }}>
-      <div className="home-shell">
+      <div className={`home-shell ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
         <HomeSidebar
           language={language}
           setLanguage={setLanguage}
           activePage={activePage}
           setActivePage={setActivePage}
           selectedStop={selectedStop}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((value) => !value)}
           onOpenDrive={onOpenDrive}
         />
+        <AccountAvatar language={language} userSession={userSession} onOpen={() => setAuthDialogOpen(true)} />
         <div className="home-shell__content">
           {activePage === 'home' && (
             <HomeLanding
@@ -1883,6 +2038,22 @@ export function HomeShowcase({ onOpenDrive }) {
           {activePage === 'reviews' && <ReviewsPage {...commonPageProps} />}
         </div>
       </div>
+      {authDialogOpen && (
+        <AuthDialog
+          language={language}
+          mode={authMode}
+          setMode={setAuthMode}
+          form={authForm}
+          setForm={setAuthForm}
+          error={authError}
+          loading={authLoading}
+          userSession={userSession}
+          history={accountHistory}
+          onSubmit={handleAuthSubmit}
+          onClose={() => setAuthDialogOpen(false)}
+          onSignOut={handleSignOut}
+        />
+      )}
     </main>
   );
 }

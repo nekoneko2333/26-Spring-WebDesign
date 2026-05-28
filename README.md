@@ -1,19 +1,46 @@
-# Web3D Travel Platform
+# 启动指令
 
-基于 React、Vite、Three.js / React Three Fiber 的 3D 旅行规划项目。当前默认入口已经整合为 04 Cinematic Portal 首页，保留完整的目的地、行程、点评、账户、服务和 3D 导览功能。
+这个项目现在默认加载本地后端接口，后端需要单独启动。
 
-## 快速启动
+## 1. 安装前端依赖
 
 ```bash
 npm install
-npm.cmd run dev
 ```
 
-默认地址：
+## 2. 后端环境
+
+后端使用本机 conda 环境 `web3d-backend`。
+
+## 3. 启动后端
+
+```bash
+npm run dev:backend
+```
+
+后端地址：
+
+```txt
+http://127.0.0.1:8000
+```
+
+## 4. 另开终端启动前端
+
+```bash
+npm run dev
+```
+
+前端地址：
 
 ```txt
 http://127.0.0.1:5173
 ```
+
+前端默认请求 `http://127.0.0.1:8000`。如果后端端口改了，再设置 `VITE_API_BASE_URL` 覆盖。
+
+# Web3D Travel Platform
+
+基于 React、Vite、Three.js / React Three Fiber 的 3D 旅行规划项目。当前默认入口已经整合为 04 Cinematic Portal 首页，保留完整的目的地、行程、点评、账户、服务和 3D 导览功能。
 
 生产构建检查：
 
