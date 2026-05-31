@@ -112,7 +112,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, delta);
       setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
       setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.IDLE));
-      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
+      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve), ...getRouteTimeline(progressRef.current) });
     }
 
     if (!drivingEnabled) {
@@ -128,13 +128,13 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       setNearbyLandmarkId(initialLandmarkId ?? null);
       clearGuidedTourFocus();
       setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.IDLE));
-      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current), ...getRouteTimeline(progressRef.current) });
+      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve), ...getRouteTimeline(progressRef.current) });
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, delta);
       return;
     }
 
     const routeLocked = focusPanelOpen || modelViewerOpen;
-    const routeContext = getRouteContext(progressRef.current, activeRoute);
+    const routeContext = getRouteContext(progressRef.current, activeRoute, routeCurve);
     const routeSpeedFactor = THREE.MathUtils.clamp(routeContext.profile.speedFactor, 0.2, 1.08);
     const input = controls.current;
     const hasManualInput = input.forward || input.backward;
@@ -194,7 +194,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     speedRef.current = THREE.MathUtils.clamp(targetSpeedRef.current, speedRef.current - maxDelta, speedRef.current + maxDelta);
     if (Math.abs(speedRef.current) < 0.05) speedRef.current = 0;
 
-    const progressDelta = (speedRef.current / Math.max(currentRoute.distanceKm, 1) / 3600)
+    const progressDelta = (speedRef.current / Math.max(activeRoute.distanceKm ?? activeRoute.distance ?? activeRoute.totalDistanceKm ?? 1, 1) / 3600)
       * VEHICLE_TUNING.simulationTimeScale * delta;
 
     if (autoDrive && !routeLocked) {
@@ -353,12 +353,9 @@ function updateGuidedTourState({
   transition(GUIDED_TOUR_STATES.DRIVING);
 }
 
-function getRouteContext(progress) {
-  const point = getRoutePointAtProgress(progress);
-  const segment = getRouteSegmentAtProgress(progress);
-  const curvatureSpeedFactor = getCurvatureSpeedFactor(progress);
-function getRouteContext(progress, activeRoute) {
+function getRouteContext(progress, activeRoute, curve) {
   const routePoint = activeRoute.pointAtProgress(progress);
+  const curvatureSpeedFactor = getCurvatureSpeedFactor(progress, curve ?? activeRoute.curve);
   const point = {
     id: `route-${routePoint.index}`,
     landmarkId: null,
@@ -390,9 +387,10 @@ function getRouteContext(progress, activeRoute) {
   };
 }
 
-function getCurvatureSpeedFactor(progress) {
-  roadCurve.getTangentAt(progress, tangentPoint);
-  roadCurve.getTangentAt(Math.min((progress + VEHICLE_TUNING.lookAheadDistance * 0.66) % 1, 0.9999), aheadTangent);
+function getCurvatureSpeedFactor(progress, curve) {
+  if (!curve) return 1;
+  curve.getTangentAt(progress, tangentPoint);
+  curve.getTangentAt(Math.min((progress + VEHICLE_TUNING.lookAheadDistance * 0.66) % 1, 0.9999), aheadTangent);
   flatTangent.copy(tangentPoint).setY(0).normalize();
   flatAheadTangent.copy(aheadTangent).setY(0).normalize();
   if (flatTangent.lengthSq() === 0 || flatAheadTangent.lengthSq() === 0) return 1;
