@@ -540,3 +540,100 @@ body.ui-awake .hud-mode {
     width: min(300px, calc(100vw - 28px));
   }
 }
+
+.tour-info-panel__subhead {
+  margin: 2px 0 8px;
+  color: var(--c-ink-dim);
+  font: 800 10px/1 var(--font-ui-zh);
+  letter-spacing: 0.12em;
+}
+
+.tour-info-panel__view-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.tour-info-panel__view-actions button {
+  min-height: 31px;
+  border: 1px solid rgba(8, 24, 39, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--c-ink-mid);
+  font: 800 10px/1.1 var(--font-ui-zh);
+  cursor: pointer;
+}
+
+.tour-info-panel__view-actions button.is-active {
+  border-color: rgba(126, 208, 228, 0.62);
+  background: rgba(126, 208, 228, 0.18);
+  color: var(--c-ink);
+}
+
+.arrival-card {
+  position: fixed;
+  left: 24px;
+  bottom: 106px;
+  z-index: 32;
+  width: min(330px, calc(100vw - 48px));
+  padding: 18px;
+  border: 1px solid rgba(201, 169, 110, 0.32);
+  border-radius: 24px;
+  background: rgba(255, 250, 240, 0.78);
+  box-shadow: 0 24px 56px rgba(61, 93, 121, 0.18);
+  backdrop-filter: blur(18px);
+  color: var(--c-ink);
+}
+
+.arrival-card p {
+  margin: 0 0 8px;
+  color: var(--c-gold);
+  font: 800 10px/1 var(--font-ui-zh);
+  letter-spacing: 0.18em;
+}
+
+.arrival-card h2 {
+  margin: 0 0 8px;
+  font: 800 20px/1.2 var(--font-ui-zh);
+}
+
+.arrival-card > span {
+  display: block;
+  color: var(--c-ink-mid);
+  font: 600 12px/1.55 var(--font-ui-zh);
+}
+
+.arrival-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.arrival-card__meta strong {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--c-ink);
+  font: 800 11px/1 var(--font-ui-zh);
+}
+
+.arrival-card button {
+  min-height: 36px;
+  width: 100%;
+  border: 0;
+  border-radius: 999px;
+  background: var(--c-ink);
+  color: #fff7df;
+  font: 800 12px/1 var(--font-ui-zh);
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .arrival-card {
+    left: 14px;
+    bottom: 260px;
+    width: min(320px, calc(100vw - 28px));
+  }
+}

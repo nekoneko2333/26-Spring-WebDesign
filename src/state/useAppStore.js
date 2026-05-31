@@ -17,6 +17,8 @@ export const useAppStore = create((set, get) => ({
   guidedTourState: 'IDLE',
   guidedTourLandmarkId: null,
   guidedTourMessage: '',
+  arrivalNotice: null,
+  arrivedLandmarkIds: [],
   tourResetToken: 0,
   autoDrive: false,
   sidebarOpen: true,
@@ -52,6 +54,8 @@ export const useAppStore = create((set, get) => ({
     guidedTourState: 'IDLE',
     guidedTourLandmarkId: null,
     guidedTourMessage: '',
+    arrivalNotice: null,
+    arrivedLandmarkIds: [],
     cameraMode: 'follow',
   })),
   setNearbyLandmarkId: (nearbyLandmarkId) => set({ nearbyLandmarkId }),
@@ -68,6 +72,8 @@ export const useAppStore = create((set, get) => ({
     tourResetToken: state.tourResetToken + 1,
     autoDrive: false,
     routeProgress: 0,
+    arrivalNotice: null,
+    arrivedLandmarkIds: [],
   })),
   setActiveRouteGeometry: ({ coordinates = [], distanceKm = null } = {}) => set((state) => ({
     activeRouteGeometryCoordinates: coordinates,
@@ -75,11 +81,37 @@ export const useAppStore = create((set, get) => ({
     tourResetToken: state.tourResetToken + 1,
     autoDrive: false,
     routeProgress: 0,
+    arrivalNotice: null,
+    arrivedLandmarkIds: [],
   })),
   setGuidedTourState: ({ guidedTourState = 'IDLE', guidedTourLandmarkId = null, guidedTourMessage = '' } = {}) => set({
     guidedTourState,
     guidedTourLandmarkId,
     guidedTourMessage,
+  }),
+  showArrivalNotice: (landmarkId) => set((state) => {
+    if (!landmarkId || state.arrivedLandmarkIds.includes(landmarkId) || state.arrivalNotice?.landmarkId === landmarkId) return {};
+    return {
+      autoDrive: false,
+      arrivalNotice: { landmarkId },
+      guidedTourState: 'FOCUS_POI',
+      guidedTourLandmarkId: landmarkId,
+      guidedTourMessage: '已到达景点',
+    };
+  }),
+  continueVehicleTour: () => set((state) => {
+    const arrivedId = state.arrivalNotice?.landmarkId;
+    return {
+      autoDrive: true,
+      cameraMode: 'follow',
+      arrivalNotice: null,
+      arrivedLandmarkIds: arrivedId && !state.arrivedLandmarkIds.includes(arrivedId)
+        ? [...state.arrivedLandmarkIds, arrivedId]
+        : state.arrivedLandmarkIds,
+      guidedTourState: 'DRIVING',
+      guidedTourLandmarkId: null,
+      guidedTourMessage: '',
+    };
   }),
   clearGuidedTourFocus: () => set({
     selectedLandmarkId: null,

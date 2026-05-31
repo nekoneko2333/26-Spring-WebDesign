@@ -71,6 +71,10 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
   const focusPanelOpen = useAppStore((state) => state.focusPanelOpen);
   const modelViewerOpen = useAppStore((state) => state.modelViewerOpen);
   const tourResetToken = useAppStore((state) => state.tourResetToken);
+  const arrivedLandmarkIds = useAppStore((state) => state.arrivedLandmarkIds);
+  const arrivalNotice = useAppStore((state) => state.arrivalNotice);
+  const showArrivalNotice = useAppStore((state) => state.showArrivalNotice);
+  const cameraMode = useAppStore((state) => state.cameraMode);
   const progressRef = useRef(START_PROGRESS);
   const speedRef = useRef(0);
   const targetSpeedRef = useRef(0);
@@ -145,6 +149,25 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     }
 
     const nearbyLandmark = getNearbyLandmarkInfo(currentPoint.x, currentPoint.z);
+    const routeStopIds = activeRoute.routeIds.length
+      ? activeRoute.routeIds
+      : ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
+    // 到站检测：只对当前路线站点触发一次，到站后暂停并交给 UI 卡片继续。
+    const shouldShowArrival = Boolean(
+      autoDrive
+      && !routeLocked
+      && nearbyLandmark
+      && routeStopIds.includes(nearbyLandmark.id)
+      && nearbyLandmark.distance <= nearbyLandmark.landmarkTriggerRadius
+      && !arrivedLandmarkIds.includes(nearbyLandmark.id)
+      && arrivalNotice?.landmarkId !== nearbyLandmark.id,
+    );
+    if (shouldShowArrival) {
+      speedRef.current = 0;
+      targetSpeedRef.current = 0;
+      showArrivalNotice(nearbyLandmark.id);
+    }
+
     const activeGuidePoi = nearbyLandmark && !visitedLandmarksRef.current.has(nearbyLandmark.id)
       ? nearbyLandmark
       : null;
@@ -222,7 +245,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       ...getRouteTimeline(progressRef.current),
     });
 
-    if (speedRef.current !== 0 && !routeLocked && guidedTourStateRef.current !== GUIDED_TOUR_STATES.FOCUS_POI) setCameraMode('follow');
+    if (speedRef.current !== 0 && !routeLocked && guidedTourStateRef.current !== GUIDED_TOUR_STATES.FOCUS_POI && cameraMode !== 'free') setCameraMode('follow');
   });
 
   return null;

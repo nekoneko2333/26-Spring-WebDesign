@@ -73,6 +73,14 @@ const driveRouteCopy = {
       freeRoute: '自定义路线',
       noStop: '路线起点',
       finished: '已完成',
+      viewMode: '视角模式',
+      followView: '跟随视角',
+      mapView: '俯视视角',
+      freeView: '自由视角',
+      arrived: '已到达',
+      rating: '评分',
+      stay: '建议停留',
+      continue: '继续导览',
     },
   },
   zh: {
@@ -141,6 +149,14 @@ const driveRouteCopy = {
       freeRoute: '自定义路线',
       noStop: '路线起点',
       finished: '已完成',
+      viewMode: '视角模式',
+      followView: '跟随视角',
+      mapView: '俯视视角',
+      freeView: '自由视角',
+      arrived: '已到达',
+      rating: '评分',
+      stay: '建议停留',
+      continue: '继续导览',
     },
   },
 };
@@ -151,6 +167,19 @@ function getLandmarkName(landmark, language) {
 
 function getLandmarkDescription(landmark, language) {
   return travelLandmarkMeta[landmark?.id]?.blurb?.[language] ?? landmark?.description ?? '';
+}
+
+function getArrivalMeta(landmarkId) {
+  const fallback = { rating: '4.8', stay: '45 分钟' };
+  const table = {
+    milan_duomo: { rating: '4.9', stay: '60 分钟' },
+    venice_rialto: { rating: '4.7', stay: '40 分钟' },
+    florence_duomo: { rating: '4.8', stay: '55 分钟' },
+    pisa: { rating: '4.7', stay: '45 分钟' },
+    colosseum: { rating: '4.9', stay: '75 分钟' },
+    pompeii: { rating: '4.8', stay: '90 分钟' },
+  };
+  return table[landmarkId] ?? fallback;
 }
 
 function formatHour(hour) {
@@ -175,6 +204,7 @@ export function UIOverlay({ isStarted }) {
     guidedTourLandmarkId,
     guidedTourMessage,
     vehicleSpeed,
+    arrivalNotice,
     focusPanelOpen,
     modelViewerOpen,
     autoDrive,
@@ -183,6 +213,7 @@ export function UIOverlay({ isStarted }) {
     setCameraMode,
     setAutoDrive,
     resetVehicleTour,
+    continueVehicleTour,
     toggleMapView,
     toggleAutoDrive,
     openLandmarkFocus,
@@ -192,6 +223,7 @@ export function UIOverlay({ isStarted }) {
   const nearbyLandmark = landmarks.find((item) => item.id === nearbyLandmarkId);
   const selectedLandmark = landmarks.find((item) => item.id === selectedLandmarkId);
   const guidedTourLandmark = landmarks.find((item) => item.id === guidedTourLandmarkId);
+  const arrivalLandmark = landmarks.find((item) => item.id === arrivalNotice?.landmarkId);
   const displayLandmark = selectedLandmark ?? nearbyLandmark;
   const { data: reviewPayload, isLoading } = useLandmarkReviews(selectedLandmarkId, language);
   const locale = reviewLocales[language];
@@ -213,6 +245,7 @@ export function UIOverlay({ isStarted }) {
   const currentStop = nearbyLandmark ?? routeStops[currentStopIndex];
   const nextStop = routeStops.find((_, index) => index > currentStopIndex) ?? null;
   const isPaused = !autoDrive;
+  const arrivalMeta = getArrivalMeta(arrivalLandmark?.id);
 
   useEffect(() => {
     if (!isStarted) return undefined;
@@ -264,6 +297,7 @@ export function UIOverlay({ isStarted }) {
     selectedLandmarkId,
     setAutoDrive,
     resetVehicleTour,
+    continueVehicleTour,
     setFocusPanelOpen,
     setModelViewerOpen,
     toggleAutoDrive,
@@ -290,7 +324,7 @@ export function UIOverlay({ isStarted }) {
     <>
       <div className="hud-title is-visible">{routeCopy.title}</div>
       <div className={`hud-mode is-visible ${autoDrive ? 'is-autodriving' : ''}`}>
-        {cameraMode === 'focus' ? locale.ui.landmarkFocus : cameraMode === 'follow' ? (autoDrive ? locale.ui.autoDriving : locale.ui.drivingView) : locale.ui.mapMode}
+        {cameraMode === 'focus' ? locale.ui.landmarkFocus : cameraMode === 'follow' ? (autoDrive ? locale.ui.autoDriving : locale.ui.drivingView) : cameraMode === 'free' ? panelCopy.freeView : panelCopy.mapView}
       </div>
 
       <div className={`guided-tour-status is-visible guided-tour-status--${guidedTourState || 'IDLE'}`} aria-live="polite">
@@ -322,6 +356,12 @@ export function UIOverlay({ isStarted }) {
           <div><dt>{panelCopy.speed}</dt><dd>{Math.round(vehicleSpeed ?? 0)} {routeCopy.speedUnit}</dd></div>
         </dl>
         <div className="tour-info-panel__progress"><span style={{ width: `${progressPercent}%` }} /></div>
+        <p className="tour-info-panel__subhead">{panelCopy.viewMode}</p>
+        <div className="tour-info-panel__view-actions">
+          <button type="button" className={cameraMode === 'follow' ? 'is-active' : ''} onClick={() => setCameraMode('follow')}>{panelCopy.followView}</button>
+          <button type="button" className={cameraMode === 'map' ? 'is-active' : ''} onClick={() => setCameraMode('map')}>{panelCopy.mapView}</button>
+          <button type="button" className={cameraMode === 'free' ? 'is-active' : ''} onClick={() => setCameraMode('free')}>{panelCopy.freeView}</button>
+        </div>
         <div className="tour-info-panel__actions">
           <button type="button" onClick={() => setAutoDrive(true)} disabled={autoDrive}>
             {progressPercent > 0 && isPaused ? panelCopy.resume : panelCopy.start}
@@ -330,6 +370,19 @@ export function UIOverlay({ isStarted }) {
           <button type="button" onClick={resetVehicleTour}>{panelCopy.reset}</button>
         </div>
       </aside>
+
+      {arrivalLandmark && (
+        <aside className="arrival-card" role="dialog" aria-live="polite">
+          <p>{panelCopy.arrived}</p>
+          <h2>{getLandmarkName(arrivalLandmark, language)}</h2>
+          <span>{getLandmarkDescription(arrivalLandmark, language)}</span>
+          <div className="arrival-card__meta">
+            <strong>{panelCopy.rating} {arrivalMeta.rating}</strong>
+            <strong>{panelCopy.stay} {arrivalMeta.stay}</strong>
+          </div>
+          <button type="button" onClick={continueVehicleTour}>{panelCopy.continue}</button>
+        </aside>
+      )}
 
       <div className="hud-hints is-visible">
         <span className="hud-key"><kbd>W</kbd><kbd>S</kbd> {locale.ui.cruise}</span>
