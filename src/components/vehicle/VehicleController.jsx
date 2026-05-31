@@ -70,6 +70,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
   const setAutoDrive = useAppStore((state) => state.setAutoDrive);
   const focusPanelOpen = useAppStore((state) => state.focusPanelOpen);
   const modelViewerOpen = useAppStore((state) => state.modelViewerOpen);
+  const tourResetToken = useAppStore((state) => state.tourResetToken);
   const progressRef = useRef(START_PROGRESS);
   const speedRef = useRef(0);
   const targetSpeedRef = useRef(0);
@@ -97,7 +98,8 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     const vehicle = bodyRef.current;
     if (!vehicle) return;
 
-    const routeInitKey = `${initialLandmarkId ?? 'start'}-${terrain.version}-${activeRoute.source}-${activeRoute.points.length}`;
+    const routeSignature = activeRoute.points.map((point) => `${point.x.toFixed(2)},${point.z.toFixed(2)}`).join('|');
+    const routeInitKey = `${initialLandmarkId ?? 'start'}-${tourResetToken}-${terrain.version}-${activeRoute.source}-${routeSignature}`;
     if (initializedTargetRef.current !== routeInitKey) {
       progressRef.current = getInitialProgress(initialLandmarkId, routeCurve);
       speedRef.current = 0;
@@ -197,10 +199,15 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     const progressDelta = (speedRef.current / Math.max(activeRoute.distanceKm ?? activeRoute.distance ?? activeRoute.totalDistanceKm ?? 1, 1) / 3600)
       * VEHICLE_TUNING.simulationTimeScale * delta;
 
-    if (autoDrive && !routeLocked) {
-      progressRef.current = (progressRef.current + progressDelta) % 1;
-    } else {
-      progressRef.current = THREE.MathUtils.clamp(progressRef.current + progressDelta, 0, 0.9995);
+    // 使用 delta time 推进路线进度，并始终限制在 0-1，避免不同帧率或自动巡航导致越界。
+    const nextProgress = THREE.MathUtils.clamp(progressRef.current + progressDelta, 0, 1);
+    progressRef.current = nextProgress;
+    if (progressRef.current >= 1 && speedRef.current > 0) {
+      speedRef.current = 0;
+      targetSpeedRef.current = 0;
+      if (autoDrive) setAutoDrive(false);
+      guidedTourStateRef.current = GUIDED_TOUR_STATES.FINISHED;
+      setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.FINISHED));
     }
 
     const targetSteer = applyCurvePose(vehicle, routeCurve, progressRef.current, speedRef.current, poseYawRef, delta);
@@ -210,7 +217,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     setVehicleState({
       vehicleSpeed: Math.abs(speedRef.current) * VEHICLE_TUNING.displaySpeedMultiplier,
       vehicleSteer: steerRef.current,
-      routeContext,
+      routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve),
       routeProgress: progressRef.current,
       ...getRouteTimeline(progressRef.current),
     });
@@ -327,7 +334,7 @@ function updateGuidedTourState({
     focusTimerRef.current += delta;
     if (focusTimerRef.current >= (activeGuidePoi?.focusDuration ?? VEHICLE_TUNING.focusDurationSec)) {
       if (focusedLandmarkIdRef.current) visitedLandmarksRef.current.add(focusedLandmarkIdRef.current);
-      transition(GUIDED_TOUR_STATES.RESUME, focusedLandmarkIdRef.current, activeGuidePoi?.outroText ?? 'Resuming route');
+      transition(GUIDED_TOUR_STATES.RESUME, focusedLandmarkIdRef.current, activeGuidePoi?.outroText ?? '继续导览');
     }
     return;
   }
@@ -354,12 +361,13 @@ function updateGuidedTourState({
 }
 
 function getRouteContext(progress, activeRoute, curve) {
-  const routePoint = activeRoute.pointAtProgress(progress);
-  const curvatureSpeedFactor = getCurvatureSpeedFactor(progress, curve ?? activeRoute.curve);
+  const safeProgress = THREE.MathUtils.clamp(progress, 0, 1);
+  const routePoint = activeRoute.pointAtProgress(safeProgress);
+  const curvatureSpeedFactor = getCurvatureSpeedFactor(safeProgress, curve ?? activeRoute.curve);
   const point = {
     id: `route-${routePoint.index}`,
     landmarkId: null,
-    roadType: activeRoute.source === 'osrm' ? 'real_osrm_road' : 'planned_waypoint_line',
+    roadType: activeRoute.source === 'osrm' ? '实景道路' : '规划路线',
   };
   const segment = {
     id: activeRoute.source === 'osrm' ? 'osrm-road' : 'planned-road',
@@ -367,8 +375,8 @@ function getRouteContext(progress, activeRoute, curve) {
     trafficState: 'normal',
     speedLimit: activeRoute.source === 'osrm' ? 90 : 70,
     profile: {
-      label: activeRoute.source === 'osrm' ? 'Road route' : 'Planned route',
-      surfaceLabel: activeRoute.source === 'osrm' ? 'mapped road' : 'planned path',
+      label: activeRoute.source === 'osrm' ? '道路路线' : '规划路线',
+      surfaceLabel: activeRoute.source === 'osrm' ? '地图道路' : '导览路径',
       speedFactor: 0.9,
       roughness: activeRoute.source === 'osrm' ? 0.018 : 0.032,
       turnLean: 0.92,
@@ -390,7 +398,7 @@ function getRouteContext(progress, activeRoute, curve) {
 function getCurvatureSpeedFactor(progress, curve) {
   if (!curve) return 1;
   curve.getTangentAt(progress, tangentPoint);
-  curve.getTangentAt(Math.min((progress + VEHICLE_TUNING.lookAheadDistance * 0.66) % 1, 0.9999), aheadTangent);
+  curve.getTangentAt(THREE.MathUtils.clamp(progress + VEHICLE_TUNING.lookAheadDistance * 0.66, 0, 1), aheadTangent);
   flatTangent.copy(tangentPoint).setY(0).normalize();
   flatAheadTangent.copy(aheadTangent).setY(0).normalize();
   if (flatTangent.lengthSq() === 0 || flatAheadTangent.lengthSq() === 0) return 1;
@@ -425,9 +433,11 @@ function getInitialProgress(initialLandmarkId, curve) {
 }
 
 function applyCurvePose(vehicle, curve, progress, speed, poseYawRef, delta) {
-  curve.getPointAt(progress, currentPoint);
-  curve.getTangentAt(progress, tangentPoint);
-  curve.getTangentAt(Math.min((progress + VEHICLE_TUNING.lookAheadDistance) % 1, 0.9999), aheadTangent);
+  const safeProgress = THREE.MathUtils.clamp(progress, 0, 1);
+  curve.getPointAt(safeProgress, currentPoint);
+  // 小车朝向直接取路线切线，并向前采样一小段用于计算转向角。
+  curve.getTangentAt(safeProgress, tangentPoint);
+  curve.getTangentAt(THREE.MathUtils.clamp(safeProgress + VEHICLE_TUNING.lookAheadDistance, 0, 1), aheadTangent);
 
   flatTangent.copy(tangentPoint).setY(0).normalize();
   if (flatTangent.lengthSq() === 0) return 0;
