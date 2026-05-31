@@ -8,56 +8,83 @@ import { travelLandmarkMeta } from '../../data/travelGuide.js';
 
 const driveRouteCopy = {
   en: {
-    title: 'Italy Drive',
-    waypointNearby: 'waypoint nearby',
-    guideStateLabel: 'Guided tour',
+    title: '意大利行车导览',
+    waypointNearby: '临近地标',
+    guideStateLabel: '导览状态',
     guideStates: {
-      IDLE: 'Standby',
-      DRIVING: 'Cruising',
-      APPROACH_POI: 'Approaching landmark',
-      FOCUS_POI: 'Immersive focus',
-      RESUME: 'Resuming route',
-      FINISHED: 'Finished',
+      IDLE: '待开始',
+      DRIVING: '自动导览中',
+      APPROACH_POI: '接近景点',
+      FOCUS_POI: '到站停靠',
+      RESUME: '继续导览',
+      FINISHED: '路线导览完成',
     },
-    speedUnit: 'km/h',
-    dayLabel: 'Day {day}',
+    speedUnit: '公里/小时',
+    dayLabel: '第 {day} 天',
     timeLabel: '{hour}',
     trafficLabels: {
-      free: 'Free flow',
-      normal: 'Normal traffic',
-      slow: 'Slow traffic',
-      traffic_jam: 'Traffic jam',
+      free: '畅通',
+      normal: '正常',
+      slow: '缓行',
+      traffic_jam: '拥堵',
     },
     segmentTypes: {
-      city: 'City streets',
-      motorway: 'Autostrada',
-      scenic: 'Scenic road',
-      mountain: 'Mountain pass',
-      bridge: 'Lagoon access road',
-      tunnel: 'Mountain tunnel',
-      ringRoad: 'Rome ring road',
+      city: '城市街道',
+      motorway: '高速公路',
+      scenic: '风景道路',
+      mountain: '山地路段',
+      bridge: '潟湖入口路',
+      tunnel: '山地隧道',
+      ringRoad: '罗马环路',
     },
     surfaceLabels: {
-      'asphalt / stone edge': 'asphalt / stone edge',
-      'smooth asphalt': 'smooth asphalt',
-      'rolling asphalt': 'rolling asphalt',
-      'graded mountain road': 'graded mountain road',
-      'low coastal roadway': 'low coastal roadway',
-      'covered roadway': 'covered roadway',
-      'urban arterial': 'urban arterial',
+      'asphalt / stone edge': '沥青 / 石材边缘',
+      'smooth asphalt': '平整沥青',
+      'rolling asphalt': '起伏沥青路面',
+      'graded mountain road': '山地坡道路面',
+      'low coastal roadway': '低海岸道路',
+      'covered roadway': '隧道道路',
+      'urban arterial': '城市主干路',
     },
     descriptions: {
-      milan_city: 'dense historic arrival',
-      a4_lombardy: 'long northern autostrada corridor',
-      venice_lagoon: 'arrival near the Venice mainland gateway',
-      veneto_emilia: 'flat motorway between Veneto and Emilia',
-      apennine_crossing: 'broad mountain-grade climb',
-      apennine_tunnel: 'tunnel descent toward Florence',
-      tuscany_west: 'rolling Tuscan primary road',
-      tuscany_to_rome: 'long scenic countryside transfer',
-      rome_arrival: 'busy metropolitan approach',
-      a1_campania: 'southbound motorway run',
-      pompeii_arrival: 'urban arrival near the ruins',
+      milan_city: '进入历史城区的密集街道',
+      a4_lombardy: '意大利北部的长距离高速通道',
+      venice_lagoon: '抵达威尼斯陆路入口附近',
+      veneto_emilia: '威尼托到艾米利亚之间的平直高速',
+      apennine_crossing: '跨越亚平宁山脉的爬坡路段',
+      apennine_tunnel: '通向佛罗伦萨的隧道下坡',
+      tuscany_west: '托斯卡纳西侧起伏的主干道路',
+      tuscany_to_rome: '穿过乡野景观的长距离转场',
+      rome_arrival: '进入罗马都会区的繁忙道路',
+      a1_campania: '向坎帕尼亚南下的高速路段',
+      pompeii_arrival: '靠近遗址的城市抵达路段',
+    },
+    tourPanel: {
+      routeName: '当前路线',
+      currentStop: '当前站点',
+      nextStop: '下一站',
+      progress: '导览进度',
+      speed: '当前速度',
+      start: '开始导览',
+      pause: '暂停',
+      resume: '继续',
+      reset: '重置',
+      defaultRoute: '意大利经典路线',
+      freeRoute: '自定义路线',
+      noStop: '路线起点',
+      finished: '已完成',
+      viewMode: '视角模式',
+      followView: '跟随视角',
+      mapView: '俯视视角',
+      freeView: '自由视角',
+      arrived: '已到达',
+      rating: '评分',
+      stay: '建议停留',
+      continue: '继续导览',
+      startHint: '点击开始导览',
+      pausedHint: '已暂停，点击继续导览',
+      completeHint: '路线导览完成',
+      arrivalNotice: '到站提示',
     },
   },
   zh: {
@@ -112,6 +139,33 @@ const driveRouteCopy = {
       a1_campania: '向坎帕尼亚南下的高速路段',
       pompeii_arrival: '靠近遗址的城市抵达路段',
     },
+    tourPanel: {
+      routeName: '当前路线',
+      currentStop: '当前站点',
+      nextStop: '下一站',
+      progress: '导览进度',
+      speed: '当前速度',
+      start: '开始导览',
+      pause: '暂停',
+      resume: '继续',
+      reset: '重置路线',
+      defaultRoute: '意大利经典路线',
+      freeRoute: '自定义路线',
+      noStop: '路线起点',
+      finished: '已完成',
+      viewMode: '视角模式',
+      followView: '跟随视角',
+      mapView: '俯视视角',
+      freeView: '自由视角',
+      arrived: '已到达',
+      rating: '评分',
+      stay: '建议停留',
+      continue: '继续导览',
+      startHint: '点击开始导览',
+      pausedHint: '已暂停，点击继续导览',
+      completeHint: '路线导览完成',
+      arrivalNotice: '到站提示',
+    },
   },
 };
 
@@ -121,6 +175,24 @@ function getLandmarkName(landmark, language) {
 
 function getLandmarkDescription(landmark, language) {
   return travelLandmarkMeta[landmark?.id]?.blurb?.[language] ?? landmark?.description ?? '';
+}
+
+function getShortText(text, maxLength = 58) {
+  if (!text || text.length <= maxLength) return text ?? '';
+  return `${text.slice(0, maxLength)}…`;
+}
+
+function getArrivalMeta(landmarkId) {
+  const fallback = { rating: '4.8', stay: '45 分钟' };
+  const table = {
+    milan_duomo: { rating: '4.9', stay: '60 分钟' },
+    venice_rialto: { rating: '4.7', stay: '40 分钟' },
+    florence_duomo: { rating: '4.8', stay: '55 分钟' },
+    pisa: { rating: '4.7', stay: '45 分钟' },
+    colosseum: { rating: '4.9', stay: '75 分钟' },
+    pompeii: { rating: '4.8', stay: '90 分钟' },
+  };
+  return table[landmarkId] ?? fallback;
 }
 
 function formatHour(hour) {
@@ -139,10 +211,13 @@ export function UIOverlay({ isStarted }) {
     routeContext,
     routeDay,
     routeHour,
+    routeProgress,
+    activeRouteIds,
     guidedTourState,
     guidedTourLandmarkId,
     guidedTourMessage,
     vehicleSpeed,
+    arrivalNotice,
     focusPanelOpen,
     modelViewerOpen,
     autoDrive,
@@ -150,6 +225,8 @@ export function UIOverlay({ isStarted }) {
     setModelViewerOpen,
     setCameraMode,
     setAutoDrive,
+    resetVehicleTour,
+    continueVehicleTour,
     toggleMapView,
     toggleAutoDrive,
     openLandmarkFocus,
@@ -159,6 +236,7 @@ export function UIOverlay({ isStarted }) {
   const nearbyLandmark = landmarks.find((item) => item.id === nearbyLandmarkId);
   const selectedLandmark = landmarks.find((item) => item.id === selectedLandmarkId);
   const guidedTourLandmark = landmarks.find((item) => item.id === guidedTourLandmarkId);
+  const arrivalLandmark = landmarks.find((item) => item.id === arrivalNotice?.landmarkId);
   const displayLandmark = selectedLandmark ?? nearbyLandmark;
   const { data: reviewPayload, isLoading } = useLandmarkReviews(selectedLandmarkId, language);
   const locale = reviewLocales[language];
@@ -172,6 +250,17 @@ export function UIOverlay({ isStarted }) {
   const routePoint = routeContext?.point;
   const routeSegment = routeContext?.segment;
   const routeProfile = routeContext?.profile;
+  const panelCopy = routeCopy.tourPanel;
+  const displayRouteIds = activeRouteIds.length ? activeRouteIds : ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
+  const routeStops = displayRouteIds.map((id) => landmarks.find((item) => item.id === id)).filter(Boolean);
+  const progressPercent = Math.round((routeProgress ?? 0) * 100);
+  const currentStopIndex = Math.min(Math.floor((routeProgress ?? 0) * Math.max(routeStops.length - 1, 1)), Math.max(routeStops.length - 1, 0));
+  const currentStop = nearbyLandmark ?? routeStops[currentStopIndex];
+  const nextStop = routeStops.find((_, index) => index > currentStopIndex) ?? null;
+  const isPaused = !autoDrive;
+  const isComplete = progressPercent >= 100 || guidedTourState === 'FINISHED';
+  const tourHint = isComplete ? panelCopy.completeHint : autoDrive ? '' : progressPercent > 0 ? panelCopy.pausedHint : panelCopy.startHint;
+  const arrivalMeta = getArrivalMeta(arrivalLandmark?.id);
 
   useEffect(() => {
     if (!isStarted) return undefined;
@@ -222,6 +311,8 @@ export function UIOverlay({ isStarted }) {
     routeLocked,
     selectedLandmarkId,
     setAutoDrive,
+    resetVehicleTour,
+    continueVehicleTour,
     setFocusPanelOpen,
     setModelViewerOpen,
     toggleAutoDrive,
@@ -248,14 +339,14 @@ export function UIOverlay({ isStarted }) {
     <>
       <div className="hud-title is-visible">{routeCopy.title}</div>
       <div className={`hud-mode is-visible ${autoDrive ? 'is-autodriving' : ''}`}>
-        {cameraMode === 'focus' ? locale.ui.landmarkFocus : cameraMode === 'follow' ? (autoDrive ? locale.ui.autoDriving : locale.ui.drivingView) : locale.ui.mapMode}
+        {cameraMode === 'focus' ? locale.ui.landmarkFocus : cameraMode === 'follow' ? (autoDrive ? locale.ui.autoDriving : locale.ui.drivingView) : cameraMode === 'free' ? panelCopy.freeView : panelCopy.mapView}
       </div>
 
       <div className={`guided-tour-status is-visible guided-tour-status--${guidedTourState || 'IDLE'}`} aria-live="polite">
         <span>{routeCopy.guideStateLabel}</span>
         <strong>{routeCopy.guideStates[guidedTourState] ?? routeCopy.guideStates.IDLE}</strong>
-        {(guidedTourLandmark || guidedTourMessage) && (
-          <p>{guidedTourMessage || getLandmarkName(guidedTourLandmark, language)}</p>
+        {(guidedTourLandmark || guidedTourMessage || tourHint) && (
+          <p>{guidedTourMessage || getLandmarkName(guidedTourLandmark, language) || tourHint}</p>
         )}
       </div>
 
@@ -268,6 +359,45 @@ export function UIOverlay({ isStarted }) {
         </svg>
         {locale.ui.mapView}
       </button>
+
+      <aside className="tour-info-panel" aria-live="polite">
+        <p className="tour-info-panel__eyebrow">小车导览</p>
+        <h2>{panelCopy.defaultRoute}</h2>
+        <dl>
+          <div><dt>{panelCopy.routeName}</dt><dd>{activeRouteIds.length ? panelCopy.freeRoute : panelCopy.defaultRoute}</dd></div>
+          <div><dt>{panelCopy.currentStop}</dt><dd>{isComplete ? panelCopy.completeHint : getLandmarkName(currentStop, language) || panelCopy.noStop}</dd></div>
+          <div><dt>{panelCopy.nextStop}</dt><dd>{isComplete ? panelCopy.finished : getLandmarkName(nextStop, language) || panelCopy.finished}</dd></div>
+          <div><dt>{panelCopy.progress}</dt><dd>{progressPercent}%</dd></div>
+          <div><dt>{panelCopy.speed}</dt><dd>{Math.round(vehicleSpeed ?? 0)} {routeCopy.speedUnit}</dd></div>
+        </dl>
+        <div className="tour-info-panel__progress"><span style={{ width: `${progressPercent}%` }} /></div>
+        <p className="tour-info-panel__subhead">{panelCopy.viewMode}</p>
+        <div className="tour-info-panel__view-actions">
+          <button type="button" className={cameraMode === 'follow' ? 'is-active' : ''} onClick={() => setCameraMode('follow')}>{panelCopy.followView}</button>
+          <button type="button" className={cameraMode === 'map' ? 'is-active' : ''} onClick={() => setCameraMode('map')}>{panelCopy.mapView}</button>
+          <button type="button" className={cameraMode === 'free' ? 'is-active' : ''} onClick={() => setCameraMode('free')}>{panelCopy.freeView}</button>
+        </div>
+        <div className="tour-info-panel__actions">
+          <button type="button" onClick={() => setAutoDrive(true)} disabled={autoDrive || isComplete}>
+            {isComplete ? panelCopy.finished : progressPercent > 0 && isPaused ? panelCopy.resume : panelCopy.start}
+          </button>
+          <button type="button" onClick={() => setAutoDrive(false)} disabled={!autoDrive}>{panelCopy.pause}</button>
+          <button type="button" onClick={resetVehicleTour}>{panelCopy.reset}</button>
+        </div>
+      </aside>
+
+      {arrivalLandmark && (
+        <aside className="arrival-card" role="dialog" aria-live="polite">
+          <p>{panelCopy.arrivalNotice} · {panelCopy.arrived}</p>
+          <h2>{getLandmarkName(arrivalLandmark, language)}</h2>
+          <span>{getShortText(getLandmarkDescription(arrivalLandmark, language))}</span>
+          <div className="arrival-card__meta">
+            <strong>{panelCopy.rating} {arrivalMeta.rating}</strong>
+            <strong>{panelCopy.stay} {arrivalMeta.stay}</strong>
+          </div>
+          <button type="button" onClick={continueVehicleTour}>{panelCopy.continue}</button>
+        </aside>
+      )}
 
       <div className="hud-hints is-visible">
         <span className="hud-key"><kbd>W</kbd><kbd>S</kbd> {locale.ui.cruise}</span>
