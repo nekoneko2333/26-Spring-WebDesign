@@ -85,6 +85,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
   const focusedLandmarkIdRef = useRef(null);
   const focusTimerRef = useRef(0);
   const visitedLandmarksRef = useRef(new Set());
+  const previousProgressRef = useRef(START_PROGRESS);
 
   const routeCurve = useMemo(() => {
     const sampledPoints = activeRoute.curve.getPoints(activeRoute.source === 'osrm' ? 420 : 180);
@@ -97,6 +98,17 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     ));
     return new THREE.CatmullRomCurve3(terrainAwarePoints, false, 'centripetal', 0.08);
   }, [activeRoute, terrain.version]);
+
+  const stationTriggers = useMemo(() => {
+    const routeStopIds = activeRoute.routeIds.length
+      ? activeRoute.routeIds
+      : ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
+
+    return routeStopIds
+      .filter((id, index, ids) => ids.indexOf(id) === index)
+      .map((id) => ({ id, progress: getInitialProgress(id, routeCurve) }))
+      .sort((a, b) => a.progress - b.progress);
+  }, [activeRoute.routeIds, routeCurve]);
 
   useFrame((_, delta) => {
     const vehicle = bodyRef.current;
@@ -114,6 +126,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       focusedLandmarkIdRef.current = null;
       focusTimerRef.current = 0;
       visitedLandmarksRef.current = new Set();
+      previousProgressRef.current = progressRef.current;
       initializedTargetRef.current = routeInitKey;
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, delta);
       setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
@@ -130,6 +143,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       guidedTourStateRef.current = GUIDED_TOUR_STATES.IDLE;
       focusedLandmarkIdRef.current = null;
       focusTimerRef.current = 0;
+      previousProgressRef.current = progressRef.current;
       setAutoDrive(false);
       setNearbyLandmarkId(initialLandmarkId ?? null);
       clearGuidedTourFocus();
@@ -158,7 +172,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       && !routeLocked
       && nearbyLandmark
       && routeStopIds.includes(nearbyLandmark.id)
-      && nearbyLandmark.distance <= nearbyLandmark.landmarkTriggerRadius
+      && nearbyLandmark.distance <= Math.max(nearbyLandmark.landmarkTriggerRadius, VEHICLE_TUNING.stopDistance)
       && !arrivedLandmarkIds.includes(nearbyLandmark.id)
       && arrivalNotice?.landmarkId !== nearbyLandmark.id,
     );
@@ -225,6 +239,21 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     // 使用 delta time 推进路线进度，并始终限制在 0-1，避免不同帧率或自动巡航导致越界。
     const nextProgress = THREE.MathUtils.clamp(progressRef.current + progressDelta, 0, 1);
     progressRef.current = nextProgress;
+
+    const arrivalByProgress = getRouteArrivalByProgress({
+      arrivalNotice,
+      arrivedLandmarkIds,
+      currentProgress: progressRef.current,
+      previousProgress: previousProgressRef.current,
+      stationTriggers,
+    });
+    if (autoDrive && !routeLocked && arrivalByProgress) {
+      speedRef.current = 0;
+      targetSpeedRef.current = 0;
+      showArrivalNotice(arrivalByProgress.id);
+    }
+    previousProgressRef.current = progressRef.current;
+
     if (progressRef.current >= 1 && speedRef.current > 0) {
       speedRef.current = 0;
       targetSpeedRef.current = 0;
@@ -249,6 +278,17 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
   });
 
   return null;
+}
+
+
+function getRouteArrivalByProgress({ arrivalNotice, arrivedLandmarkIds, currentProgress, previousProgress, stationTriggers }) {
+  const ARRIVAL_PROGRESS_WINDOW = 0.012;
+  return stationTriggers.find((station) => {
+    if (!station?.id || arrivedLandmarkIds.includes(station.id) || arrivalNotice?.landmarkId === station.id) return false;
+    const crossedStation = previousProgress <= station.progress && currentProgress >= station.progress;
+    const nearStation = Math.abs(currentProgress - station.progress) <= ARRIVAL_PROGRESS_WINDOW;
+    return crossedStation || nearStation;
+  }) ?? null;
 }
 
 function getRouteTimeline(progress) {
