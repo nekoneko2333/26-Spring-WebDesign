@@ -14,7 +14,7 @@ export function RoadRibbon() {
   const routeProgress = useAppStore((state) => state.routeProgress);
   const nearbyLandmarkId = useAppStore((state) => state.nearbyLandmarkId);
 
-  const { baseRoadGeometry, passedRoadGeometry, edgeGeometries, dashGeometries, stationMarkers, vehicleMarker } = useMemo(() => {
+  const { baseRoadGeometry, passedRoadGeometry, edgeGeometries, dashGeometries, stationMarkers, vehicleMarker, roadsideMarkers } = useMemo(() => {
     const ROAD_WIDTH = 1.46;
     const EDGE_WIDTH = 1.72;
     const PASSED_WIDTH = 1.18;
@@ -87,6 +87,21 @@ export function RoadRibbon() {
 
     const markerPoint = points[progressIndex] ?? points[0];
     const vehicleMarker = [markerPoint.x, heights[progressIndex] + 0.13, markerPoint.z];
+    const roadsideMarkers = [];
+    const markerEvery = activeRoute.source === 'osrm' ? 52 : 32;
+    for (let index = 10; index < points.length - 10; index += markerEvery) {
+      const curr = points[index];
+      const next = points[Math.min(index + 1, points.length - 1)];
+      const prev = points[Math.max(index - 1, 0)];
+      const tangent = new THREE.Vector3().subVectors(next, prev).setY(0).normalize();
+      const normal = new THREE.Vector3(-tangent.z, 0, tangent.x);
+      const side = (index / markerEvery) % 2 === 0 ? 1 : -1;
+      roadsideMarkers.push({
+        id: `roadside-${index}`,
+        kind: index % (markerEvery * 2) === 0 ? 'lamp' : 'tree',
+        position: [curr.x + normal.x * side * 2.8, heights[index] + 0.05, curr.z + normal.z * side * 2.8],
+      });
+    }
 
     return {
       baseRoadGeometry: buildStrip(ROAD_WIDTH, 0.025),
@@ -95,6 +110,7 @@ export function RoadRibbon() {
       dashGeometries,
       stationMarkers,
       vehicleMarker,
+      roadsideMarkers,
     };
   }, [activeRoute, nearbyLandmarkId, routeProgress, terrain.version]);
 
@@ -141,6 +157,33 @@ export function RoadRibbon() {
           <meshStandardMaterial color="#f0d490" emissive="#f0d490" emissiveIntensity={0.45} roughness={0.36} />
         </mesh>
       </group>
+      {roadsideMarkers.map((marker) => (
+        <group key={marker.id} position={marker.position}>
+          {marker.kind === 'tree' ? (
+            <>
+              <mesh position={[0, 0.32, 0]}>
+                <cylinderGeometry args={[0.05, 0.07, 0.64, 6]} />
+                <meshStandardMaterial color="#7b5b38" roughness={0.8} />
+              </mesh>
+              <mesh position={[0, 0.88, 0]}>
+                <coneGeometry args={[0.38, 0.8, 7]} />
+                <meshStandardMaterial color="#6f9b70" roughness={0.82} />
+              </mesh>
+            </>
+          ) : (
+            <>
+              <mesh position={[0, 0.46, 0]}>
+                <cylinderGeometry args={[0.035, 0.045, 0.92, 8]} />
+                <meshStandardMaterial color="#44525c" roughness={0.62} />
+              </mesh>
+              <mesh position={[0, 0.95, 0]}>
+                <sphereGeometry args={[0.12, 10, 8]} />
+                <meshStandardMaterial color="#f0d490" emissive="#f0d490" emissiveIntensity={0.28} roughness={0.4} />
+              </mesh>
+            </>
+          )}
+        </group>
+      ))}
     </group>
   );
 }

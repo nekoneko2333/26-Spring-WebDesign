@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../../state/useAppStore.js';
 import { landmarks } from '../../data/landmarks.js';
 import { useLandmarkReviews } from '../../hooks/useLandmarkReviews.js';
@@ -85,29 +85,18 @@ const driveRouteCopy = {
       pausedHint: '已暂停，点击继续导览',
       completeHint: '路线导览完成',
       arrivalNotice: '到站提示',
-    },
-    tourPanel: {
-      routeName: '当前路线',
-      currentStop: '当前站点',
-      nextStop: '下一站',
-      progress: '导览进度',
-      speed: '当前速度',
-      start: '开始导览',
-      pause: '暂停',
-      resume: '继续',
-      reset: '重置',
-      defaultRoute: '意大利经典路线',
-      freeRoute: '自定义路线',
-      noStop: '路线起点',
-      finished: '已完成',
-      viewMode: '视角模式',
-      followView: '跟随视角',
-      mapView: '俯视视角',
-      freeView: '自由视角',
-      arrived: '已到达',
-      rating: '评分',
-      stay: '建议停留',
-      continue: '继续导览',
+      detail: '查看详情',
+      timeline: '路线时间轴',
+      reached: '已到达',
+      heading: '前往中',
+      pending: '未到达',
+      summaryTitle: '导览完成',
+      visitedCount: '已游览景点',
+      routeDistance: '模拟路线距离',
+      nextStep: '推荐下一步：可重新导览、切换路线，或返回首页调整路线。',
+      restart: '重新导览',
+      switchRoute: '切换路线',
+      home: '返回首页',
     },
   },
   zh: {
@@ -188,6 +177,18 @@ const driveRouteCopy = {
       pausedHint: '已暂停，点击继续导览',
       completeHint: '路线导览完成',
       arrivalNotice: '到站提示',
+      detail: '查看详情',
+      timeline: '路线时间轴',
+      reached: '已到达',
+      heading: '前往中',
+      pending: '未到达',
+      summaryTitle: '导览完成',
+      visitedCount: '已游览景点',
+      routeDistance: '模拟路线距离',
+      nextStep: '推荐下一步：可重新导览、切换路线，或返回首页调整路线。',
+      restart: '重新导览',
+      switchRoute: '切换路线',
+      home: '返回首页',
     },
   },
 };
@@ -225,7 +226,7 @@ function formatHour(hour) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-export function UIOverlay({ isStarted }) {
+export function UIOverlay({ isStarted, onClose }) {
   const {
     language,
     cameraMode,
@@ -236,11 +237,13 @@ export function UIOverlay({ isStarted }) {
     routeHour,
     routeProgress,
     activeRouteIds,
+    activeRouteDistanceKm,
     guidedTourState,
     guidedTourLandmarkId,
     guidedTourMessage,
     vehicleSpeed,
     arrivalNotice,
+    arrivedLandmarkIds,
     focusPanelOpen,
     modelViewerOpen,
     autoDrive,
@@ -284,6 +287,11 @@ export function UIOverlay({ isStarted }) {
   const isComplete = progressPercent >= 100 || guidedTourState === 'FINISHED';
   const tourHint = isComplete ? panelCopy.completeHint : autoDrive ? '' : progressPercent > 0 ? panelCopy.pausedHint : panelCopy.startHint;
   const arrivalMeta = getArrivalMeta(arrivalLandmark?.id);
+  const [timelineLandmarkId, setTimelineLandmarkId] = useState(null);
+  const timelineLandmark = landmarks.find((item) => item.id === timelineLandmarkId);
+  const timelineMeta = getArrivalMeta(timelineLandmark?.id);
+  const visitedCount = Math.max(arrivedLandmarkIds.length, isComplete ? routeStops.length : 0);
+  const distanceText = activeRouteDistanceKm ? `${Math.round(activeRouteDistanceKm)} km` : '约 920 km';
 
   useEffect(() => {
     if (!isStarted) return undefined;
@@ -341,6 +349,10 @@ export function UIOverlay({ isStarted }) {
     toggleAutoDrive,
     toggleMapView,
   ]);
+
+  useEffect(() => {
+    setTimelineLandmarkId(null);
+  }, [displayRouteIds.join('|')]);
 
   useEffect(() => {
     document.body.classList.toggle('route-locked', routeLocked);
@@ -415,10 +427,65 @@ export function UIOverlay({ isStarted }) {
           <h2>{getLandmarkName(arrivalLandmark, language)}</h2>
           <span>{getShortText(getLandmarkDescription(arrivalLandmark, language))}</span>
           <div className="arrival-card__meta">
+            <strong>{travelLandmarkMeta[arrivalLandmark.id]?.type?.[language] ?? '精选景点'}</strong>
             <strong>{panelCopy.rating} {arrivalMeta.rating}</strong>
             <strong>{panelCopy.stay} {arrivalMeta.stay}</strong>
           </div>
-          <button type="button" onClick={continueVehicleTour}>{panelCopy.continue}</button>
+          <p className="arrival-card__reason">推荐理由：适合作为本段路线的重点停靠点，建议短暂停留拍照并查看建筑细节。</p>
+          <div className="arrival-card__actions">
+            <button type="button" onClick={continueVehicleTour}>{panelCopy.continue}</button>
+            <button type="button" onClick={() => openLandmarkFocus(arrivalLandmark.id)}>{panelCopy.detail}</button>
+          </div>
+        </aside>
+      )}
+
+
+      <div className="route-timeline" aria-label={panelCopy.timeline}>
+        <p>{panelCopy.timeline}</p>
+        <div className="route-timeline__track">
+          {routeStops.map((stop, index) => {
+            const stopProgress = routeStops.length <= 1 ? 0 : index / (routeStops.length - 1);
+            const reached = arrivedLandmarkIds.includes(stop.id) || routeProgress >= stopProgress || isComplete;
+            const current = !isComplete && index === Math.min(currentStopIndex + 1, routeStops.length - 1);
+            const statusText = reached ? panelCopy.reached : current ? panelCopy.heading : panelCopy.pending;
+            return (
+              <button
+                key={stop.id}
+                type="button"
+                className={`route-timeline__stop ${reached ? 'is-reached' : ''} ${current ? 'is-current' : ''}`}
+                onClick={() => setTimelineLandmarkId(stop.id)}
+              >
+                <span>{index + 1}</span>
+                <strong>{getLandmarkName(stop, language)}</strong>
+                <em>{statusText}</em>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {timelineLandmark && (
+        <aside className="timeline-popover">
+          <button type="button" onClick={() => setTimelineLandmarkId(null)}>×</button>
+          <p>{panelCopy.timeline}</p>
+          <h2>{getLandmarkName(timelineLandmark, language)}</h2>
+          <span>{getShortText(getLandmarkDescription(timelineLandmark, language), 52)}</span>
+          <div><strong>{panelCopy.rating} {timelineMeta.rating}</strong><strong>{panelCopy.stay} {timelineMeta.stay}</strong></div>
+        </aside>
+      )}
+
+      {isComplete && (
+        <aside className="tour-summary-card" role="dialog" aria-live="polite">
+          <p>{panelCopy.summaryTitle}</p>
+          <h2>{panelCopy.defaultRoute}</h2>
+          <div><span>{panelCopy.visitedCount}</span><strong>{visitedCount} / {routeStops.length}</strong></div>
+          <div><span>{panelCopy.routeDistance}</span><strong>{distanceText}</strong></div>
+          <small>{panelCopy.nextStep}</small>
+          <section>
+            <button type="button" onClick={resetVehicleTour}>{panelCopy.restart}</button>
+            <button type="button" onClick={onClose}>{panelCopy.switchRoute}</button>
+            <button type="button" onClick={onClose}>{panelCopy.home}</button>
+          </section>
         </aside>
       )}
 
