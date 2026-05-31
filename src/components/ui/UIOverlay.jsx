@@ -8,7 +8,7 @@ import { travelLandmarkMeta } from '../../data/travelGuide.js';
 
 const driveRouteCopy = {
   en: {
-    title: 'Italy Drive',
+    title: '意大利行车导览',
     waypointNearby: 'waypoint nearby',
     guideStateLabel: 'Guided tour',
     guideStates: {
@@ -58,6 +58,29 @@ const driveRouteCopy = {
       rome_arrival: 'busy metropolitan approach',
       a1_campania: 'southbound motorway run',
       pompeii_arrival: 'urban arrival near the ruins',
+    },
+    tourPanel: {
+      routeName: '当前路线',
+      currentStop: '当前站点',
+      nextStop: '下一站',
+      progress: '导览进度',
+      speed: '当前速度',
+      start: '开始导览',
+      pause: '暂停',
+      resume: '继续',
+      reset: '重置',
+      defaultRoute: '意大利经典路线',
+      freeRoute: '自定义路线',
+      noStop: '路线起点',
+      finished: '已完成',
+      viewMode: '视角模式',
+      followView: '跟随视角',
+      mapView: '俯视视角',
+      freeView: '自由视角',
+      arrived: '已到达',
+      rating: '评分',
+      stay: '建议停留',
+      continue: '继续导览',
     },
   },
   zh: {
@@ -112,6 +135,29 @@ const driveRouteCopy = {
       a1_campania: '向坎帕尼亚南下的高速路段',
       pompeii_arrival: '靠近遗址的城市抵达路段',
     },
+    tourPanel: {
+      routeName: '当前路线',
+      currentStop: '当前站点',
+      nextStop: '下一站',
+      progress: '导览进度',
+      speed: '当前速度',
+      start: '开始导览',
+      pause: '暂停',
+      resume: '继续',
+      reset: '重置路线',
+      defaultRoute: '意大利经典路线',
+      freeRoute: '自定义路线',
+      noStop: '路线起点',
+      finished: '已完成',
+      viewMode: '视角模式',
+      followView: '跟随视角',
+      mapView: '俯视视角',
+      freeView: '自由视角',
+      arrived: '已到达',
+      rating: '评分',
+      stay: '建议停留',
+      continue: '继续导览',
+    },
   },
 };
 
@@ -121,6 +167,19 @@ function getLandmarkName(landmark, language) {
 
 function getLandmarkDescription(landmark, language) {
   return travelLandmarkMeta[landmark?.id]?.blurb?.[language] ?? landmark?.description ?? '';
+}
+
+function getArrivalMeta(landmarkId) {
+  const fallback = { rating: '4.8', stay: '45 分钟' };
+  const table = {
+    milan_duomo: { rating: '4.9', stay: '60 分钟' },
+    venice_rialto: { rating: '4.7', stay: '40 分钟' },
+    florence_duomo: { rating: '4.8', stay: '55 分钟' },
+    pisa: { rating: '4.7', stay: '45 分钟' },
+    colosseum: { rating: '4.9', stay: '75 分钟' },
+    pompeii: { rating: '4.8', stay: '90 分钟' },
+  };
+  return table[landmarkId] ?? fallback;
 }
 
 function formatHour(hour) {
@@ -139,10 +198,13 @@ export function UIOverlay({ isStarted }) {
     routeContext,
     routeDay,
     routeHour,
+    routeProgress,
+    activeRouteIds,
     guidedTourState,
     guidedTourLandmarkId,
     guidedTourMessage,
     vehicleSpeed,
+    arrivalNotice,
     focusPanelOpen,
     modelViewerOpen,
     autoDrive,
@@ -150,6 +212,8 @@ export function UIOverlay({ isStarted }) {
     setModelViewerOpen,
     setCameraMode,
     setAutoDrive,
+    resetVehicleTour,
+    continueVehicleTour,
     toggleMapView,
     toggleAutoDrive,
     openLandmarkFocus,
@@ -159,6 +223,7 @@ export function UIOverlay({ isStarted }) {
   const nearbyLandmark = landmarks.find((item) => item.id === nearbyLandmarkId);
   const selectedLandmark = landmarks.find((item) => item.id === selectedLandmarkId);
   const guidedTourLandmark = landmarks.find((item) => item.id === guidedTourLandmarkId);
+  const arrivalLandmark = landmarks.find((item) => item.id === arrivalNotice?.landmarkId);
   const displayLandmark = selectedLandmark ?? nearbyLandmark;
   const { data: reviewPayload, isLoading } = useLandmarkReviews(selectedLandmarkId, language);
   const locale = reviewLocales[language];
@@ -172,6 +237,15 @@ export function UIOverlay({ isStarted }) {
   const routePoint = routeContext?.point;
   const routeSegment = routeContext?.segment;
   const routeProfile = routeContext?.profile;
+  const panelCopy = routeCopy.tourPanel;
+  const displayRouteIds = activeRouteIds.length ? activeRouteIds : ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
+  const routeStops = displayRouteIds.map((id) => landmarks.find((item) => item.id === id)).filter(Boolean);
+  const progressPercent = Math.round((routeProgress ?? 0) * 100);
+  const currentStopIndex = Math.min(Math.floor((routeProgress ?? 0) * Math.max(routeStops.length - 1, 1)), Math.max(routeStops.length - 1, 0));
+  const currentStop = nearbyLandmark ?? routeStops[currentStopIndex];
+  const nextStop = routeStops.find((_, index) => index > currentStopIndex) ?? null;
+  const isPaused = !autoDrive;
+  const arrivalMeta = getArrivalMeta(arrivalLandmark?.id);
 
   useEffect(() => {
     if (!isStarted) return undefined;
@@ -222,6 +296,8 @@ export function UIOverlay({ isStarted }) {
     routeLocked,
     selectedLandmarkId,
     setAutoDrive,
+    resetVehicleTour,
+    continueVehicleTour,
     setFocusPanelOpen,
     setModelViewerOpen,
     toggleAutoDrive,
@@ -248,7 +324,7 @@ export function UIOverlay({ isStarted }) {
     <>
       <div className="hud-title is-visible">{routeCopy.title}</div>
       <div className={`hud-mode is-visible ${autoDrive ? 'is-autodriving' : ''}`}>
-        {cameraMode === 'focus' ? locale.ui.landmarkFocus : cameraMode === 'follow' ? (autoDrive ? locale.ui.autoDriving : locale.ui.drivingView) : locale.ui.mapMode}
+        {cameraMode === 'focus' ? locale.ui.landmarkFocus : cameraMode === 'follow' ? (autoDrive ? locale.ui.autoDriving : locale.ui.drivingView) : cameraMode === 'free' ? panelCopy.freeView : panelCopy.mapView}
       </div>
 
       <div className={`guided-tour-status is-visible guided-tour-status--${guidedTourState || 'IDLE'}`} aria-live="polite">
@@ -268,6 +344,45 @@ export function UIOverlay({ isStarted }) {
         </svg>
         {locale.ui.mapView}
       </button>
+
+      <aside className="tour-info-panel" aria-live="polite">
+        <p className="tour-info-panel__eyebrow">小车导览</p>
+        <h2>{panelCopy.defaultRoute}</h2>
+        <dl>
+          <div><dt>{panelCopy.routeName}</dt><dd>{activeRouteIds.length ? panelCopy.freeRoute : panelCopy.defaultRoute}</dd></div>
+          <div><dt>{panelCopy.currentStop}</dt><dd>{getLandmarkName(currentStop, language) || panelCopy.noStop}</dd></div>
+          <div><dt>{panelCopy.nextStop}</dt><dd>{getLandmarkName(nextStop, language) || panelCopy.finished}</dd></div>
+          <div><dt>{panelCopy.progress}</dt><dd>{progressPercent}%</dd></div>
+          <div><dt>{panelCopy.speed}</dt><dd>{Math.round(vehicleSpeed ?? 0)} {routeCopy.speedUnit}</dd></div>
+        </dl>
+        <div className="tour-info-panel__progress"><span style={{ width: `${progressPercent}%` }} /></div>
+        <p className="tour-info-panel__subhead">{panelCopy.viewMode}</p>
+        <div className="tour-info-panel__view-actions">
+          <button type="button" className={cameraMode === 'follow' ? 'is-active' : ''} onClick={() => setCameraMode('follow')}>{panelCopy.followView}</button>
+          <button type="button" className={cameraMode === 'map' ? 'is-active' : ''} onClick={() => setCameraMode('map')}>{panelCopy.mapView}</button>
+          <button type="button" className={cameraMode === 'free' ? 'is-active' : ''} onClick={() => setCameraMode('free')}>{panelCopy.freeView}</button>
+        </div>
+        <div className="tour-info-panel__actions">
+          <button type="button" onClick={() => setAutoDrive(true)} disabled={autoDrive}>
+            {progressPercent > 0 && isPaused ? panelCopy.resume : panelCopy.start}
+          </button>
+          <button type="button" onClick={() => setAutoDrive(false)} disabled={!autoDrive}>{panelCopy.pause}</button>
+          <button type="button" onClick={resetVehicleTour}>{panelCopy.reset}</button>
+        </div>
+      </aside>
+
+      {arrivalLandmark && (
+        <aside className="arrival-card" role="dialog" aria-live="polite">
+          <p>{panelCopy.arrived}</p>
+          <h2>{getLandmarkName(arrivalLandmark, language)}</h2>
+          <span>{getLandmarkDescription(arrivalLandmark, language)}</span>
+          <div className="arrival-card__meta">
+            <strong>{panelCopy.rating} {arrivalMeta.rating}</strong>
+            <strong>{panelCopy.stay} {arrivalMeta.stay}</strong>
+          </div>
+          <button type="button" onClick={continueVehicleTour}>{panelCopy.continue}</button>
+        </aside>
+      )}
 
       <div className="hud-hints is-visible">
         <span className="hud-key"><kbd>W</kbd><kbd>S</kbd> {locale.ui.cruise}</span>
