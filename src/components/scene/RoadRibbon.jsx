@@ -106,17 +106,17 @@ export function RoadRibbon() {
         <meshStandardMaterial color="#43545a" roughness={0.82} />
       </mesh>
       <mesh geometry={baseRoadGeometry} receiveShadow>
-        <meshStandardMaterial color="#6f7d81" roughness={0.72} metalness={0.02} />
+        <meshStandardMaterial color="#59666b" roughness={0.76} metalness={0.02} />
       </mesh>
       <mesh geometry={passedRoadGeometry} receiveShadow>
-        <meshStandardMaterial color="#8bd2d8" emissive="#3c98a8" emissiveIntensity={0.16} roughness={0.58} />
+        <meshStandardMaterial color="#56d6e6" emissive="#2caaba" emissiveIntensity={0.26} roughness={0.58} />
       </mesh>
       <mesh geometry={edgeGeometries[1]}>
         <meshBasicMaterial color="#111827" transparent opacity={0.08} depthWrite={false} />
       </mesh>
       {dashGeometries.map((geometry, index) => (
         <mesh key={`lane-dash-${index}`} geometry={geometry} renderOrder={2}>
-          <meshStandardMaterial color="#f3dfad" emissive="#b9853f" emissiveIntensity={0.12} roughness={0.48} />
+          <meshStandardMaterial color="#fff1bf" emissive="#c89545" emissiveIntensity={0.16} roughness={0.48} />
         </mesh>
       ))}
       {stationMarkers.map((marker) => (

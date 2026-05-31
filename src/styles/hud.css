@@ -436,11 +436,11 @@ body.ui-awake .hud-mode {
 /* First-stage vehicle tour panel: compact Tailwind-like glass card without covering the car path. */
 .tour-info-panel {
   position: fixed;
-  top: 118px;
-  right: 24px;
+  top: 108px;
+  right: 20px;
   z-index: 26;
-  width: min(300px, calc(100vw - 48px));
-  padding: 18px;
+  width: min(286px, calc(100vw - 48px));
+  padding: 16px;
   border: 1px solid rgba(8, 24, 39, 0.12);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.66);
@@ -576,8 +576,8 @@ body.ui-awake .hud-mode {
   left: 24px;
   bottom: 106px;
   z-index: 32;
-  width: min(330px, calc(100vw - 48px));
-  padding: 18px;
+  width: min(306px, calc(100vw - 48px));
+  padding: 16px;
   border: 1px solid rgba(201, 169, 110, 0.32);
   border-radius: 24px;
   background: rgba(255, 250, 240, 0.78);
@@ -595,7 +595,7 @@ body.ui-awake .hud-mode {
 
 .arrival-card h2 {
   margin: 0 0 8px;
-  font: 800 20px/1.2 var(--font-ui-zh);
+  font: 800 18px/1.2 var(--font-ui-zh);
 }
 
 .arrival-card > span {
