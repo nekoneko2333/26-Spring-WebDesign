@@ -3,7 +3,7 @@ import { travelLandmarkMeta } from '../data/travelGuide.js';
 
 function osrmUrl(coords) {
   const encoded = coords.map((c) => `${c.lon},${c.lat}`).join(';');
-  return `https://router.project-osrm.org/route/v1/driving/${encoded}?overview=false&annotations=false&steps=false`;
+  return `https://router.project-osrm.org/route/v1/driving/${encoded}?overview=full&geometries=geojson&annotations=false&steps=false`;
 }
 
 async function fetchOsrmMetrics(routeIds) {
@@ -26,6 +26,7 @@ async function fetchOsrmMetrics(routeIds) {
     mode: 'osrm',
     distanceKm: Number((route.distance / 1000).toFixed(1)),
     durationHours: Number((route.duration / 3600).toFixed(2)),
+    geometryCoordinates: route.geometry?.coordinates ?? [],
   };
 }
 
@@ -39,4 +40,3 @@ export function useRouteMetrics(routeIds) {
     staleTime: 10 * 60 * 1000,
   });
 }
-

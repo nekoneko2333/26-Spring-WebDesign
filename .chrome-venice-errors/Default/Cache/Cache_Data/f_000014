@@ -1,0 +1,374 @@
+export const MAP_BOUNDS = {
+	lonMin: 6.6,
+	lonMax: 18.5,
+	latMin: 36.6,
+	latMax: 47.1,
+	worldSize: 170
+};
+function mercY(lat) {
+	return Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+}
+const MERC_Y_MIN = mercY(MAP_BOUNDS.latMin);
+const MERC_Y_MAX = mercY(MAP_BOUNDS.latMax);
+export function lngLatToWorld(lon, lat) {
+	const tx = (lon - MAP_BOUNDS.lonMin) / (MAP_BOUNDS.lonMax - MAP_BOUNDS.lonMin);
+	const tz = 1 - (mercY(lat) - MERC_Y_MIN) / (MERC_Y_MAX - MERC_Y_MIN);
+	return [
+		(tx - .5) * MAP_BOUNDS.worldSize,
+		0,
+		(tz - .5) * MAP_BOUNDS.worldSize
+	];
+}
+export function worldToLngLat(worldX, worldZ) {
+	const tx = worldX / MAP_BOUNDS.worldSize + .5;
+	const tz = worldZ / MAP_BOUNDS.worldSize + .5;
+	const lon = MAP_BOUNDS.lonMin + tx * (MAP_BOUNDS.lonMax - MAP_BOUNDS.lonMin);
+	const merc = MERC_Y_MIN + (1 - tz) * (MERC_Y_MAX - MERC_Y_MIN);
+	const lat = Math.atan(Math.sinh(merc)) * 180 / Math.PI;
+	return {
+		lon,
+		lat
+	};
+}
+function makeLandmark({ id, name, description, lon, lat, modelKind = "monument", scale = 5.8, triggerRadius = 13, rotationY = 0 }) {
+	return {
+		id,
+		name,
+		description,
+		modelPath: null,
+		lon,
+		lat,
+		position: lngLatToWorld(lon, lat),
+		rotation: [
+			0,
+			rotationY,
+			0
+		],
+		scale,
+		triggerRadius,
+		modelKind
+	};
+}
+export const landmarks = [
+	{
+		id: "colosseum",
+		name: "Colosseum",
+		description: "Ancient Roman amphitheatre in the center of Rome.",
+		modelPath: "/models/colosseum.glb",
+		lon: 12.4922,
+		lat: 41.8902,
+		position: lngLatToWorld(12.4922, 41.8902),
+		rotation: [
+			0,
+			Math.PI * .15,
+			0
+		],
+		scale: 6.4,
+		triggerRadius: 16,
+		modelKind: "arena"
+	},
+	{
+		id: "pisa",
+		name: "Leaning Tower of Pisa",
+		description: "Medieval bell tower in Pisa Cathedral Square.",
+		modelPath: "/models/leaning_tower_of_pisa.glb",
+		lon: 10.3966,
+		lat: 43.723,
+		position: lngLatToWorld(10.3966, 43.723),
+		rotation: [
+			0,
+			-Math.PI * .2,
+			0
+		],
+		scale: 7.2,
+		triggerRadius: 15,
+		modelKind: "tower"
+	},
+	{
+		id: "florence_duomo",
+		name: "Florence Duomo",
+		description: "Santa Maria del Fiore and Brunelleschi dome in Florence.",
+		modelPath: null,
+		lon: 11.256,
+		lat: 43.7731,
+		position: lngLatToWorld(11.256, 43.7731),
+		rotation: [
+			0,
+			Math.PI * .08,
+			0
+		],
+		scale: 6.8,
+		triggerRadius: 14,
+		modelKind: "dome"
+	},
+	{
+		id: "venice_rialto",
+		name: "Rialto Bridge",
+		description: "Historic bridge crossing Venice Grand Canal.",
+		modelPath: null,
+		lon: 12.3359,
+		lat: 45.438,
+		position: lngLatToWorld(12.3359, 45.438),
+		rotation: [
+			0,
+			-Math.PI * .1,
+			0
+		],
+		scale: 6.2,
+		triggerRadius: 14,
+		modelKind: "bridge"
+	},
+	{
+		id: "milan_duomo",
+		name: "Milan Cathedral",
+		description: "Gothic cathedral and plaza in central Milan.",
+		modelPath: null,
+		lon: 9.1919,
+		lat: 45.4642,
+		position: lngLatToWorld(9.1919, 45.4642),
+		rotation: [
+			0,
+			Math.PI * .2,
+			0
+		],
+		scale: 7,
+		triggerRadius: 15,
+		modelKind: "cathedral"
+	},
+	{
+		id: "pompeii",
+		name: "Pompeii Archaeological Park",
+		description: "Archaeological park preserving the ancient Roman city of Pompeii.",
+		modelPath: null,
+		lon: 14.4869,
+		lat: 40.7497,
+		position: lngLatToWorld(14.4869, 40.7497),
+		rotation: [
+			0,
+			-Math.PI * .18,
+			0
+		],
+		scale: 6.4,
+		triggerRadius: 15,
+		modelKind: "ruins"
+	},
+	makeLandmark({
+		id: "pantheon_rome",
+		name: "Pantheon",
+		description: "Ancient Roman temple and domed church in central Rome.",
+		lon: 12.4768,
+		lat: 41.8986,
+		modelKind: "dome",
+		scale: 6.4
+	}),
+	makeLandmark({
+		id: "trevi_fountain",
+		name: "Trevi Fountain",
+		description: "Baroque fountain and urban landmark in Rome.",
+		lon: 12.4833,
+		lat: 41.9009,
+		modelKind: "fountain",
+		scale: 5.5
+	}),
+	makeLandmark({
+		id: "roman_forum",
+		name: "Roman Forum",
+		description: "Archaeological area at the center of ancient Rome.",
+		lon: 12.4853,
+		lat: 41.8925,
+		modelKind: "ruins",
+		scale: 6.2
+	}),
+	makeLandmark({
+		id: "uffizi_gallery",
+		name: "Uffizi Gallery",
+		description: "Major Renaissance art museum in Florence.",
+		lon: 11.2553,
+		lat: 43.7687,
+		modelKind: "palace",
+		scale: 5.8
+	}),
+	makeLandmark({
+		id: "siena_cathedral",
+		name: "Siena Cathedral",
+		description: "Medieval cathedral with marble facade and striped interior.",
+		lon: 11.3287,
+		lat: 43.3177,
+		modelKind: "cathedral",
+		scale: 6.2
+	}),
+	makeLandmark({
+		id: "verona_arena",
+		name: "Verona Arena",
+		description: "Roman amphitheatre still used for performances.",
+		lon: 10.9944,
+		lat: 45.4386,
+		modelKind: "arena",
+		scale: 6.2
+	}),
+	makeLandmark({
+		id: "st_marks_basilica",
+		name: "St Mark's Basilica",
+		description: "Byzantine and Gothic basilica on Piazza San Marco in Venice.",
+		lon: 12.3397,
+		lat: 45.4345,
+		modelKind: "cathedral",
+		scale: 6.5
+	}),
+	makeLandmark({
+		id: "doges_palace",
+		name: "Doge's Palace",
+		description: "Gothic palace and former seat of Venetian government.",
+		lon: 12.3404,
+		lat: 45.4337,
+		modelKind: "palace",
+		scale: 6
+	}),
+	makeLandmark({
+		id: "cinque_terre",
+		name: "Cinque Terre",
+		description: "Coastal villages and terraced landscape on the Ligurian coast.",
+		lon: 9.7089,
+		lat: 44.1461,
+		modelKind: "coast",
+		scale: 5.8
+	}),
+	makeLandmark({
+		id: "lake_como",
+		name: "Lake Como",
+		description: "Alpine lake landscape with historic villas and towns.",
+		lon: 9.2572,
+		lat: 45.9871,
+		modelKind: "lake",
+		scale: 6
+	}),
+	makeLandmark({
+		id: "mole_antonelliana",
+		name: "Mole Antonelliana",
+		description: "Tall historic tower and landmark of Turin.",
+		lon: 7.6931,
+		lat: 45.0691,
+		modelKind: "tower",
+		scale: 6.8
+	}),
+	makeLandmark({
+		id: "san_vitale_ravenna",
+		name: "Basilica of San Vitale",
+		description: "Ravenna basilica known for Byzantine mosaics.",
+		lon: 12.1964,
+		lat: 44.4208,
+		modelKind: "dome",
+		scale: 5.8
+	}),
+	makeLandmark({
+		id: "assisi_basilica",
+		name: "Basilica of Saint Francis of Assisi",
+		description: "Franciscan basilica and pilgrimage landmark in Umbria.",
+		lon: 12.6264,
+		lat: 43.0747,
+		modelKind: "cathedral",
+		scale: 6.1
+	}),
+	makeLandmark({
+		id: "caserta_palace",
+		name: "Royal Palace of Caserta",
+		description: "Large Bourbon royal palace and garden complex near Naples.",
+		lon: 14.3275,
+		lat: 41.0731,
+		modelKind: "palace",
+		scale: 6.4
+	}),
+	makeLandmark({
+		id: "herculaneum",
+		name: "Herculaneum",
+		description: "Ancient Roman town preserved by the eruption of Mount Vesuvius.",
+		lon: 14.3487,
+		lat: 40.8059,
+		modelKind: "ruins",
+		scale: 5.9
+	}),
+	makeLandmark({
+		id: "paestum",
+		name: "Paestum",
+		description: "Greek temples and archaeological site in Campania.",
+		lon: 15.0059,
+		lat: 40.4197,
+		modelKind: "temple",
+		scale: 6.1
+	}),
+	makeLandmark({
+		id: "matera_sassi",
+		name: "Sassi di Matera",
+		description: "Historic cave dwellings and stone urban landscape in Matera.",
+		lon: 16.6106,
+		lat: 40.6664,
+		modelKind: "ruins",
+		scale: 5.8
+	}),
+	makeLandmark({
+		id: "alberobello_trulli",
+		name: "Trulli of Alberobello",
+		description: "Dry-stone conical-roof houses in Apulia.",
+		lon: 17.2365,
+		lat: 40.7829,
+		modelKind: "village",
+		scale: 5.7
+	}),
+	makeLandmark({
+		id: "castel_del_monte",
+		name: "Castel del Monte",
+		description: "Octagonal medieval castle in Apulia.",
+		lon: 16.2707,
+		lat: 41.0847,
+		modelKind: "castle",
+		scale: 6.1
+	}),
+	makeLandmark({
+		id: "amalfi_coast",
+		name: "Amalfi Coast",
+		description: "Cliffside coastal landscape and historic towns in Campania.",
+		lon: 14.6027,
+		lat: 40.634,
+		modelKind: "coast",
+		scale: 5.8
+	}),
+	makeLandmark({
+		id: "valley_of_temples",
+		name: "Valley of the Temples",
+		description: "Ancient Greek temple landscape in Agrigento, Sicily.",
+		lon: 13.5933,
+		lat: 37.2894,
+		modelKind: "temple",
+		scale: 6.2
+	}),
+	makeLandmark({
+		id: "mount_etna",
+		name: "Mount Etna",
+		description: "Active volcano and mountain landscape in eastern Sicily.",
+		lon: 14.9958,
+		lat: 37.751,
+		modelKind: "mountain",
+		scale: 6.6
+	}),
+	makeLandmark({
+		id: "palermo_cathedral",
+		name: "Palermo Cathedral",
+		description: "Cathedral complex combining Norman, Gothic, and later styles.",
+		lon: 13.3564,
+		lat: 38.1144,
+		modelKind: "cathedral",
+		scale: 6
+	}),
+	makeLandmark({
+		id: "nuraghe_su_nuraxi",
+		name: "Su Nuraxi di Barumini",
+		description: "Bronze Age nuragic archaeological site in Sardinia.",
+		lon: 8.9918,
+		lat: 39.7056,
+		modelKind: "ruins",
+		scale: 5.8
+	})
+];
+export const WORLD_SIZE_UNITS = MAP_BOUNDS.worldSize;
+
+//# sourceMappingURL=data:application/json;base64,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YUFBYTtFQUNiLFdBQVc7RUFDWCxLQUFLO0VBQ0wsS0FBSztFQUNMLFVBQVUsY0FBYyxTQUFTLFFBQVE7RUFDekMsVUFBVTtHQUFDO0dBQUcsQ0FBQyxLQUFLLEtBQUs7R0FBTTtHQUFFO0VBQ2pDLE9BQU87RUFDUCxlQUFlO0VBQ2YsV0FBVztFQUNaO0NBQ0QsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0YsYUFBYTtFQUNYLElBQUk7RUFDSixNQUFNO0VBQ04sYUFBYTtFQUNiLEtBQUs7RUFDTCxLQUFLO0VBQ0wsV0FBVztFQUNYLE9BQU87RUFDUixDQUFDO0NBQ0g7QUFFRCxPQUFPLE1BQU0sbUJBQW1CLFdBQVciLCJuYW1lcyI6W10sInNvdXJjZXMiOlsibGFuZG1hcmtzLmpzIl0sInZlcnNpb24iOjMsInNvdXJjZXNDb250ZW50IjpbImV4cG9ydCBjb25zdCBNQVBfQk9VTkRTID0ge1xuICBsb25NaW46IDYuNixcbiAgbG9uTWF4OiAxOC41LFxuICBsYXRNaW46IDM2LjYsXG4gIGxhdE1heDogNDcuMSxcbiAgd29ybGRTaXplOiAxNzAsXG59O1xuXG5mdW5jdGlvbiBtZXJjWShsYXQpIHtcbiAgcmV0dXJuIE1hdGgubG9nKE1hdGgudGFuKE1hdGguUEkgLyA0ICsgKGxhdCAqIE1hdGguUEkpIC8gMzYwKSk7XG59XG5cbmNvbnN0IE1FUkNfWV9NSU4gPSBtZXJjWShNQVBfQk9VTkRTLmxhdE1pbik7XG5jb25zdCBNRVJDX1lfTUFYID0gbWVyY1koTUFQX0JPVU5EUy5sYXRNYXgpO1xuXG5leHBvcnQgZnVuY3Rpb24gbG5nTGF0VG9Xb3JsZChsb24sIGxhdCkge1xuICBjb25zdCB0eCA9IChsb24gLSBNQVBfQk9VTkRTLmxvbk1pbikgLyAoTUFQX0JPVU5EUy5sb25NYXggLSBNQVBfQk9VTkRTLmxvbk1pbik7XG4gIGNvbnN0IHR6ID0gMSAtIChtZXJjWShsYXQpIC0gTUVSQ19ZX01JTikgLyAoTUVSQ19ZX01BWCAtIE1FUkNfWV9NSU4pO1xuICByZXR1cm4gWyh0eCAtIDAuNSkgKiBNQVBfQk9VTkRTLndvcmxkU2l6ZSwgMCwgKHR6IC0gMC41KSAqIE1BUF9CT1VORFMud29ybGRTaXplXTtcbn1cblxuZXhwb3J0IGZ1bmN0aW9uIHdvcmxkVG9MbmdMYXQod29ybGRYLCB3b3JsZFopIHtcbiAgY29uc3QgdHggPSB3b3JsZFggLyBNQVBfQk9VTkRTLndvcmxkU2l6ZSArIDAuNTtcbiAgY29uc3QgdHogPSB3b3JsZFogLyBNQVBfQk9VTkRTLndvcmxkU2l6ZSArIDAuNTtcbiAgY29uc3QgbG9uID0gTUFQX0JPVU5EUy5sb25NaW4gKyB0eCAqIChNQVBfQk9VTkRTLmxvbk1heCAtIE1BUF9CT1VORFMubG9uTWluKTtcbiAgY29uc3QgbWVyYyA9IE1FUkNfWV9NSU4gKyAoMSAtIHR6KSAqIChNRVJDX1lfTUFYIC0gTUVSQ19ZX01JTik7XG4gIGNvbnN0IGxhdCA9IChNYXRoLmF0YW4oTWF0aC5zaW5oKG1lcmMpKSAqIDE4MCkgLyBNYXRoLlBJO1xuICByZXR1cm4geyBsb24sIGxhdCB9O1xufVxuXG5mdW5jdGlvbiBtYWtlTGFuZG1hcmsoe1xuICBpZCxcbiAgbmFtZSxcbiAgZGVzY3JpcHRpb24sXG4gIGxvbixcbiAgbGF0LFxuICBtb2RlbEtpbmQgPSAnbW9udW1lbnQnLFxuICBzY2FsZSA9IDUuOCxcbiAgdHJpZ2dlclJhZGl1cyA9IDEzLFxuICByb3RhdGlvblkgPSAwLFxufSkge1xuICByZXR1cm4ge1xuICAgIGlkLFxuICAgIG5hbWUsXG4gICAgZGVzY3JpcHRpb24sXG4gICAgbW9kZWxQYXRoOiBudWxsLFxuICAgIGxvbixcbiAgICBsYXQsXG4gICAgcG9zaXRpb246IGxuZ0xhdFRvV29ybGQobG9uLCBsYXQpLFxuICAgIHJvdGF0aW9uOiBbMCwgcm90YXRpb25ZLCAwXSxcbiAgICBzY2FsZSxcbiAgICB0cmlnZ2VyUmFkaXVzLFxuICAgIG1vZGVsS2luZCxcbiAgfTtcbn1cblxuZXhwb3J0IGNvbnN0IGxhbmRtYXJrcyA9IFtcbiAge1xuICAgIGlkOiAnY29sb3NzZXVtJyxcbiAgICBuYW1lOiAnQ29sb3NzZXVtJyxcbiAgICBkZXNjcmlwdGlvbjogJ0FuY2llbnQgUm9tYW4gYW1waGl0aGVhdHJlIGluIHRoZSBjZW50ZXIgb2YgUm9tZS4nLFxuICAgIG1vZGVsUGF0aDogJy9tb2RlbHMvY29sb3NzZXVtLmdsYicsXG4gICAgbG9uOiAxMi40OTIyLFxuICAgIGxhdDogNDEuODkwMixcbiAgICBwb3NpdGlvbjogbG5nTGF0VG9Xb3JsZCgxMi40OTIyLCA0MS44OTAyKSxcbiAgICByb3RhdGlvbjogWzAsIE1hdGguUEkgKiAwLjE1LCAwXSxcbiAgICBzY2FsZTogNi40LFxuICAgIHRyaWdnZXJSYWRpdXM6IDE2LFxuICAgIG1vZGVsS2luZDogJ2FyZW5hJyxcbiAgfSxcbiAge1xuICAgIGlkOiAncGlzYScsXG4gICAgbmFtZTogJ0xlYW5pbmcgVG93ZXIgb2YgUGlzYScsXG4gICAgZGVzY3JpcHRpb246ICdNZWRpZXZhbCBiZWxsIHRvd2VyIGluIFBpc2EgQ2F0aGVkcmFsIFNxdWFyZS4nLFxuICAgIG1vZGVsUGF0aDogJy9tb2RlbHMvbGVhbmluZ190b3dlcl9vZl9waXNhLmdsYicsXG4gICAgbG9uOiAxMC4zOTY2LFxuICAgIGxhdDogNDMuNzIzLFxuICAgIHBvc2l0aW9uOiBsbmdMYXRUb1dvcmxkKDEwLjM5NjYsIDQzLjcyMyksXG4gICAgcm90YXRpb246IFswLCAtTWF0aC5QSSAqIDAuMiwgMF0sXG4gICAgc2NhbGU6IDcuMixcbiAgICB0cmlnZ2VyUmFkaXVzOiAxNSxcbiAgICBtb2RlbEtpbmQ6ICd0b3dlcicsXG4gIH0sXG4gIHtcbiAgICBpZDogJ2Zsb3JlbmNlX2R1b21vJyxcbiAgICBuYW1lOiAnRmxvcmVuY2UgRHVvbW8nLFxuICAgIGRlc2NyaXB0aW9uOiAnU2FudGEgTWFyaWEgZGVsIEZpb3JlIGFuZCBCcnVuZWxsZXNjaGkgZG9tZSBpbiBGbG9yZW5jZS4nLFxuICAgIG1vZGVsUGF0aDogbnVsbCxcbiAgICBsb246IDExLjI1NixcbiAgICBsYXQ6IDQzLjc3MzEsXG4gICAgcG9zaXRpb246IGxuZ0xhdFRvV29ybGQoMTEuMjU2LCA0My43NzMxKSxcbiAgICByb3RhdGlvbjogWzAsIE1hdGguUEkgKiAwLjA4LCAwXSxcbiAgICBzY2FsZTogNi44LFxuICAgIHRyaWdnZXJSYWRpdXM6IDE0LFxuICAgIG1vZGVsS2luZDogJ2RvbWUnLFxuICB9LFxuICB7XG4gICAgaWQ6ICd2ZW5pY2VfcmlhbHRvJyxcbiAgICBuYW1lOiAnUmlhbHRvIEJyaWRnZScsXG4gICAgZGVzY3JpcHRpb246ICdIaXN0b3JpYyBicmlkZ2UgY3Jvc3NpbmcgVmVuaWNlIEdyYW5kIENhbmFsLicsXG4gICAgbW9kZWxQYXRoOiBudWxsLFxuICAgIGxvbjogMTIuMzM1OSxcbiAgICBsYXQ6IDQ1LjQzOCxcbiAgICBwb3NpdGlvbjogbG5nTGF0VG9Xb3JsZCgxMi4zMzU5LCA0NS40MzgpLFxuICAgIHJvdGF0aW9uOiBbMCwgLU1hdGguUEkgKiAwLjEsIDBdLFxuICAgIHNjYWxlOiA2LjIsXG4gICAgdHJpZ2dlclJhZGl1czogMTQsXG4gICAgbW9kZWxLaW5kOiAnYnJpZGdlJyxcbiAgfSxcbiAge1xuICAgIGlkOiAnbWlsYW5fZHVvbW8nLFxuICAgIG5hbWU6ICdNaWxhbiBDYXRoZWRyYWwnLFxuICAgIGRlc2NyaXB0aW9uOiAnR290aGljIGNhdGhlZHJhbCBhbmQgcGxhemEgaW4gY2VudHJhbCBNaWxhbi4nLFxuICAgIG1vZGVsUGF0aDogbnVsbCxcbiAgICBsb246IDkuMTkxOSxcbiAgICBsYXQ6IDQ1LjQ2NDIsXG4gICAgcG9zaXRpb246IGxuZ0xhdFRvV29ybGQoOS4xOTE5LCA0NS40NjQyKSxcbiAgICByb3RhdGlvbjogWzAsIE1hdGguUEkgKiAwLjIsIDBdLFxuICAgIHNjYWxlOiA3LFxuICAgIHRyaWdnZXJSYWRpdXM6IDE1LFxuICAgIG1vZGVsS2luZDogJ2NhdGhlZHJhbCcsXG4gIH0sXG4gIHtcbiAgICBpZDogJ3BvbXBlaWknLFxuICAgIG5hbWU6ICdQb21wZWlpIEFyY2hhZW9sb2dpY2FsIFBhcmsnLFxuICAgIGRlc2NyaXB0aW9uOiAnQXJjaGFlb2xvZ2ljYWwgcGFyayBwcmVzZXJ2aW5nIHRoZSBhbmNpZW50IFJvbWFuIGNpdHkgb2YgUG9tcGVpaS4nLFxuICAgIG1vZGVsUGF0aDogbnVsbCxcbiAgICBsb246IDE0LjQ4NjksXG4gICAgbGF0OiA0MC43NDk3LFxuICAgIHBvc2l0aW9uOiBsbmdMYXRUb1dvcmxkKDE0LjQ4NjksIDQwLjc0OTcpLFxuICAgIHJvdGF0aW9uOiBbMCwgLU1hdGguUEkgKiAwLjE4LCAwXSxcbiAgICBzY2FsZTogNi40LFxuICAgIHRyaWdnZXJSYWRpdXM6IDE1LFxuICAgIG1vZGVsS2luZDogJ3J1aW5zJyxcbiAgfSxcbiAgbWFrZUxhbmRtYXJrKHtcbiAgICBpZDogJ3BhbnRoZW9uX3JvbWUnLFxuICAgIG5hbWU6ICdQYW50aGVvbicsXG4gICAgZGVzY3JpcHRpb246ICdBbmNpZW50IFJvbWFuIHRlbXBsZSBhbmQgZG9tZWQgY2h1cmNoIGluIGNlbnRyYWwgUm9tZS4nLFxuICAgIGxvbjogMTIuNDc2OCxcbiAgICBsYXQ6IDQxLjg5ODYsXG4gICAgbW9kZWxLaW5kOiAnZG9tZScsXG4gICAgc2NhbGU6IDYuNCxcbiAgfSksXG4gIG1ha2VMYW5kbWFyayh7XG4gICAgaWQ6ICd0cmV2aV9mb3VudGFpbicsXG4gICAgbmFtZTogJ1RyZXZpIEZvdW50YWluJyxcbiAgICBkZXNjcmlwdGlvbjogJ0Jhcm9xdWUgZm91bnRhaW4gYW5kIHVyYmFuIGxhbmRtYXJrIGluIFJvbWUuJyxcbiAgICBsb246IDEyLjQ4MzMsXG4gICAgbGF0OiA0MS45MDA5LFxuICAgIG1vZGVsS2luZDogJ2ZvdW50YWluJyxcbiAgICBzY2FsZTogNS41LFxuICB9KSxcbiAgbWFrZUxhbmRtYXJrKHtcbiAgICBpZDogJ3JvbWFuX2ZvcnVtJyxcbiAgICBuYW1lOiAnUm9tYW4gRm9ydW0nLFxuICAgIGRlc2NyaXB0aW9uOiAnQXJjaGFlb2xvZ2ljYWwgYXJlYSBhdCB0aGUgY2VudGVyIG9mIGFuY2llbnQgUm9tZS4nLFxuICAgIGxvbjogMTIuNDg1MyxcbiAgICBsYXQ6IDQxLjg5MjUsXG4gICAgbW9kZWxLaW5kOiAncnVpbnMnLFxuICAgIHNjYWxlOiA2LjIsXG4gIH0pLFxuICBtYWtlTGFuZG1hcmsoe1xuICAgIGlkOiAndWZmaXppX2dhbGxlcnknLFxuICAgIG5hbWU6ICdVZmZpemkgR2FsbGVyeScsXG4gICAgZGVzY3JpcHRpb246ICdNYWpvciBSZW5haXNzYW5jZSBhcnQgbXVzZXVtIGluIEZsb3JlbmNlLicsXG4gICAgbG9uOiAxMS4yNTUzLFxuICAgIGxhdDogNDMuNzY4NyxcbiAgICBtb2RlbEtpbmQ6ICdwYWxhY2UnLFxuICAgIHNjYWxlOiA1LjgsXG4gIH0pLFxuICBtYWtlTGFuZG1hcmsoe1xuICAgIGlkOiAnc2llbmFfY2F0aGVkcmFsJyxcbiAgICBuYW1lOiAnU2llbmEgQ2F0aGVkcmFsJyxcbiAgICBkZXNjcmlwdGlvbjogJ01lZGlldmFsIGNhdGhlZHJhbCB3aXRoIG1hcmJsZSBmYWNhZGUgYW5kIHN0cmlwZWQgaW50ZXJpb3IuJyxcbiAgICBsb246IDExLjMyODcsXG4gICAgbGF0OiA0My4zMTc3LFxuICAgIG1vZGVsS2luZDogJ2NhdGhlZHJhbCcsXG4gICAgc2NhbGU6IDYuMixcbiAgfSksXG4gIG1ha2VMYW5kbWFyayh7XG4gICAgaWQ6ICd2ZXJvbmFfYXJlbmEnLFxuICAgIG5hbWU6ICdWZXJvbmEgQXJlbmEnLFxuICAgIGRlc2NyaXB0aW9uOiAnUm9tYW4gYW1waGl0aGVhdHJlIHN0aWxsIHVzZWQgZm9yIHBlcmZvcm1hbmNlcy4nLFxuICAgIGxvbjogMTAuOTk0NCxcbiAgICBsYXQ6IDQ1LjQzODYsXG4gICAgbW9kZWxLaW5kOiAnYXJlbmEnLFxuICAgIHNjYWxlOiA2LjIsXG4gIH0pLFxuICBtYWtlTGFuZG1hcmsoe1xuICAgIGlkOiAnc3RfbWFya3NfYmFzaWxpY2EnLFxuICAgIG5hbWU6IFwiU3QgTWFyaydzIEJhc2lsaWNhXCIsXG4gICAgZGVzY3JpcHRpb246ICdCeXphbnRpbmUgYW5kIEdvdGhpYyBiYXNpbGljYSBvbiBQaWF6emEgU2FuIE1hcmNvIGluIFZlbmljZS4nLFxuICAgIGxvbjogMTIuMzM5NyxcbiAgICBsYXQ6IDQ1LjQzNDUsXG4gICAgbW9kZWxLaW5kOiAnY2F0aGVkcmFsJyxcbiAgICBzY2FsZTogNi41LFxuICB9KSxcbiAgbWFrZUxhbmRtYXJrKHtcbiAgICBpZDogJ2RvZ2VzX3BhbGFjZScsXG4gICAgbmFtZTogXCJEb2dlJ3MgUGFsYWNlXCIsXG4gICAgZGVzY3JpcHRpb246ICdHb3RoaWMgcGFsYWNlIGFuZCBmb3JtZXIgc2VhdCBvZiBWZW5ldGlhbiBnb3Zlcm5tZW50LicsXG4gICAgbG9uOiAxMi4zNDA0LFxuICAgIGxhdDogNDUuNDMzNyxcbiAgICBtb2RlbEtpbmQ6ICdwYWxhY2UnLFxuICAgIHNjYWxlOiA2LFxuICB9KSxcbiAgbWFrZUxhbmRtYXJrKHtcbiAgICBpZDogJ2NpbnF1ZV90ZXJyZScsXG4gICAgbmFtZTogJ0NpbnF1ZSBUZXJyZScsXG4gICAgZGVzY3JpcHRpb246ICdDb2FzdGFsIHZpbGxhZ2VzIGFuZCB0ZXJyYWNlZCBsYW5kc2NhcGUgb24gdGhlIExpZ3VyaWFuIGNvYXN0LicsXG4gICAgbG9uOiA5LjcwODksXG4gICAgbGF0OiA0NC4xNDYxLFxuICAgIG1vZGVsS2luZDogJ2NvYXN0JyxcbiAgICBzY2FsZTogNS44LFxuICB9KSxcbiAgbWFrZUxhbmRtYXJrKHtcbiAgICBpZDogJ2xha2VfY29tbycsXG4gICAgbmFtZTogJ0xha2UgQ29tbycsXG4gICAgZGVzY3JpcHRpb246ICdBbHBpbmUgbGFrZSBsYW5kc2NhcGUgd2l0aCBoaXN0b3JpYyB2aWxsYXMgYW5kIHRvd25zLicsXG4gICAgbG9uOiA5LjI1NzIsXG4gICAgbGF0OiA0NS45ODcxLFxuICAgIG1vZGVsS2luZDogJ2xha2UnLFxuICAgIHNjYWxlOiA2LFxuICB9KSxcbiAgbWFrZUxhbmRtYXJrKHtcbiAgICBpZDogJ21vbGVfYW50b25lbGxpYW5hJyxcbiAgICBuYW1lOiAnTW9sZSBBbnRvbmVsbGlhbmEnLFxuICAgIGRlc2NyaXB0aW9uOiAnVGFsbCBoaXN0b3JpYyB0b3dlciBhbmQgbGFuZG1hcmsgb2YgVHVyaW4uJyxcbiAgICBsb246IDcuNjkzMSxcbiAgICBsYXQ6IDQ1LjA2OTEsXG4gICAgbW9kZWxLaW5kOiAndG93ZXInLFxuICAgIHNjYWxlOiA2LjgsXG4gIH0pLFxuICBtYWtlTGFuZG1hcmsoe1xuICAgIGlkOiAnc2FuX3ZpdGFsZV9yYXZlbm5hJyxcbiAgICBuYW1lOiAnQmFzaWxpY2Egb2YgU2FuIFZpdGFsZScsXG4gICAgZGVzY3JpcHRpb246ICdSYXZlbm5hIGJhc2lsaWNhIGtub3duIGZvciBCeXphbnRpbmUgbW9zYWljcy4nLFxuICAgIGxvbjogMTIuMTk2NCxcbiAgICBsYXQ6IDQ0LjQyMDgsXG4gICAgbW9kZWxLaW5kOiAnZG9tZScsXG4gICAgc2NhbGU6IDUuOCxcbiAgfSksXG4gIG1ha2VMYW5kbWFyayh7XG4gICAgaWQ6ICdhc3Npc2lfYmFzaWxpY2EnLFxuICAgIG5hbWU6ICdCYXNpbGljYSBvZiBTYWludCBGcmFuY2lzIG9mIEFzc2lzaScsXG4gICAgZGVzY3JpcHRpb246ICdGcmFuY2lzY2FuIGJhc2lsaWNhIGFuZCBwaWxncmltYWdlIGxhbmRtYXJrIGluIFVtYnJpYS4nLFxuICAgIGxvbjogMTIuNjI2NCxcbiAgICBsYXQ6IDQzLjA3NDcsXG4gICAgbW9kZWxLaW5kOiAnY2F0aGVkcmFsJyxcbiAgICBzY2FsZTogNi4xLFxuICB9KSxcbiAgbWFrZUxhbmRtYXJrKHtcbiAgICBpZDogJ2Nhc2VydGFfcGFsYWNlJyxcbiAgICBuYW1lOiAnUm95YWwgUGFsYWNlIG9mIENhc2VydGEnLFxuICAgIGRlc2NyaXB0aW9uOiAnTGFyZ2UgQm91cmJvbiByb3lhbCBwYWxhY2UgYW5kIGdhcmRlbiBjb21wbGV4IG5lYXIgTmFwbGVzLicsXG4gICAgbG9uOiAxNC4zMjc1LFxuICAgIGxhdDogNDEuMDczMSxcbiAgICBtb2RlbEtpbmQ6ICdwYWxhY2UnLFxuICAgIHNjYWxlOiA2LjQsXG4gIH0pLFxuICBtYWtlTGFuZG1hcmsoe1xuICAgIGlkOiAnaGVyY3VsYW5ldW0nLFxuICAgIG5hbWU6ICdIZXJjdWxhbmV1bScsXG4gICAgZGVzY3JpcHRpb246ICdBbmNpZW50IFJvbWFuIHRvd24gcHJlc2VydmVkIGJ5IHRoZSBlcnVwdGlvbiBvZiBNb3VudCBWZXN1dml1cy4nLFxuICAgIGxvbjogMTQuMzQ4NyxcbiAgICBsYXQ6IDQwLjgwNTksXG4gICAgbW9kZWxLaW5kOiAncnVpbnMnLFxuICAgIHNjYWxlOiA1LjksXG4gIH0pLFxuICBtYWtlTGFuZG1hcmsoe1xuICAgIGlkOiAncGFlc3R1bScsXG4gICAgbmFtZTogJ1BhZXN0dW0nLFxuICAgIGRlc2NyaXB0aW9uOiAnR3JlZWsgdGVtcGxlcyBhbmQgYXJjaGFlb2xvZ2ljYWwgc2l0ZSBpbiBDYW1wYW5pYS4nLFxuICAgIGxvbjogMTUuMDA1OSxcbiAgICBsYXQ6IDQwLjQxOTcsXG4gICAgbW9kZWxLaW5kOiAndGVtcGxlJyxcbiAgICBzY2FsZTogNi4xLFxuICB9KSxcbiAgbWFrZUxhbmRtYXJrKHtcbiAgICBpZDogJ21hdGVyYV9zYXNzaScsXG4gICAgbmFtZTogJ1Nhc3NpIGRpIE1hdGVyYScsXG4gICAgZGVzY3JpcHRpb246ICdIaXN0b3JpYyBjYXZlIGR3ZWxsaW5ncyBhbmQgc3RvbmUgdXJiYW4gbGFuZHNjYXBlIGluIE1hdGVyYS4nLFxuICAgIGxvbjogMTYuNjEwNixcbiAgICBsYXQ6IDQwLjY2NjQsXG4gICAgbW9kZWxLaW5kOiAncnVpbnMnLFxuICAgIHNjYWxlOiA1LjgsXG4gIH0pLFxuICBtYWtlTGFuZG1hcmsoe1xuICAgIGlkOiAnYWxiZXJvYmVsbG9fdHJ1bGxpJyxcbiAgICBuYW1lOiAnVHJ1bGxpIG9mIEFsYmVyb2JlbGxvJyxcbiAgICBkZXNjcmlwdGlvbjogJ0RyeS1zdG9uZSBjb25pY2FsLXJvb2YgaG91c2VzIGluIEFwdWxpYS4nLFxuICAgIGxvbjogMTcuMjM2NSxcbiAgICBsYXQ6IDQwLjc4MjksXG4gICAgbW9kZWxLaW5kOiAndmlsbGFnZScsXG4gICAgc2NhbGU6IDUuNyxcbiAgfSksXG4gIG1ha2VMYW5kbWFyayh7XG4gICAgaWQ6ICdjYXN0ZWxfZGVsX21vbnRlJyxcbiAgICBuYW1lOiAnQ2FzdGVsIGRlbCBNb250ZScsXG4gICAgZGVzY3JpcHRpb246ICdPY3RhZ29uYWwgbWVkaWV2YWwgY2FzdGxlIGluIEFwdWxpYS4nLFxuICAgIGxvbjogMTYuMjcwNyxcbiAgICBsYXQ6IDQxLjA4NDcsXG4gICAgbW9kZWxLaW5kOiAnY2FzdGxlJyxcbiAgICBzY2FsZTogNi4xLFxuICB9KSxcbiAgbWFrZUxhbmRtYXJrKHtcbiAgICBpZDogJ2FtYWxmaV9jb2FzdCcsXG4gICAgbmFtZTogJ0FtYWxmaSBDb2FzdCcsXG4gICAgZGVzY3JpcHRpb246ICdDbGlmZnNpZGUgY29hc3RhbCBsYW5kc2NhcGUgYW5kIGhpc3RvcmljIHRvd25zIGluIENhbXBhbmlhLicsXG4gICAgbG9uOiAxNC42MDI3LFxuICAgIGxhdDogNDAuNjM0LFxuICAgIG1vZGVsS2luZDogJ2NvYXN0JyxcbiAgICBzY2FsZTogNS44LFxuICB9KSxcbiAgbWFrZUxhbmRtYXJrKHtcbiAgICBpZDogJ3ZhbGxleV9vZl90ZW1wbGVzJyxcbiAgICBuYW1lOiAnVmFsbGV5IG9mIHRoZSBUZW1wbGVzJyxcbiAgICBkZXNjcmlwdGlvbjogJ0FuY2llbnQgR3JlZWsgdGVtcGxlIGxhbmRzY2FwZSBpbiBBZ3JpZ2VudG8sIFNpY2lseS4nLFxuICAgIGxvbjogMTMuNTkzMyxcbiAgICBsYXQ6IDM3LjI4OTQsXG4gICAgbW9kZWxLaW5kOiAndGVtcGxlJyxcbiAgICBzY2FsZTogNi4yLFxuICB9KSxcbiAgbWFrZUxhbmRtYXJrKHtcbiAgICBpZDogJ21vdW50X2V0bmEnLFxuICAgIG5hbWU6ICdNb3VudCBFdG5hJyxcbiAgICBkZXNjcmlwdGlvbjogJ0FjdGl2ZSB2b2xjYW5vIGFuZCBtb3VudGFpbiBsYW5kc2NhcGUgaW4gZWFzdGVybiBTaWNpbHkuJyxcbiAgICBsb246IDE0Ljk5NTgsXG4gICAgbGF0OiAzNy43NTEsXG4gICAgbW9kZWxLaW5kOiAnbW91bnRhaW4nLFxuICAgIHNjYWxlOiA2LjYsXG4gIH0pLFxuICBtYWtlTGFuZG1hcmsoe1xuICAgIGlkOiAncGFsZXJtb19jYXRoZWRyYWwnLFxuICAgIG5hbWU6ICdQYWxlcm1vIENhdGhlZHJhbCcsXG4gICAgZGVzY3JpcHRpb246ICdDYXRoZWRyYWwgY29tcGxleCBjb21iaW5pbmcgTm9ybWFuLCBHb3RoaWMsIGFuZCBsYXRlciBzdHlsZXMuJyxcbiAgICBsb246IDEzLjM1NjQsXG4gICAgbGF0OiAzOC4xMTQ0LFxuICAgIG1vZGVsS2luZDogJ2NhdGhlZHJhbCcsXG4gICAgc2NhbGU6IDYsXG4gIH0pLFxuICBtYWtlTGFuZG1hcmsoe1xuICAgIGlkOiAnbnVyYWdoZV9zdV9udXJheGknLFxuICAgIG5hbWU6ICdTdSBOdXJheGkgZGkgQmFydW1pbmknLFxuICAgIGRlc2NyaXB0aW9uOiAnQnJvbnplIEFnZSBudXJhZ2ljIGFyY2hhZW9sb2dpY2FsIHNpdGUgaW4gU2FyZGluaWEuJyxcbiAgICBsb246IDguOTkxOCxcbiAgICBsYXQ6IDM5LjcwNTYsXG4gICAgbW9kZWxLaW5kOiAncnVpbnMnLFxuICAgIHNjYWxlOiA1LjgsXG4gIH0pLFxuXTtcblxuZXhwb3J0IGNvbnN0IFdPUkxEX1NJWkVfVU5JVFMgPSBNQVBfQk9VTkRTLndvcmxkU2l6ZTtcbiJdfQ==

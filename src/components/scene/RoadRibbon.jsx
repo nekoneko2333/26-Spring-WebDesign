@@ -1,18 +1,19 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { getRouteSegmentAtProgress, roadCurve, routeSegments, routeTrafficColors } from '../../data/routes.js';
-import { buildSemanticRouteHeightProfile } from '../../data/terrain.js';
+import { buildRouteHeightProfile } from '../../data/terrain.js';
+import { useActiveRoute3d } from '../../hooks/useActiveRoute3d.js';
 import { useTerrainData } from '../../hooks/useTerrainData.js';
 
 export function RoadRibbon() {
   const terrain = useTerrainData();
+  const activeRoute = useActiveRoute3d();
 
   const { roadSegments, lineGeometry } = useMemo(() => {
     const ROAD_WIDTH = 1.18;
     const LINE_WIDTH = 0.07;
-    const SEGMENTS = 180;
-    const points = roadCurve.getPoints(SEGMENTS);
-    const heights = buildSemanticRouteHeightProfile(points, getRouteSegmentAtProgress, { clearance: 0.035 });
+    const SEGMENTS = activeRoute.source === 'osrm' ? 420 : 180;
+    const points = activeRoute.curve.getPoints(SEGMENTS);
+    const heights = buildRouteHeightProfile(points, { clearance: 0.16, maxGrade: 0.025, smoothPasses: 2 });
 
     const buildStrip = (width, yOffset, startIndex = 0, endIndex = points.length - 1) => {
       const positions = [];
@@ -50,18 +51,13 @@ export function RoadRibbon() {
       return geo;
     };
 
-    const progressToIndex = (progress) => THREE.MathUtils.clamp(
-      Math.round(progress * (points.length - 1)),
-      0,
-      points.length - 1,
-    );
-
-    const roadSegments = routeSegments.map((segment) => {
-      const startIndex = Math.min(progressToIndex(segment.startProgress), points.length - 2);
-      const endIndex = Math.max(progressToIndex(segment.endProgress), startIndex + 1);
+    const segmentCount = Math.min(10, Math.max(1, Math.ceil(points.length / 60)));
+    const roadSegments = Array.from({ length: segmentCount }, (_, index) => {
+      const startIndex = Math.floor((index / segmentCount) * (points.length - 1));
+      const endIndex = Math.max(Math.floor(((index + 1) / segmentCount) * (points.length - 1)), startIndex + 1);
       return {
-        id: segment.id,
-        segment,
+        id: `active-route-${index}`,
+        segment: { trafficState: 'normal', type: activeRoute.source === 'osrm' ? 'realRoad' : 'plannedRoad' },
         geometry: buildStrip(ROAD_WIDTH, 0.018, startIndex, endIndex),
       };
     });
@@ -70,7 +66,7 @@ export function RoadRibbon() {
       roadSegments,
       lineGeometry: buildStrip(LINE_WIDTH, 0.028),
     };
-  }, [terrain.version]);
+  }, [activeRoute, terrain.version]);
 
   if (terrain.status !== 'ready') return null;
 
@@ -81,16 +77,16 @@ export function RoadRibbon() {
           <mesh geometry={segment.geometry} receiveShadow>
             <meshStandardMaterial
               color={getRoadColor(segment.segment)}
-              roughness={segment.segment.type === 'city' ? 0.78 : 0.62}
-              emissive={segment.segment.type === 'tunnel' ? '#111827' : '#000000'}
-              emissiveIntensity={segment.segment.type === 'tunnel' ? 0.22 : 0}
+              roughness={0.66}
+              emissive="#000000"
+              emissiveIntensity={0}
             />
           </mesh>
           <mesh geometry={segment.geometry}>
             <meshBasicMaterial
               color={getRoadGlowColor(segment.segment)}
               transparent
-              opacity={segment.segment.trafficState === 'traffic_jam' ? 0.22 : 0.13}
+              opacity={0.13}
               depthWrite={false}
               blending={THREE.AdditiveBlending}
             />
@@ -105,15 +101,9 @@ export function RoadRibbon() {
 }
 
 function getRoadColor(segment) {
-  if (segment.type === 'tunnel') return segment.profile.color;
-  if (segment.trafficState === 'slow' || segment.trafficState === 'traffic_jam') {
-    return routeTrafficColors[segment.trafficState];
-  }
-  return segment.profile.color ?? '#6d7584';
+  return segment.type === 'realRoad' ? '#6b7f84' : '#7c858b';
 }
 
 function getRoadGlowColor(segment) {
-  if (segment.trafficState === 'traffic_jam') return '#d35b52';
-  if (segment.trafficState === 'slow') return '#f0c36d';
-  return '#82c7d5';
+  return segment.type === 'realRoad' ? '#82c7d5' : '#f0c36d';
 }

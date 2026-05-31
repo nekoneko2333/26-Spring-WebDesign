@@ -14,6 +14,20 @@ dist-ssr
 data/raw/
 tools/amsterdam-vr/.cache/
 
+# Python / backend generated files
+__pycache__/
+*.py[cod]
+*$py.class
+backend/account_store.json
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

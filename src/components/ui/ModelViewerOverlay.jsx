@@ -96,7 +96,7 @@ export function ModelViewerOverlay({ landmark, isOpen, onClose }) {
         <p className="mv-desc">{desc}</p>
         {sourceUrl && (
           <a className="mv-source" href={sourceUrl} target="_blank" rel="noreferrer">
-            Wikipedia
+            {language === 'zh' ? '查看背景资料' : 'Read background'}
           </a>
         )}
       </div>
@@ -104,5 +104,5 @@ export function ModelViewerOverlay({ landmark, isOpen, onClose }) {
   );
 }
 
-useGLTF.preload('/models/colosseum.glb');
-useGLTF.preload('/models/leaning_tower_of_pisa.glb');
+useGLTF.preload('/models/romes_colosseum.glb');
+useGLTF.preload('/models/pisas_tower.glb');

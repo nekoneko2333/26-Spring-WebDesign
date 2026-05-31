@@ -2,7 +2,7 @@ import { Canvas } from '@react-three/fiber';
 import { PerspectiveCamera } from '@react-three/drei';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { AppShell } from './components/layout/AppShell.jsx';
-import { HomePage } from './components/home/HomePage.jsx';
+import { HomeShowcase } from './components/home/HomeShowcase.jsx';
 import { SceneLights } from './components/scene/SceneLights.jsx';
 import { GroundPlane } from './components/scene/GroundPlane.jsx';
 import { FollowCamera } from './components/camera/FollowCamera.jsx';
@@ -13,7 +13,8 @@ import { LandmarkModels } from './components/landmarks/LandmarkModels.jsx';
 import { VehicleController, VehicleChassis } from './components/vehicle/VehicleController.jsx';
 import { THEME } from './config/theme.js';
 import { useAppStore } from './state/useAppStore.js';
-import { AmsterdamVrLab } from './experiments/amsterdam-vr/AmsterdamVrLab.jsx';
+import { VeniceVrLab } from './experiments/venice-vr/VeniceVrLab.jsx';
+import { RouteV2Page } from './experiments/route-versions/RouteVersions.jsx';
 
 function Experience({ isStarted, initialLandmarkId }) {
   const vehicleRef = useRef(null);
@@ -86,13 +87,17 @@ export default function App() {
     setInitialLandmarkId(null);
   }, []);
 
-  if (hashRoute === '#/amsterdam-vr') {
-    return <AmsterdamVrLab />;
+  if (hashRoute === '#/venice-vr') {
+    return <VeniceVrLab />;
+  }
+
+  if (hashRoute === '#/v2') {
+    return <RouteV2Page />;
   }
 
   return (
     <>
-      <HomePage onOpenDrive={handleOpenDrive} />
+      <HomeShowcase onOpenDrive={handleOpenDrive} />
       {driveOpen && <DriveExperience onClose={handleCloseDrive} initialLandmarkId={initialLandmarkId} />}
     </>
   );
