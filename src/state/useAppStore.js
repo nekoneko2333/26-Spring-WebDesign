@@ -14,6 +14,10 @@ export const useAppStore = create((set, get) => ({
   activeRouteIds: [],
   activeRouteGeometryCoordinates: [],
   activeRouteDistanceKm: null,
+  guidedTourState: 'IDLE',
+  guidedTourLandmarkId: null,
+  guidedTourMessage: '',
+  tourResetToken: 0,
   autoDrive: false,
   sidebarOpen: true,
   focusPanelOpen: false,
@@ -34,7 +38,22 @@ export const useAppStore = create((set, get) => ({
     if (focusPanelOpen || modelViewerOpen) return;
     set((state) => ({ autoDrive: !state.autoDrive, cameraMode: 'follow' }));
   },
-  setAutoDrive: (autoDrive) => set({ autoDrive }),
+  setAutoDrive: (autoDrive) => set((state) => ({
+    autoDrive,
+    cameraMode: autoDrive && !state.focusPanelOpen && !state.modelViewerOpen ? 'follow' : state.cameraMode,
+  })),
+  resetVehicleTour: () => set((state) => ({
+    autoDrive: false,
+    tourResetToken: state.tourResetToken + 1,
+    routeProgress: 0,
+    vehicleSpeed: 0,
+    vehicleSteer: 0,
+    nearbyLandmarkId: null,
+    guidedTourState: 'IDLE',
+    guidedTourLandmarkId: null,
+    guidedTourMessage: '',
+    cameraMode: 'follow',
+  })),
   setNearbyLandmarkId: (nearbyLandmarkId) => set({ nearbyLandmarkId }),
   setVehicleState: ({ vehicleSpeed, vehicleSteer, routeContext, routeProgress, routeDay, routeHour }) => set((state) => ({
     vehicleSpeed,
@@ -44,10 +63,30 @@ export const useAppStore = create((set, get) => ({
     routeDay: routeDay ?? state.routeDay,
     routeHour: routeHour ?? state.routeHour,
   })),
-  setActiveRouteIds: (activeRouteIds) => set({ activeRouteIds }),
-  setActiveRouteGeometry: ({ coordinates = [], distanceKm = null } = {}) => set({
+  setActiveRouteIds: (activeRouteIds) => set((state) => ({
+    activeRouteIds,
+    tourResetToken: state.tourResetToken + 1,
+    autoDrive: false,
+    routeProgress: 0,
+  })),
+  setActiveRouteGeometry: ({ coordinates = [], distanceKm = null } = {}) => set((state) => ({
     activeRouteGeometryCoordinates: coordinates,
     activeRouteDistanceKm: distanceKm,
+    tourResetToken: state.tourResetToken + 1,
+    autoDrive: false,
+    routeProgress: 0,
+  })),
+  setGuidedTourState: ({ guidedTourState = 'IDLE', guidedTourLandmarkId = null, guidedTourMessage = '' } = {}) => set({
+    guidedTourState,
+    guidedTourLandmarkId,
+    guidedTourMessage,
+  }),
+  clearGuidedTourFocus: () => set({
+    selectedLandmarkId: null,
+    focusPanelOpen: false,
+    modelViewerOpen: false,
+    guidedTourLandmarkId: null,
+    guidedTourMessage: '',
   }),
   selectLandmark: (selectedLandmarkId) => set({ selectedLandmarkId, focusPanelOpen: false, modelViewerOpen: false, cameraMode: 'focus' }),
   openLandmarkFocus: (selectedLandmarkId) => set({ selectedLandmarkId, focusPanelOpen: true, modelViewerOpen: false, cameraMode: 'focus', autoDrive: false }),
