@@ -36,7 +36,6 @@ const versions = [
 const storyModelPaths = {
   colosseum: '/models/romes_colosseum.glb',
   pisa: '/models/pisas_tower.glb',
-  duomo: '/models/milan_cathedral.glb',
   florence: '/models/santa-maria-del-fiore/source/Santa%20Maria.glb',
 };
 
@@ -68,15 +67,9 @@ const storyScenes = [
     modelScale: 0.78,
   },
   {
-    id: 'duomo',
-    kind: 'duomo',
-    side: 'right',
-    title: 'Milan Duomo',
-  },
-  {
     id: 'florence',
     kind: 'florence',
-    side: 'left',
+    side: 'right',
     title: 'Santa Maria del Fiore',
   },
 ];
@@ -528,7 +521,6 @@ function samplePisaPoint() {
   const y = -1.75 + floor * 0.48 + (band ? (Math.random() - 0.5) * 0.08 : (Math.random() - 0.5) * 0.34);
   const z = Math.sin(angle) * radius * 0.92;
   x += y * 0.18;
-  if (Math.random() < 0.1) return sampleBox(-0.32, -1.96, 0, 2.15, 0.2, 1.75);
   return [x, y, z];
 }
 
@@ -559,6 +551,7 @@ function sampleStoryTarget(kind) {
   if (kind === 'colosseum') return sampleColosseumPoint();
   if (kind === 'pisa') return samplePisaPoint();
   if (kind === 'duomo') return sampleDuomoPoint();
+  if (kind !== 'chaos') return sampleBox(0, 0, 0, 4.8, 2.7, 1.9);
   return sampleBox(0, 0, 0, 7, 4, 3);
 }
 
@@ -591,6 +584,20 @@ function createStoryMorphData(count = STORY_PARTICLE_COUNT) {
   return { random, seeds, proceduralTargets };
 }
 
+function getDensePointCloud(sourcePoints, box) {
+  const size = box.getSize(new THREE.Vector3());
+  const largest = Math.max(size.x, size.y, size.z) || 1;
+  const cellSize = largest * 0.035;
+  const densityByCell = new Map();
+  const keys = sourcePoints.map((point) => {
+    const key = `${Math.floor(point.x / cellSize)},${Math.floor(point.y / cellSize)},${Math.floor(point.z / cellSize)}`;
+    densityByCell.set(key, (densityByCell.get(key) ?? 0) + 1);
+    return key;
+  });
+  const densePoints = sourcePoints.filter((_, index) => densityByCell.get(keys[index]) >= 3);
+  return densePoints.length >= Math.min(800, sourcePoints.length * 0.28) ? densePoints : sourcePoints;
+}
+
 function sampleModelPointCloud(scene, count, options = {}) {
   const sourcePoints = [];
   const box = new THREE.Box3();
@@ -612,6 +619,7 @@ function sampleModelPointCloud(scene, count, options = {}) {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const largest = Math.max(size.x, size.y, size.z) || 1;
+  const denseSourcePoints = getDensePointCloud(sourcePoints, box);
   const scale = options.scale ?? 4.6;
   const rotateX = options.rotateX ?? 0;
   const rotateY = options.rotateY ?? 0;
@@ -623,7 +631,7 @@ function sampleModelPointCloud(scene, count, options = {}) {
 
   const target = new Float32Array(count * 3);
   for (let i = 0; i < count; i += 1) {
-    const point = sourcePoints[Math.floor(Math.random() * sourcePoints.length)].clone();
+    const point = denseSourcePoints[Math.floor(Math.random() * denseSourcePoints.length)].clone();
     point.sub(center).multiplyScalar(scale / largest);
     point.applyMatrix4(matrix);
     point.x += (Math.random() - 0.5) * 0.018;
@@ -640,7 +648,6 @@ function sampleModelPointCloud(scene, count, options = {}) {
 function ModelPointCloudLoader({ onTargetsReady }) {
   const colosseum = useGLTF(storyModelPaths.colosseum);
   const pisa = useGLTF(storyModelPaths.pisa);
-  const duomo = useGLTF(storyModelPaths.duomo);
   const florence = useGLTF(storyModelPaths.florence);
 
   const targets = useMemo(() => {
@@ -648,10 +655,9 @@ function ModelPointCloudLoader({ onTargetsReady }) {
     return {
       colosseum: sampleModelPointCloud(colosseum.scene, count, { scale: 6.2, rotateY: -0.32, offsetY: 0.08 }),
       pisa: sampleModelPointCloud(pisa.scene, count, { scale: 5.8, rotateX: -Math.PI / 2, rotateY: 0.18, offsetY: 0.08 }),
-      duomo: sampleModelPointCloud(duomo.scene, count, { scale: 6.15, rotateY: -0.08, offsetY: 0.02 }),
       florence: sampleModelPointCloud(florence.scene, count, { scale: 6.2, rotateY: 0.22, offsetY: 0.04 }),
     };
-  }, [colosseum.scene, pisa.scene, duomo.scene, florence.scene]);
+  }, [colosseum.scene, pisa.scene, florence.scene]);
 
   useEffect(() => {
     onTargetsReady(targets);
@@ -920,7 +926,7 @@ function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
       const centerX = width * (side === 'left' ? 0.34 : side === 'right' ? 0.66 : 0.52);
       const centerY = height * 0.5;
       const sceneScale = activeScene.modelScale ?? 1;
-      const scale = Math.min(width, height) * (shouldAssemble ? 0.39 : 0.22) * sceneScale;
+      const scale = Math.min(width, height) * (shouldAssemble ? 0.26 : 0.22) * sceneScale;
       const rotateY = t * 0.34 + mouseRef.current.x * 0.2;
       const rotateX = -0.08 + mouseRef.current.y * 0.1;
       const cy = Math.cos(rotateY);
@@ -946,7 +952,7 @@ function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
         const perspective = 1 / (1 + (rz2 + 3.8) * 0.09);
         const px = centerX + rx * scale * perspective;
         const py = centerY - ry * scale * perspective;
-        const radius = (shouldAssemble ? 1.85 : 1.25) * perspective * (0.92 + localMorph * 0.42);
+        const radius = (shouldAssemble ? 1.42 : 1.25) * perspective * (0.92 + localMorph * 0.42);
 
         ctx.globalAlpha = 0.34 + localMorph * 0.5;
         ctx.beginPath();
