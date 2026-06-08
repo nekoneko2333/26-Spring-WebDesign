@@ -30,6 +30,13 @@
     linear-gradient(135deg, #fbfdff 0%, #eef7fb 48%, #fff7ef 100%);
 }
 
+.showcase-home--story {
+  min-height: 100vh;
+  padding: 0;
+  overflow: visible;
+  background: #fdfbf7;
+}
+
 .showcase-home--radial {
   background:
     radial-gradient(920px 620px at 58% 28%, rgba(92, 190, 255, 0.16), transparent 68%),
@@ -101,7 +108,7 @@
   z-index: 1;
   width: 100vw;
   min-height: 400vh;
-  margin: 10px calc(50% - 50vw) 36px;
+  margin: 0 calc(50% - 50vw);
   border-radius: 0;
   background-color: #fdfbf7;
   background-image:
@@ -119,12 +126,16 @@
   z-index: 1;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   min-height: 100vh;
   opacity: 0;
   pointer-events: none;
+  overflow: hidden;
+  background-color: #fdfbf7;
   background:
     radial-gradient(760px 460px at 70% 46%, rgba(255, 249, 196, 0.52), transparent 70%),
-    radial-gradient(620px 360px at 36% 52%, rgba(255, 255, 255, 0.58), transparent 74%);
+    radial-gradient(620px 360px at 36% 52%, rgba(255, 255, 255, 0.58), transparent 74%),
+    #fdfbf7;
 }
 
 .semantic-story__loader {
@@ -3096,7 +3107,7 @@
 }
 
 .cinematic-home-page {
-  width: min(100%, 1360px);
+  width: min(100%, 1600px);
   display: grid;
   gap: clamp(38px, 6vw, 78px);
   margin: 0 auto;
@@ -3133,7 +3144,7 @@
 .cinematic-hero {
   min-height: calc(100vh - 126px);
   display: grid;
-  grid-template-columns: minmax(0, 0.88fr) minmax(360px, 0.72fr);
+  grid-template-columns: minmax(420px, 0.88fr) minmax(420px, 0.72fr);
   gap: clamp(26px, 5vw, 76px);
   align-items: center;
 }
@@ -3194,6 +3205,7 @@
 }
 
 .cinematic-hero__preview {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 16px;
@@ -3201,27 +3213,98 @@
   transform: rotate(0.8deg);
 }
 
+.cinematic-hero__preview::before {
+  content: "";
+  position: absolute;
+  top: -15px;
+  left: 50%;
+  z-index: 3;
+  width: 112px;
+  height: 28px;
+  border: 2px solid rgba(45, 45, 45, 0.18);
+  border-radius: 18px 12px 16px 10px / 10px 16px 12px 18px;
+  background: rgba(229, 224, 216, 0.72);
+  transform: translateX(-50%) rotate(-2.5deg);
+}
+
+.cinematic-hero__preview::after {
+  content: "";
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  width: 42px;
+  height: 42px;
+  border: 2px dashed #ff4d4d;
+  border-radius: 58% 42% 55% 45% / 45% 52% 48% 55%;
+  opacity: 0.92;
+  transform: rotate(8deg);
+}
+
 .cinematic-hero__media {
   position: relative;
   min-height: 360px;
-  overflow: hidden;
-  border: 2px solid #2d2d2d;
-  border-radius: 42% 58% 48% 52% / 54% 42% 58% 46%;
-  background: #fff9c4;
+  overflow: visible;
+  padding: clamp(10px, 1.2vw, 16px);
+  border: 3px dashed #2d2d2d;
+  border-radius: 24px 18px 26px 16px / 18px 26px 16px 24px;
+  background:
+    radial-gradient(#e5e0d8 1px, transparent 1.5px),
+    #fff9c4;
+  background-size: 18px 18px, auto;
+  box-shadow: 6px 6px 0 #2d2d2d;
+  transform: rotate(-1.2deg);
+}
+
+.cinematic-hero__media::before,
+.cinematic-hero__media::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  width: 42px;
+  height: 42px;
+  pointer-events: none;
+}
+
+.cinematic-hero__media::before {
+  top: 12px;
+  left: 12px;
+  border-top: 4px solid #2d2d2d;
+  border-left: 4px solid #2d2d2d;
+  border-radius: 12px 0 0 0;
+  transform: rotate(-3deg);
+}
+
+.cinematic-hero__media::after {
+  right: 12px;
+  bottom: 12px;
+  border-right: 4px solid #2d2d2d;
+  border-bottom: 4px solid #2d2d2d;
+  border-radius: 0 0 12px 0;
+  transform: rotate(2deg);
 }
 
 .cinematic-hero__media img {
+  display: block;
   width: 100%;
   height: 100%;
-  min-height: 360px;
+  min-height: 336px;
+  border: 3px solid #2d2d2d;
+  border-radius: 16px 10px 18px 12px / 12px 18px 10px 16px;
   object-fit: cover;
-  filter: saturate(0.88) contrast(1.04);
+  filter: saturate(0.82) contrast(1.06) sepia(0.08);
+  box-shadow: 3px 3px 0 rgba(45, 45, 45, 0.28);
 }
 
 .cinematic-hero__media button {
   position: absolute;
-  right: 16px;
-  bottom: 16px;
+  right: 24px;
+  bottom: 24px;
+  z-index: 4;
+}
+
+.cinematic-hero__media:hover {
+  transform: rotate(-0.35deg) translate(2px, 2px);
+  box-shadow: 4px 4px 0 #2d2d2d;
 }
 
 .cinematic-hero__route {
@@ -3279,7 +3362,7 @@
 .cinematic-review-grid,
 .cinematic-notes-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 22px;
 }
 
@@ -3482,7 +3565,7 @@
 
 .cinematic-entry-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 16px;
 }
 
@@ -3862,5 +3945,101 @@
   .destination-detail__media,
   .destination-detail__media img {
     min-height: 300px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .showcase-home--cinema {
+    padding-inline: clamp(32px, 4vw, 72px);
+  }
+
+  .cinematic-hero__media {
+    min-height: min(58vh, 620px);
+  }
+
+  .cinematic-hero__media img {
+    min-height: min(54vh, 590px);
+  }
+
+  .paper-route-map {
+    min-height: min(62vh, 680px);
+  }
+}
+
+@media (max-width: 920px) {
+  .showcase-home--cinema {
+    padding-inline: clamp(12px, 3vw, 22px);
+  }
+
+  .cinematic-home-nav {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cinematic-home-nav nav {
+    justify-content: start;
+  }
+
+  .cinematic-home-nav nav button,
+  .cinematic-home-nav__tools button,
+  .cinematic-home-nav__account {
+    min-height: 34px;
+    padding-inline: 10px;
+  }
+
+  .cinematic-hero {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    padding-top: 18px;
+  }
+
+  .cinematic-route-planner__main,
+  .destination-detail__hero {
+    grid-template-columns: 1fr;
+  }
+
+  .cinematic-destination-grid,
+  .cinematic-feature-grid,
+  .cinematic-review-grid,
+  .cinematic-notes-grid,
+  .cinematic-entry-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .showcase-home--story {
+    padding: 0;
+  }
+
+  .semantic-story {
+    margin: 0 calc(50% - 50vw);
+  }
+
+  .semantic-story__canvas {
+    height: 58vh;
+    min-height: 340px;
+  }
+
+  .cinematic-home-nav nav,
+  .cinematic-home-nav__tools,
+  .cinematic-actions,
+  .home-card-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .cinematic-home-nav__brand {
+    min-width: 0;
+  }
+
+  .cinematic-hero__media,
+  .cinematic-hero__media img,
+  .paper-route-map {
+    min-height: 260px;
+  }
+
+  .cinematic-account-summary__grid,
+  .destination-detail__gallery,
+  .destination-detail__facts {
+    grid-template-columns: 1fr;
   }
 }

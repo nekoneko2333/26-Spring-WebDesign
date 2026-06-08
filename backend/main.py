@@ -1,8 +1,8 @@
 import math
 import os
-import json
 import secrets
 import hashlib
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
@@ -30,8 +30,8 @@ app.add_middleware(
 _LON_MIN, _LON_MAX = 6.6, 18.5
 _LAT_MIN, _LAT_MAX = 36.6, 47.1
 _WORLD = 170
-_STORE_PATH = Path(__file__).with_name('account_store.json')
-_STORE_LOCK = Lock()
+_DB_PATH = Path(os.getenv('ACCOUNT_DB_PATH', Path(__file__).with_name('accounts.sqlite3')))
+_DB_LOCK = Lock()
 _PBKDF2_ROUNDS = 120_000
 
 
@@ -50,22 +50,45 @@ def _now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
-def _empty_store():
-    return {'users': {}, 'sessions': {}}
+def _connect_db():
+    _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(_DB_PATH)
+    connection.row_factory = sqlite3.Row
+    connection.execute('PRAGMA foreign_keys = ON')
+    return connection
 
 
-def _load_store():
-    if not _STORE_PATH.exists():
-        return _empty_store()
-    with _STORE_PATH.open('r', encoding='utf-8') as file:
-        data = json.load(file)
-    data.setdefault('users', {})
-    data.setdefault('sessions', {})
-    return data
+def _init_account_db():
+    with _DB_LOCK, _connect_db() as connection:
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                email TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                last_login_at TEXT
+            );
 
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+                created_at TEXT NOT NULL
+            );
 
-def _save_store(data):
-    _STORE_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+            CREATE TABLE IF NOT EXISTS account_history (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+                action TEXT NOT NULL,
+                detail TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_account_history_email_created
+            ON account_history(email, created_at DESC);
+            """
+        )
 
 
 def _hash_password(password, salt=None):
@@ -88,26 +111,52 @@ def _public_user(email, user):
     }
 
 
-def _add_history(user, action, detail=''):
-    user.setdefault('history', []).insert(0, {
-        'id': secrets.token_hex(8),
-        'action': action,
-        'detail': detail,
-        'created_at': _now_iso(),
-    })
-    user['history'] = user['history'][:80]
+def _history_for_email(connection, email, limit=80):
+    rows = connection.execute(
+        """
+        SELECT id, action, detail, created_at
+        FROM account_history
+        WHERE email = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (email, limit),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _add_history(connection, email, action, detail=''):
+    connection.execute(
+        """
+        INSERT INTO account_history (id, email, action, detail, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (secrets.token_hex(8), email, action, detail, _now_iso()),
+    )
 
 
 def _require_user(authorization):
     if not authorization or not authorization.startswith('Bearer '):
         raise HTTPException(status_code=401, detail='Missing auth token')
     token = authorization.removeprefix('Bearer ').strip()
-    with _STORE_LOCK:
-        store = _load_store()
-        email = store['sessions'].get(token)
-        if not email or email not in store['users']:
+    with _DB_LOCK, _connect_db() as connection:
+        row = connection.execute(
+            """
+            SELECT users.email, users.name, users.created_at, users.last_login_at
+            FROM sessions
+            JOIN users ON users.email = sessions.email
+            WHERE sessions.token = ?
+            """,
+            (token,),
+        ).fetchone()
+        if row is None:
             raise HTTPException(status_code=401, detail='Invalid auth token')
-        return token, email, store, store['users'][email]
+        return token, row['email'], dict(row)
+
+
+@app.on_event('startup')
+def startup():
+    _init_account_db()
 
 
 def _merc_y(lat):
@@ -281,83 +330,95 @@ def health():
     return {
         'status': 'ok',
         'mode': 'backend',
-        'database_configured': False,
+        'database_configured': True,
+        'account_database': str(_DB_PATH),
     }
 
 
 @app.post('/api/auth/register')
 def register(payload: AuthPayload):
+    _init_account_db()
     email = payload.email.strip().lower()
     if '@' not in email or '.' not in email.rsplit('@', 1)[-1]:
         raise HTTPException(status_code=422, detail='Invalid email')
     name = (payload.name or email.split('@', 1)[0]).strip()[:64] or 'Traveler'
-    with _STORE_LOCK:
-        store = _load_store()
-        if email in store['users']:
+    with _DB_LOCK, _connect_db() as connection:
+        existing = connection.execute('SELECT email FROM users WHERE email = ?', (email,)).fetchone()
+        if existing is not None:
             raise HTTPException(status_code=409, detail='Account already exists')
         salt, digest = _hash_password(payload.password)
-        user = {
-            'email': email,
-            'name': name,
-            'salt': salt,
-            'password_hash': digest,
-            'created_at': _now_iso(),
-            'last_login_at': _now_iso(),
-            'history': [],
-        }
-        _add_history(user, 'registered', 'Account created')
+        created_at = _now_iso()
+        last_login_at = created_at
         token = secrets.token_urlsafe(32)
-        store['users'][email] = user
-        store['sessions'][token] = email
-        _save_store(store)
-        return {'token': token, 'user': _public_user(email, user), 'history': user['history']}
+        connection.execute(
+            """
+            INSERT INTO users (email, name, salt, password_hash, created_at, last_login_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (email, name, salt, digest, created_at, last_login_at),
+        )
+        connection.execute(
+            'INSERT INTO sessions (token, email, created_at) VALUES (?, ?, ?)',
+            (token, email, _now_iso()),
+        )
+        _add_history(connection, email, 'registered', 'Account created')
+        user = {'email': email, 'name': name, 'created_at': created_at, 'last_login_at': last_login_at}
+        return {'token': token, 'user': user, 'history': _history_for_email(connection, email)}
 
 
 @app.post('/api/auth/login')
 def login(payload: AuthPayload):
+    _init_account_db()
     email = payload.email.strip().lower()
-    with _STORE_LOCK:
-        store = _load_store()
-        user = store['users'].get(email)
-        if not user or not _verify_password(payload.password, user['salt'], user['password_hash']):
+    with _DB_LOCK, _connect_db() as connection:
+        user = connection.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+        if user is None or not _verify_password(payload.password, user['salt'], user['password_hash']):
             raise HTTPException(status_code=401, detail='Invalid email or password')
-        user['last_login_at'] = _now_iso()
-        _add_history(user, 'signed in', 'Session started')
+        last_login_at = _now_iso()
         token = secrets.token_urlsafe(32)
-        store['sessions'][token] = email
-        _save_store(store)
-        return {'token': token, 'user': _public_user(email, user), 'history': user['history']}
+        connection.execute('UPDATE users SET last_login_at = ? WHERE email = ?', (last_login_at, email))
+        connection.execute(
+            'INSERT INTO sessions (token, email, created_at) VALUES (?, ?, ?)',
+            (token, email, _now_iso()),
+        )
+        _add_history(connection, email, 'signed in', 'Session started')
+        public_user = {
+            'email': email,
+            'name': user['name'],
+            'created_at': user['created_at'],
+            'last_login_at': last_login_at,
+        }
+        return {'token': token, 'user': public_user, 'history': _history_for_email(connection, email)}
 
 
 @app.get('/api/auth/me')
 def get_me(authorization: str | None = Header(default=None)):
-    _, email, _, user = _require_user(authorization)
-    return {'user': _public_user(email, user), 'history': user.get('history', [])}
+    _, email, user = _require_user(authorization)
+    with _DB_LOCK, _connect_db() as connection:
+        return {'user': _public_user(email, user), 'history': _history_for_email(connection, email)}
 
 
 @app.post('/api/auth/logout')
 def logout(authorization: str | None = Header(default=None)):
-    token, _, store, _ = _require_user(authorization)
-    with _STORE_LOCK:
-        store = _load_store()
-        store['sessions'].pop(token, None)
-        _save_store(store)
+    token, _, _ = _require_user(authorization)
+    with _DB_LOCK, _connect_db() as connection:
+        connection.execute('DELETE FROM sessions WHERE token = ?', (token,))
     return {'ok': True}
 
 
 @app.get('/api/account/history')
 def get_account_history(authorization: str | None = Header(default=None)):
-    _, _, _, user = _require_user(authorization)
-    return {'items': user.get('history', [])}
+    _, email, _ = _require_user(authorization)
+    with _DB_LOCK, _connect_db() as connection:
+        return {'items': _history_for_email(connection, email)}
 
 
 @app.post('/api/account/history')
 def add_account_history(payload: HistoryPayload, authorization: str | None = Header(default=None)):
-    _, email, store, user = _require_user(authorization)
-    _add_history(user, payload.action, payload.detail)
-    store['users'][email] = user
-    _save_store(store)
-    return {'items': user.get('history', [])}
+    _, email, _ = _require_user(authorization)
+    with _DB_LOCK, _connect_db() as connection:
+        _add_history(connection, email, payload.action, payload.detail)
+        return {'items': _history_for_email(connection, email)}
 
 
 @app.get('/api/landmarks')

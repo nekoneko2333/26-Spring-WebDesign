@@ -1,7 +1,7 @@
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { landmarks } from '../../data/landmarks.js';
 import liveLandmarksData from '../../../public/data/live-landmarks.json';
 
@@ -45,6 +45,7 @@ const STORY_PARTICLE_COUNT = 7600;
 const STORY_MODEL_SAMPLE_COUNT = 8200;
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
 const AUTH_TOKEN_KEY = 'web3d_auth_token';
+const HOME_ENTERED_KEY = 'trip3d_home_entered';
 
 const storyScenes = [
   {
@@ -1774,7 +1775,18 @@ function MapPage(props) {
 }
 
 function scrollToHomeSection(id) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (window.location.hash && window.location.hash !== '#/' && !window.location.hash.startsWith('#home-')) {
+    window.location.hash = '#/';
+  }
+  requestAnimationFrame(() => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+function resetPageScroll() {
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
 }
 
 function homeText(language, zh, en) {
@@ -1934,7 +1946,7 @@ function CinematicHomePage(props) {
 
 export function HomeShowcase({ onOpenDrive }) {
   const activeVersion = versions[0];
-  const [hasEnteredHome, setHasEnteredHome] = useState(false);
+  const [hasEnteredHome, setHasEnteredHome] = useState(() => window.sessionStorage.getItem(HOME_ENTERED_KEY) === '1');
   const [activePage, setActivePage] = useState('home');
   const [language, setLanguage] = useState('zh');
   const [query, setQuery] = useState('');
@@ -1990,6 +2002,23 @@ export function HomeShowcase({ onOpenDrive }) {
     setVisibleCount(12);
     setReviewVisibleCount(6);
   }, [kind, query, region, season, sort]);
+
+  useLayoutEffect(() => {
+    if (!hasEnteredHome) return;
+    resetPageScroll();
+    const frame = requestAnimationFrame(resetPageScroll);
+    const timers = [0, 80, 220, 420].map((delay) => window.setTimeout(resetPageScroll, delay));
+    return () => {
+      cancelAnimationFrame(frame);
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [hasEnteredHome]);
+
+  const handleEnterHome = useCallback(() => {
+    window.sessionStorage.setItem(HOME_ENTERED_KEY, '1');
+    resetPageScroll();
+    setHasEnteredHome(true);
+  }, []);
 
   useEffect(() => {
     if (!authToken) return undefined;
@@ -2176,7 +2205,7 @@ export function HomeShowcase({ onOpenDrive }) {
   if (!hasEnteredHome) {
     return (
       <main className={`showcase-home showcase-home--story is-${language}`} style={{ '--concept-accent': activeVersion.accent }}>
-        <SemanticParticleStory language={language} onEnterHome={() => setHasEnteredHome(true)} />
+        <SemanticParticleStory language={language} onEnterHome={handleEnterHome} />
       </main>
     );
   }
