@@ -374,7 +374,7 @@
 .focus-side {
   background: linear-gradient(90deg, rgba(244,249,252,0.72), rgba(244,249,252,0.22) 78%, transparent);
   border-right: 1px solid rgba(8, 24, 39, 0.1);
-  padding: 96px 30px 30px;
+  padding: 124px 30px 30px;
 }
 
 .focus-side--right {

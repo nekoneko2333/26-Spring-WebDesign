@@ -13,6 +13,7 @@ export function RoadRibbon() {
   const activeRoute = useActiveRoute3d();
   const routeProgress = useAppStore((state) => state.routeProgress);
   const nearbyLandmarkId = useAppStore((state) => state.nearbyLandmarkId);
+  const renderedRouteProgress = Math.round(routeProgress * 100) / 100;
 
   const { baseRoadGeometry, passedRoadGeometry, edgeGeometries, dashGeometries, stationMarkers, vehicleMarker, roadsideMarkers } = useMemo(() => {
     const ROAD_WIDTH = 1.46;
@@ -22,7 +23,7 @@ export function RoadRibbon() {
     const SEGMENTS = activeRoute.source === 'osrm' ? 420 : 190;
     const points = activeRoute.curve.getPoints(SEGMENTS);
     const heights = buildRouteHeightProfile(points, { clearance: 0.18, maxGrade: 0.024, smoothPasses: 2 });
-    const progressIndex = Math.max(1, Math.round(THREE.MathUtils.clamp(routeProgress, 0, 1) * (points.length - 1)));
+    const progressIndex = Math.max(1, Math.round(THREE.MathUtils.clamp(renderedRouteProgress, 0, 1) * (points.length - 1)));
 
     // 基于路线采样点生成轻量道路带，宽度由切线法线控制，不引入贴图资源。
     const buildStrip = (width, yOffset, startIndex = 0, endIndex = points.length - 1) => {
@@ -112,7 +113,7 @@ export function RoadRibbon() {
       vehicleMarker,
       roadsideMarkers,
     };
-  }, [activeRoute, nearbyLandmarkId, routeProgress, terrain.version]);
+  }, [activeRoute, nearbyLandmarkId, renderedRouteProgress, terrain.version]);
 
   if (terrain.status !== 'ready') return null;
 

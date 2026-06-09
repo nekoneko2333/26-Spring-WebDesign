@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { landmarks as baseLandmarks, lngLatToWorld } from '../../data/landmarks.js';
 import { useAppStore } from '../../state/useAppStore.js';
+import { fetchRouteMetrics, useRouteMetrics } from '../../hooks/useRouteMetrics.js';
 import liveLandmarksData from '../../../public/data/live-landmarks.json';
 
 const versions = [
@@ -161,7 +162,6 @@ const copy = {
       ['reviews', 'Travel notes'],
       ['drive', 'Drive'],
       ['map', 'Map'],
-      ['vr', 'Venice'],
     ],
     cta3d: 'Start driving',
     routeMap: 'View route',
@@ -232,7 +232,6 @@ const copy = {
       ['reviews', '行前资料'],
       ['drive', '导览'],
       ['map', '地图'],
-      ['vr', '威尼斯'],
     ],
     cta3d: '开始导览',
     routeMap: '查看路线',
@@ -1146,10 +1145,6 @@ function HomeSidebar({ language, setLanguage, activePage, setActivePage, selecte
       setActivePage(id);
       return;
     }
-    if (id === 'vr') {
-      window.location.hash = '#/venice-vr';
-      return;
-    }
     if (id === 'drive') {
       setActivePage(id);
       return;
@@ -1285,8 +1280,6 @@ function Hero({ version, language, routeStops, favorites, onOpenDrive }) {
         <p className="concept-summary">{t(version.summary, language)}</p>
         <div className="concept-actions">
           <button className="concept-btn concept-btn--primary" type="button" onClick={() => onOpenDrive()}>{c.cta3d}</button>
-          <a className="concept-btn" href="#/v2">{c.routeMap}</a>
-          <a className="concept-btn" href="#/venice-vr">Venice VR</a>
         </div>
       </div>
       {version.id === 'radial' ? (
@@ -1295,7 +1288,7 @@ function Hero({ version, language, routeStops, favorites, onOpenDrive }) {
             <strong>{c.cta3d}</strong>
             <button className="radial-drive" type="button" onClick={() => onOpenDrive()}>3D</button>
           </div>
-          {c.nav.concat([['vr', 'Venice VR'], ['map', c.routeMap]]).map(([id, label], index) => (
+          {c.nav.concat([['map', c.routeMap]]).map(([id, label], index) => (
             <button key={id} className="radial-node" style={{ '--i': index }} type="button">
               {label}
             </button>
@@ -1840,8 +1833,6 @@ function DrivePage(props) {
         <p>{copy[language].driveBody}</p>
         <div className="concept-actions">
           <button className="concept-btn concept-btn--primary" type="button" onClick={() => onOpenDrive(selectedStop.id)}>{copy[language].cta3d}</button>
-          <a className="concept-btn" href="#/v2">{copy[language].routeMap}</a>
-          <a className="concept-btn" href="#/venice-vr">Venice VR</a>
         </div>
         <HeroGallery language={language} routeStops={routeStops} onOpenDrive={onOpenDrive} />
       </div>
@@ -2117,19 +2108,66 @@ function HomeStats({ language }) {
   return <section className="cinematic-stats" aria-label={language === 'zh' ? '\u6570\u636e\u6982\u89c8' : 'Overview stats'}>{stats.map(([value, label]) => <article key={label}><strong>{value}</strong><span>{label}</span></article>)}</section>;
 }
 
-function RouteSketchMap({ language, routeStops }) {
+const ROUTE_MAP_BOUNDS = { lonMin: 6.2, lonMax: 18.8, latMin: 36.4, latMax: 46.8 };
+const ITALY_MAINLAND = [[7.5,44.1],[7.7,45.1],[8.6,45.7],[10.2,46.2],[12.2,46],[13.6,45.7],[13.9,44.8],[13.2,43.9],[13,43.1],[13.8,42.6],[14.5,42],[15,41.2],[16.2,41.9],[18.2,40.7],[18.5,39.9],[17.5,40.1],[16.8,39.5],[17.2,38.9],[16.6,38.7],[16,39.2],[15.6,40],[14.8,40.6],[14.1,40.9],[13.4,41.3],[12.6,41.7],[12,42.5],[11.3,43.4],[10.3,43.9],[9.3,44.2],[8.5,44.4],[7.8,44.5]];
+const ROUTE_NETWORK = [
+  [[9.19,45.46],[10.99,45.44],[11.88,45.41],[12.23,45.49]],
+  [[10.99,45.44],[11.34,44.49],[11.25,43.77],[12.48,41.91],[14.33,41.07],[14.49,40.75]],
+  [[11.25,43.77],[10.4,43.72],[9.71,44.15]],
+];
+
+function projectRouteMapPoint(lon, lat) {
+  return {
+    x: 5 + ((lon - ROUTE_MAP_BOUNDS.lonMin) / (ROUTE_MAP_BOUNDS.lonMax - ROUTE_MAP_BOUNDS.lonMin)) * 90,
+    y: 5 + (1 - ((lat - ROUTE_MAP_BOUNDS.latMin) / (ROUTE_MAP_BOUNDS.latMax - ROUTE_MAP_BOUNDS.latMin))) * 90,
+  };
+}
+
+function routeMapPath(coordinates, close = false) {
+  const path = coordinates.map(([lon, lat], index) => {
+    const point = projectRouteMapPoint(lon, lat);
+    return `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+  }).join(' ');
+  return close && path ? `${path} Z` : path;
+}
+
+function RouteSketchMap({ language, routeStops, routeGeometry = [] }) {
   const points = routeStops.map((stop) => {
     const live = liveFor(stop.id);
     const lon = live?.coordinates?.lon ?? stop.lon;
     const lat = live?.coordinates?.lat ?? stop.lat;
+    const projected = projectRouteMapPoint(lon, lat);
     return {
       stop,
-      x: 8 + ((lon - 6.6) / (18.5 - 6.6)) * 84,
-      y: 8 + ((47.1 - lat) / (47.1 - 36.6)) * 84,
+      lon,
+      lat,
+      x: projected.x,
+      y: projected.y,
     };
   });
-  const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
-  return <div className="paper-route-map" aria-label={language === 'zh' ? '\u624b\u7ed8\u8def\u7ebf\u5730\u56fe' : 'Hand-drawn route map'}><svg viewBox="0 0 100 100" role="img" aria-hidden="true" preserveAspectRatio="none"><path className="paper-route-map__coast" d="M2 82 C18 74 22 62 35 60 C48 58 52 68 64 60 C76 52 74 36 90 24" /><path className="paper-route-map__river" d="M8 22 C24 30 26 42 42 42 C58 42 64 30 88 38" />{path && <path className="paper-route-map__path" d={path} />}{points.map((point, index) => <g key={point.stop.id} className="paper-route-map__stop"><circle cx={point.x} cy={point.y} r="3.8" /><text x={point.x} y={point.y + 1.6}>{index + 1}</text></g>)}</svg>{points.map((point) => <span key={point.stop.id} style={{ '--x': point.x + '%', '--y': point.y + '%' }}>{nameFor(point.stop, language)}</span>)}</div>;
+  const displayGeometry = routeGeometry.length >= 2
+    ? routeGeometry
+    : points.map((point) => [point.lon, point.lat]);
+  const routeStep = Math.max(1, Math.floor(displayGeometry.length / 1200));
+  const simplifiedRoute = displayGeometry.filter((_, index) => index % routeStep === 0);
+
+  return (
+    <div className="paper-route-map" aria-label={language === 'zh' ? '手绘道路路线地图' : 'Hand-drawn road route map'}>
+      <svg viewBox="0 0 100 100" role="img" aria-hidden="true">
+        <path className="paper-route-map__land" d={routeMapPath(ITALY_MAINLAND, true)} />
+        {ROUTE_NETWORK.map((line, index) => <path key={index} className="paper-route-map__network" d={routeMapPath(line)} />)}
+        {simplifiedRoute.length >= 2 && <path className="paper-route-map__path-casing" d={routeMapPath(simplifiedRoute)} />}
+        {simplifiedRoute.length >= 2 && <path className="paper-route-map__path" d={routeMapPath(simplifiedRoute)} />}
+        {points.map((point, index) => (
+          <g key={point.stop.id} className="paper-route-map__stop">
+            <circle cx={point.x} cy={point.y} r="3.2" />
+            <text x={point.x} y={point.y + 1.4}>{index + 1}</text>
+          </g>
+        ))}
+      </svg>
+      {points.map((point) => <span key={point.stop.id} style={{ '--x': point.x + '%', '--y': point.y + '%' }}>{nameFor(point.stop, language)}</span>)}
+    </div>
+  );
 }
 
 function DestinationSection(props) {
@@ -2255,7 +2293,7 @@ function PrintableItinerary({ language, routeStops, itinerary, pace }) {
 
 
 function RoutePlannerSection(props) {
-  const { language, routeStops, routeSegments, routeQuery, setRouteQuery, routeMatches, days, setDays, pace, setPace, lockedIds } = props;
+  const { language, routeStops, routeSegments, routeGeometry, routeQuery, setRouteQuery, routeMatches, days, setDays, pace, setPace, lockedIds } = props;
   const itinerary = makeItinerary(routeStops, days, pace, language);
   const exportText = itineraryExportText(language, routeStops, days, pace);
   const printPdf = () => window.print();
@@ -2317,7 +2355,7 @@ function RoutePlannerSection(props) {
         <div className="cinematic-route-planner__visual">
           <section className="home-module home-module--map">
             <div className="home-module__head"><span>{homeText(language, '路线预览', 'Route preview')}</span><strong>{routeStops.length}</strong></div>
-            <RouteSketchMap language={language} routeStops={routeStops} />
+            <RouteSketchMap language={language} routeStops={routeStops} routeGeometry={routeGeometry} />
           </section>
           <section className="home-module home-module--schema">
             <div className="home-module__head"><span>{homeText(language, '站点连接', 'Stop connections')}</span><strong>{routeSegments.length}</strong></div>
@@ -2343,8 +2381,7 @@ function RoutePlannerSection(props) {
 }
 
 function ThreeDGuideSection({ language, selectedStop, routeStops, onOpenDrive }) {
-  const entries = language === 'zh' ? [['3D Drive', '\u6cbf\u7740\u5f53\u524d\u8def\u7ebf\u8fdb\u5165\u6c89\u6d78\u5f0f\u9a7e\u9a76\u5bfc\u89c8\u3002', () => onOpenDrive(selectedStop.id), 'button'], ['V2 \u8def\u7ebf\u62d3\u6251\u89c6\u56fe', '\u67e5\u770b\u8def\u7ebf\u7ad9\u70b9\u4e4b\u95f4\u7684\u7a7a\u95f4\u5173\u7cfb\u3002', '#/v2', 'link'], ['Venice VR \u57ce\u5e02\u6f2b\u6e38', '\u8fdb\u5165\u5a01\u5c3c\u65af\u57ce\u5e02\u6f2b\u6e38\u4f53\u9a8c\u3002', '#/venice-vr', 'link']] : [['3D Drive', 'Enter immersive driving guidance along the current route.', () => onOpenDrive(selectedStop.id), 'button'], ['V2 route topology', 'Review the spatial relationship between route stops.', '#/v2', 'link'], ['Venice VR city walk', 'Enter the Venice city walkthrough.', '#/venice-vr', 'link']];
-  return <section id="home-3d" className="cinematic-section cinematic-3d"><div className="cinematic-section__head"><span>{language === 'zh' ? '3D\u65c5\u884c\u5bfc\u89c8' : '3D travel guide'}</span><h2>{language === 'zh' ? '\u8fdb\u5165\u53ef\u63a2\u7d22\u7684\u610f\u5927\u5229\u8def\u7ebf' : 'Step into an explorable Italy route'}</h2><p>{language === 'zh' ? '\u4ece\u9a7e\u9a76\u5bfc\u89c8\u3001\u8def\u7ebf\u62d3\u6251\u548c\u57ce\u5e02\u6f2b\u6e38\u4e2d\u9009\u62e9\u4e0b\u4e00\u6b65\u3002' : 'Choose between drive guidance, route topology, and city walkthrough.'}</p></div><div className="cinematic-3d__layout"><div className="cinematic-3d__copy"><strong>{nameFor(selectedStop, language)}</strong><p>{language === 'zh' ? '\u5f53\u524d\u8def\u7ebf\u5305\u542b ' + routeStops.length + ' \u4e2a\u505c\u9760\u70b9\uff0c\u53ef\u76f4\u63a5\u8fdb\u51653D\u5bfc\u89c8\u3002' : 'The current route has ' + routeStops.length + ' stops and is ready for 3D guidance.'}</p></div><div className="cinematic-entry-grid">{entries.map(([title, detail, action, type]) => <article key={title}><strong>{title}</strong><p>{detail}</p>{type === 'button' ? <button type="button" onClick={action}>{language === 'zh' ? '\u8fdb\u5165' : 'Enter'}</button> : <a className="concept-btn" href={action}>{language === 'zh' ? '\u8fdb\u5165' : 'Enter'}</a>}</article>)}</div></div></section>;
+  return <section id="home-3d" className="cinematic-section cinematic-3d"><div className="cinematic-section__head"><span>{language === 'zh' ? '3D旅行导览' : '3D travel guide'}</span><h2>{language === 'zh' ? '沿真实道路进入意大利路线' : 'Enter the Italy route along real roads'}</h2><p>{language === 'zh' ? '路线规划完成后，直接进入沉浸式驾驶导览。' : 'Once the route is ready, enter the immersive driving guide directly.'}</p></div><div className="cinematic-3d__layout"><div className="cinematic-3d__copy"><strong>{nameFor(selectedStop, language)}</strong><p>{language === 'zh' ? '当前路线包含 ' + routeStops.length + ' 个停靠点，3D 导览会使用道路级路线折线。' : 'The current route has ' + routeStops.length + ' stops and uses road-level routed geometry.'}</p></div><div className="cinematic-entry-grid cinematic-entry-grid--single"><article><strong>3D Drive</strong><p>{language === 'zh' ? '沿当前道路路线进入沉浸式驾驶导览。' : 'Enter immersive driving guidance along the current road route.'}</p><button type="button" onClick={() => onOpenDrive(selectedStop.id)}>{language === 'zh' ? '进入' : 'Enter'}</button></article></div></div></section>;
 }
 
 function FeatureSection({ language, favorites, compare, routeStops, userSession }) {
@@ -2584,6 +2621,7 @@ function CinematicHomePage(props) {
 export function HomeShowcase({ onOpenDrive }) {
   const activeVersion = versions[0];
   const setActiveRouteIds = useAppStore((state) => state.setActiveRouteIds);
+  const setActiveRouteGeometry = useAppStore((state) => state.setActiveRouteGeometry);
   const [hasEnteredHome, setHasEnteredHome] = useState(() => window.sessionStorage.getItem(HOME_ENTERED_KEY) === '1');
   const [activePage, setActivePage] = useState('home');
   const [language, setLanguage] = useState(() => {
@@ -2624,6 +2662,7 @@ export function HomeShowcase({ onOpenDrive }) {
   const [reviewVisibleCount, setReviewVisibleCount] = useState(6);
   const [detailStopId, setDetailStopId] = useState(null);
   const [onboardingOpen, setOnboardingOpen] = useState(() => hasEnteredHome && window.localStorage.getItem(ONBOARDING_SEEN_KEY) !== '1');
+  const routeMetricsQuery = useRouteMetrics(routeIds);
 
   const options = useMemo(() => ({
     regions: [...new Set(landmarks.map(regionFor))].sort(),
@@ -2685,6 +2724,15 @@ export function HomeShowcase({ onOpenDrive }) {
   useEffect(() => {
     window.localStorage.setItem(PACE_KEY, pace);
   }, [pace]);
+
+  useEffect(() => {
+    const metrics = routeMetricsQuery.data;
+    if (!metrics?.geometryCoordinates?.length) return;
+    setActiveRouteGeometry({
+      coordinates: metrics.geometryCoordinates,
+      distanceKm: metrics.distanceKm,
+    });
+  }, [routeMetricsQuery.data, setActiveRouteGeometry]);
 
   useLayoutEffect(() => {
     if (!hasEnteredHome) return;
@@ -2829,14 +2877,25 @@ export function HomeShowcase({ onOpenDrive }) {
     setActiveRouteIds(route.ids);
     setActivePage('planner');
   };
-  const startRoute = (route) => {
+  const startRoute = async (route) => {
     setRouteIds(route.ids);
     setLockedIds(new Set());
     setActiveRouteIds(route.ids);
+    const metrics = await fetchRouteMetrics(route.ids).catch(() => null);
+    if (metrics?.geometryCoordinates?.length) {
+      setActiveRouteGeometry({ coordinates: metrics.geometryCoordinates, distanceKm: metrics.distanceKm });
+    }
     onOpenDrive(route.ids[0] ?? null);
   };
-  const openDriveWithCurrentRoute = (landmarkId = null) => {
+  const openDriveWithCurrentRoute = async (landmarkId = null) => {
     setActiveRouteIds(routeIds);
+    let metrics = routeMetricsQuery.data;
+    if (!metrics?.geometryCoordinates?.length) {
+      metrics = await fetchRouteMetrics(routeIds).catch(() => null);
+    }
+    if (metrics?.geometryCoordinates?.length) {
+      setActiveRouteGeometry({ coordinates: metrics.geometryCoordinates, distanceKm: metrics.distanceKm });
+    }
     onOpenDrive(landmarkId);
   };
   const saveAuthPayload = (payload) => {
@@ -2918,6 +2977,7 @@ export function HomeShowcase({ onOpenDrive }) {
     routeIds,
     routeStops,
     routeSegments,
+    routeGeometry: routeMetricsQuery.data?.geometryCoordinates ?? [],
     routeQuery,
     setRouteQuery,
     routeMatches,

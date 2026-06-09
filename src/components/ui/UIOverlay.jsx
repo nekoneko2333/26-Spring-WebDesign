@@ -396,7 +396,7 @@ export function UIOverlay({ isStarted, onClose }) {
       </button>
 
       <aside className="tour-info-panel" aria-live="polite">
-        <p className="tour-info-panel__eyebrow">小车导览</p>
+        <p className="tour-info-panel__eyebrow">{language === 'zh' ? '路线便签' : 'Route notes'}</p>
         <h2>{panelCopy.defaultRoute}</h2>
         <dl>
           <div><dt>{panelCopy.routeName}</dt><dd>{activeRouteIds.length ? panelCopy.freeRoute : panelCopy.defaultRoute}</dd></div>

@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import { PerspectiveCamera } from '@react-three/drei';
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppShell } from './components/layout/AppShell.jsx';
 import { HomeShowcase } from './components/home/HomeShowcase.jsx';
 import { SceneLights } from './components/scene/SceneLights.jsx';
@@ -13,8 +13,6 @@ import { LandmarkModels } from './components/landmarks/LandmarkModels.jsx';
 import { VehicleController, VehicleChassis } from './components/vehicle/VehicleController.jsx';
 import { THEME } from './config/theme.js';
 import { useAppStore } from './state/useAppStore.js';
-import { VeniceVrLab } from './experiments/venice-vr/VeniceVrLab.jsx';
-import { RouteV2Page } from './experiments/route-versions/RouteVersions.jsx';
 
 function Experience({ isStarted, initialLandmarkId }) {
   const vehicleRef = useRef(null);
@@ -45,7 +43,7 @@ function DriveExperience({ onClose, initialLandmarkId }) {
   const openLandmarkFocus = useAppStore((state) => state.openLandmarkFocus);
   const setCameraMode = useAppStore((state) => state.setCameraMode);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setIsStarted(Boolean(initialLandmarkId));
     if (initialLandmarkId) {
       openLandmarkFocus(initialLandmarkId);
@@ -57,7 +55,7 @@ function DriveExperience({ onClose, initialLandmarkId }) {
 
   return (
     <AppShell isStarted={isStarted} onStart={handleStart} onClose={onClose}>
-      <Canvas shadows dpr={[1, 2]} gl={{ antialias: true }}>
+      <Canvas shadows dpr={[1, 1.5]} gl={{ antialias: true, powerPreference: 'high-performance' }}>
         <color attach="background" args={[THEME.sky]} />
         <fog attach="fog" args={[THEME.haze, 75, 220]} />
         <Experience isStarted={isStarted} initialLandmarkId={initialLandmarkId} />
@@ -67,15 +65,8 @@ function DriveExperience({ onClose, initialLandmarkId }) {
 }
 
 export default function App() {
-  const [hashRoute, setHashRoute] = useState(() => window.location.hash);
   const [driveOpen, setDriveOpen] = useState(false);
   const [initialLandmarkId, setInitialLandmarkId] = useState(null);
-
-  useEffect(() => {
-    const onHashChange = () => setHashRoute(window.location.hash);
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
-  }, []);
 
   const handleOpenDrive = useCallback((landmarkId = null) => {
     setInitialLandmarkId(landmarkId);
@@ -85,15 +76,12 @@ export default function App() {
   const handleCloseDrive = useCallback(() => {
     setDriveOpen(false);
     setInitialLandmarkId(null);
+    window.requestAnimationFrame(() => {
+      const home = document.getElementById('home-hero');
+      if (home) home.scrollIntoView({ block: 'start' });
+      else window.scrollTo({ top: 0, left: 0 });
+    });
   }, []);
-
-  if (hashRoute === '#/venice-vr') {
-    return <VeniceVrLab />;
-  }
-
-  if (hashRoute === '#/v2') {
-    return <RouteV2Page />;
-  }
 
   return (
     <>

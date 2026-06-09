@@ -3482,28 +3482,35 @@
   height: 100%;
 }
 
-.paper-route-map__coast,
-.paper-route-map__river {
+.paper-route-map__land {
+  fill: rgba(253, 251, 247, 0.72);
+  stroke: #2d2d2d;
+  stroke-width: 0.7;
+  stroke-linejoin: round;
+}
+
+.paper-route-map__network {
   fill: none;
-  stroke: rgba(45, 93, 161, 0.22);
-  stroke-width: 2;
-  stroke-dasharray: 5 6;
+  stroke: rgba(45, 93, 161, 0.42);
+  stroke-width: 0.55;
+  stroke-dasharray: 1.2 1.8;
   stroke-linecap: round;
 }
 
-.paper-route-map__river {
-  stroke: rgba(45, 93, 161, 0.32);
-  stroke-width: 1.4;
+.paper-route-map__path-casing {
+  fill: none;
+  stroke: #2d2d2d;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .paper-route-map__path {
   fill: none;
   stroke: #ff4d4d;
-  stroke-width: 3.4;
+  stroke-width: 1.25;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-dasharray: 1 7;
-  filter: drop-shadow(2px 2px 0 #2d2d2d);
 }
 
 .paper-route-map__stop circle {
@@ -3567,6 +3574,10 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 16px;
+}
+
+.cinematic-entry-grid--single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .cinematic-entry-grid article {

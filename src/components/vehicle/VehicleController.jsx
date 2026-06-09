@@ -39,6 +39,7 @@ const GUIDED_TOUR_STATES = {
   FINISHED: 'FINISHED',
 };
 const SIMULATED_DAYS = 3;
+const UI_SYNC_INTERVAL = 1 / 12;
 const wheelOffsets = [
   [-0.82, 0.2, 1.22],
   [0.82, 0.2, 1.22],
@@ -86,6 +87,8 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
   const focusTimerRef = useRef(0);
   const visitedLandmarksRef = useRef(new Set());
   const previousProgressRef = useRef(START_PROGRESS);
+  const uiSyncElapsedRef = useRef(UI_SYNC_INTERVAL);
+  const nearbyLandmarkIdRef = useRef(null);
 
   const routeCurve = useMemo(() => {
     const sampledPoints = activeRoute.curve.getPoints(activeRoute.source === 'osrm' ? 420 : 180);
@@ -129,7 +132,9 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       previousProgressRef.current = progressRef.current;
       initializedTargetRef.current = routeInitKey;
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, delta);
-      setNearbyLandmarkId(getNearbyLandmarkId(currentPoint.x, currentPoint.z));
+      const initialNearbyLandmarkId = getNearbyLandmarkId(currentPoint.x, currentPoint.z);
+      nearbyLandmarkIdRef.current = initialNearbyLandmarkId;
+      setNearbyLandmarkId(initialNearbyLandmarkId);
       setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.IDLE));
       setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve), ...getRouteTimeline(progressRef.current) });
     }
@@ -145,7 +150,10 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
       focusTimerRef.current = 0;
       previousProgressRef.current = progressRef.current;
       setAutoDrive(false);
-      setNearbyLandmarkId(initialLandmarkId ?? null);
+      if (nearbyLandmarkIdRef.current !== (initialLandmarkId ?? null)) {
+        nearbyLandmarkIdRef.current = initialLandmarkId ?? null;
+        setNearbyLandmarkId(nearbyLandmarkIdRef.current);
+      }
       clearGuidedTourFocus();
       setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.IDLE));
       setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve), ...getRouteTimeline(progressRef.current) });
@@ -265,14 +273,23 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     const targetSteer = applyCurvePose(vehicle, routeCurve, progressRef.current, speedRef.current, poseYawRef, delta);
     const steerDeltaCap = VEHICLE_TUNING.maxSteerRatePerSec * delta;
     steerRef.current = THREE.MathUtils.clamp(targetSteer, steerRef.current - steerDeltaCap, steerRef.current + steerDeltaCap);
-    setNearbyLandmarkId(nearbyLandmark?.id ?? null);
-    setVehicleState({
-      vehicleSpeed: Math.abs(speedRef.current) * VEHICLE_TUNING.displaySpeedMultiplier,
-      vehicleSteer: steerRef.current,
-      routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve),
-      routeProgress: progressRef.current,
-      ...getRouteTimeline(progressRef.current),
-    });
+    const nextNearbyLandmarkId = nearbyLandmark?.id ?? null;
+    if (nearbyLandmarkIdRef.current !== nextNearbyLandmarkId) {
+      nearbyLandmarkIdRef.current = nextNearbyLandmarkId;
+      setNearbyLandmarkId(nextNearbyLandmarkId);
+    }
+
+    uiSyncElapsedRef.current += delta;
+    if (uiSyncElapsedRef.current >= UI_SYNC_INTERVAL || progressRef.current >= 1) {
+      uiSyncElapsedRef.current = 0;
+      setVehicleState({
+        vehicleSpeed: Math.abs(speedRef.current) * VEHICLE_TUNING.displaySpeedMultiplier,
+        vehicleSteer: steerRef.current,
+        routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve),
+        routeProgress: progressRef.current,
+        ...getRouteTimeline(progressRef.current),
+      });
+    }
 
     if (speedRef.current !== 0 && !routeLocked && guidedTourStateRef.current !== GUIDED_TOUR_STATES.FOCUS_POI && cameraMode !== 'free') setCameraMode('follow');
   });

@@ -131,7 +131,7 @@ tables=account_history,data_import_batches,landmark_localizations,landmark_sourc
 - Destination details include fit, recommended visit time, best time, first-Italy suitability, nearby route-friendly stops, and source notes.
 - Browser local storage preserves guest planning state after refresh.
 - Signed-in users save route stops, locked stops, favorites, comparisons, days, pace, and language in PostgreSQL.
-- The database work does not add hotel coordinates or change the 3D Drive / Venice VR / V2 core implementation.
+- The database work does not add hotel coordinates or change the 3D Drive core implementation.
 
 # Web3D Travel Platform
 
@@ -157,8 +157,6 @@ npm.cmd run build
 
 ```txt
 http://127.0.0.1:5173/               # 04 Cinematic Portal 首页
-http://127.0.0.1:5173/#/v2           # 路线地图 / 拓扑版本
-http://127.0.0.1:5173/#/venice-vr    # Venice 城市漫游实验
 ```
 
 ## 当前功能
@@ -168,8 +166,6 @@ http://127.0.0.1:5173/#/venice-vr    # Venice 城市漫游实验
 - 行程规划：路线顺序调整、景点锁定、路线优化、按天生成行程、导出文本。
 - 账户状态：游客使用本地保存；登录用户将收藏、路线、对比、锁定景点、天数和节奏同步到 PostgreSQL。
 - 3D Drive：Three.js 场景、车辆沿路线行驶、地标聚焦、模型预览。
-- V2 路线视图：基于 `public/data/italy-route-topology.json` 展示路线拓扑、地形和站点进度。
-- Venice VR：独立威尼斯城市漫游实验入口。
 - 设计风格：当前首页图片和卡片已经偏向手绘笔记本风格，使用虚线边框、轻微旋转、硬阴影和更有“草图感”的视觉处理。
 
 ## 目录结构
@@ -192,8 +188,6 @@ web3d-project/
 │   │   └── ui/                      # HUD、弹层、模型预览
 │   ├── data/                        # 路线、地标、文案、点评本地数据
 │   ├── experiments/
-│   │   ├── route-versions/          # V2 路线视图
-│   │   └── venice-vr/               # Venice 城市漫游实验
 │   ├── hooks/                       # 天气、Wikipedia、路线、实时数据 hooks
 │   ├── state/                       # Zustand 全局状态
 │   └── styles/                      # CSS 模块和首页样式
@@ -220,4 +214,3 @@ web3d-project/
 - 3D Drive 仍是路线曲线驱动，不是真实道路物理驾驶。
 - 票务、酒店、餐厅和预算目前是基于本地路线数据的功能面板，尚未接入真实供应商 API。
 - 本地账户不是正式认证系统，只适合原型阶段。
-- Venice VR 的城市寻路仍是实验性实现。

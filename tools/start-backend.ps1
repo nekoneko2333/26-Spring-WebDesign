@@ -11,8 +11,9 @@ if (Test-Path -LiteralPath $envFile) {
         }
 
         $name, $value = $trimmed -split "=", 2
+        $name = $name.Trim().TrimStart([char]0xFEFF)
         if ($name -and $null -ne $value) {
-            Set-Item -Path "Env:$($name.Trim())" -Value $value.Trim()
+            Set-Item -Path "Env:$name" -Value $value.Trim()
         }
     }
 }

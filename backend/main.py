@@ -4,6 +4,9 @@ import secrets
 import hashlib
 import json
 import sqlite3
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
@@ -92,8 +95,103 @@ class PlanPayload(BaseModel):
     language: str = Field(default='zh', pattern='^(zh|en)$')
 
 
+class RouteCoordinate(BaseModel):
+    lon: float = Field(ge=-180, le=180)
+    lat: float = Field(ge=-90, le=90)
+
+
+class RoutePlanPayload(BaseModel):
+    coordinates: list[RouteCoordinate] = Field(min_length=2, max_length=25)
+
+
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
+
+
+def _request_json(url, *, method='GET', headers=None, payload=None, timeout=20):
+    body = json.dumps(payload).encode('utf-8') if payload is not None else None
+    request = urllib.request.Request(url, data=body, method=method, headers=headers or {})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode('utf-8'))
+
+
+def _decode_google_polyline(encoded):
+    coordinates = []
+    index = 0
+    lat = 0
+    lon = 0
+    while index < len(encoded):
+        deltas = []
+        for _ in range(2):
+            result = 0
+            shift = 0
+            while True:
+                byte = ord(encoded[index]) - 63
+                index += 1
+                result |= (byte & 0x1f) << shift
+                shift += 5
+                if byte < 0x20:
+                    break
+            deltas.append(~(result >> 1) if result & 1 else result >> 1)
+        lat += deltas[0]
+        lon += deltas[1]
+        coordinates.append([lon / 100000, lat / 100000])
+    return coordinates
+
+
+def _plan_google_route(coordinates, api_key):
+    waypoints = [
+        {'location': {'latLng': {'latitude': point.lat, 'longitude': point.lon}}}
+        for point in coordinates
+    ]
+    response = _request_json(
+        'https://routes.googleapis.com/directions/v2:computeRoutes',
+        method='POST',
+        headers={
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': api_key,
+            'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline',
+        },
+        payload={
+            'origin': waypoints[0],
+            'destination': waypoints[-1],
+            'intermediates': waypoints[1:-1],
+            'travelMode': 'DRIVE',
+            'routingPreference': 'TRAFFIC_AWARE',
+            'polylineQuality': 'HIGH_QUALITY',
+            'polylineEncoding': 'ENCODED_POLYLINE',
+        },
+    )
+    route = (response.get('routes') or [None])[0]
+    if not route:
+        raise RuntimeError('Google Routes returned no route')
+    duration_seconds = float(str(route.get('duration', '0s')).removesuffix('s') or 0)
+    return {
+        'provider': 'google-routes',
+        'distanceKm': round(float(route.get('distanceMeters', 0)) / 1000, 1),
+        'durationHours': round(duration_seconds / 3600, 2),
+        'geometryCoordinates': _decode_google_polyline(route['polyline']['encodedPolyline']),
+    }
+
+
+def _plan_osrm_route(coordinates):
+    encoded = ';'.join(f'{point.lon},{point.lat}' for point in coordinates)
+    query = urllib.parse.urlencode({
+        'overview': 'full',
+        'geometries': 'geojson',
+        'annotations': 'false',
+        'steps': 'false',
+    })
+    response = _request_json(f'https://router.project-osrm.org/route/v1/driving/{encoded}?{query}')
+    route = (response.get('routes') or [None])[0]
+    if not route:
+        raise RuntimeError('OSRM returned no route')
+    return {
+        'provider': 'osrm',
+        'distanceKm': round(float(route.get('distance', 0)) / 1000, 1),
+        'durationHours': round(float(route.get('duration', 0)) / 3600, 2),
+        'geometryCoordinates': route.get('geometry', {}).get('coordinates', []),
+    }
 
 
 def _connect_db():
@@ -647,6 +745,20 @@ def get_current_route():
         'mode': 'backend',
         'route': MOCK_ROUTE,
     }
+
+
+@app.post('/api/routes/plan')
+def plan_route(payload: RoutePlanPayload):
+    google_api_key = os.getenv('GOOGLE_MAPS_API_KEY', '').strip()
+    if google_api_key:
+        try:
+            return _plan_google_route(payload.coordinates, google_api_key)
+        except (KeyError, RuntimeError, ValueError, urllib.error.URLError):
+            pass
+    try:
+        return _plan_osrm_route(payload.coordinates)
+    except (RuntimeError, ValueError, urllib.error.URLError) as error:
+        raise HTTPException(status_code=502, detail=f'Route provider failed: {error}') from error
 
 
 @app.get('/api/landmarks/{landmark_id}/reviews')

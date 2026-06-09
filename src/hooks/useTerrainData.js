@@ -8,8 +8,16 @@ export function useTerrainData() {
 
   useEffect(() => {
     const unsubscribe = subscribeTerrain(setTerrain);
-    loadTerrainData();
-    return unsubscribe;
+    const load = () => loadTerrainData();
+    const idleHandle = 'requestIdleCallback' in window
+      ? window.requestIdleCallback(load, { timeout: 700 })
+      : window.setTimeout(load, 80);
+
+    return () => {
+      unsubscribe();
+      if ('cancelIdleCallback' in window) window.cancelIdleCallback(idleHandle);
+      else window.clearTimeout(idleHandle);
+    };
   }, []);
 
   useEffect(() => {

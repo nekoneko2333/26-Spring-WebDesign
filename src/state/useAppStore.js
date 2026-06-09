@@ -25,7 +25,9 @@ export const useAppStore = create((set, get) => ({
   focusPanelOpen: false,
   modelViewerOpen: false,
   setLanguage: (language) => set({ language }),
-  setCameraMode: (cameraMode) => set({ cameraMode }),
+  setCameraMode: (cameraMode) => set((state) => (
+    state.cameraMode === cameraMode ? state : { cameraMode }
+  )),
   toggleMapView: () => {
     const { cameraMode, selectedLandmarkId, focusPanelOpen, modelViewerOpen } = get();
     if (focusPanelOpen || modelViewerOpen) return;
@@ -58,7 +60,9 @@ export const useAppStore = create((set, get) => ({
     arrivedLandmarkIds: [],
     cameraMode: 'follow',
   })),
-  setNearbyLandmarkId: (nearbyLandmarkId) => set({ nearbyLandmarkId }),
+  setNearbyLandmarkId: (nearbyLandmarkId) => set((state) => (
+    state.nearbyLandmarkId === nearbyLandmarkId ? state : { nearbyLandmarkId }
+  )),
   setVehicleState: ({ vehicleSpeed, vehicleSteer, routeContext, routeProgress, routeDay, routeHour }) => set((state) => ({
     vehicleSpeed,
     vehicleSteer,
