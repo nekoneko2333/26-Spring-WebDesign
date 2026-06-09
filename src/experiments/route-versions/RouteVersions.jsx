@@ -212,7 +212,7 @@ function Topbar({ title, subtitle }) {
         <p>{subtitle}</p>
       </div>
       <div className="route-version-actions">
-        <a href="#">Home</a>
+        <a href="#/">Home</a>
         <a href="#/v2">V2</a>
       </div>
     </div>

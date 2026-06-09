@@ -42,6 +42,16 @@ http://127.0.0.1:5173
 
 基于 React、Vite、Three.js / React Three Fiber 的 3D 旅行规划项目。当前默认入口已经整合为 04 Cinematic Portal 首页，保留完整的目的地、行程、点评、账户、服务和 3D 导览功能。
 
+## 当前技术栈
+
+- `React`：页面与状态编排
+- `Vite`：开发服务器与生产构建
+- `Three.js` + `@react-three/fiber` + `@react-three/drei`：3D 场景、相机、模型与粒子效果
+- `Zustand`：全局状态管理
+- 原生 `CSS`：页面布局、主题和动效
+- `fetch` + 本地 API：登录、账户历史与会话状态
+- 本地静态数据：景点、路线、天气、百科、点评和 3D 资源
+
 生产构建检查：
 
 ```bash
@@ -65,6 +75,7 @@ http://127.0.0.1:5173/#/venice-vr    # Venice 城市漫游实验
 - 3D Drive：Three.js 场景、车辆沿路线行驶、地标聚焦、模型预览。
 - V2 路线视图：基于 `public/data/italy-route-topology.json` 展示路线拓扑、地形和站点进度。
 - Venice VR：独立威尼斯城市漫游实验入口。
+- 设计风格：当前首页图片和卡片已经偏向手绘笔记本风格，使用虚线边框、轻微旋转、硬阴影和更有“草图感”的视觉处理。
 
 ## 目录结构
 
@@ -90,7 +101,12 @@ web3d-project/
 │   │   └── venice-vr/               # Venice 城市漫游实验
 │   ├── hooks/                       # 天气、Wikipedia、路线、实时数据 hooks
 │   ├── state/                       # Zustand 全局状态
-│   └── styles/                      # CSS 模块
+│   └── styles/                      # CSS 模块和首页样式
+│       ├── base.css
+│       ├── home.css
+│       └── home-showcase.css
+├── Styles/
+│   └── sketch.txt                   # 手绘风设计参考
 ├── tools/                           # 本地数据准备脚本
 ├── package.json
 └── vite.config.js

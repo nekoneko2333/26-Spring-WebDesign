@@ -664,7 +664,7 @@ export function VeniceVrLab() {
   return (
     <main className="venice-tour">
       <header className="venice-tour__topbar">
-        <a className="venice-tour__back" href="#/concepts">Back to 04</a>
+        <a className="venice-tour__back" href="#/">Home</a>
         <div>
           <span>Immersive city demo</span>
           <strong>Venice Walking Lab</strong>
