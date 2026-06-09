@@ -367,9 +367,29 @@ function nameFor(landmark, language) {
   return live?.name?.[language] || live?.name?.en || landmark.name;
 }
 
+const summaryFallbacks = {
+  pompeii: {
+    zh: '庞贝是意大利南部的一座古罗马城市遗址。公元 79 年维苏威火山喷发后，城市被火山灰掩埋，街道、住宅、剧场与壁画因此得到保存。',
+    en: 'Pompeii is an ancient Roman city near Naples. It was buried by the eruption of Mount Vesuvius in AD 79, preserving streets, homes, theatres, and frescoes.',
+  },
+};
+
+function cleanWikipediaExtract(value) {
+  return String(value ?? '')
+    .replace(/\{\{[\s\S]*?\}\}/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function summaryFor(landmark, language) {
   const live = liveFor(landmark.id);
-  return live?.wikipedia?.[language]?.extract || live?.wikipedia?.en?.extract || landmark.description;
+  const localized = cleanWikipediaExtract(live?.wikipedia?.[language]?.extract);
+  if (localized.length >= 24) return localized;
+  const fallback = summaryFallbacks[landmark.id]?.[language];
+  if (fallback) return fallback;
+  const english = cleanWikipediaExtract(live?.wikipedia?.en?.extract);
+  return english || cleanWikipediaExtract(landmark.description);
 }
 
 function imageFor(landmark, language) {
@@ -2117,9 +2137,11 @@ const ROUTE_NETWORK = [
 ];
 
 function projectRouteMapPoint(lon, lat) {
+  const padding = 2;
+  const drawingArea = 100 - padding * 2;
   return {
-    x: 5 + ((lon - ROUTE_MAP_BOUNDS.lonMin) / (ROUTE_MAP_BOUNDS.lonMax - ROUTE_MAP_BOUNDS.lonMin)) * 90,
-    y: 5 + (1 - ((lat - ROUTE_MAP_BOUNDS.latMin) / (ROUTE_MAP_BOUNDS.latMax - ROUTE_MAP_BOUNDS.latMin))) * 90,
+    x: padding + ((lon - ROUTE_MAP_BOUNDS.lonMin) / (ROUTE_MAP_BOUNDS.lonMax - ROUTE_MAP_BOUNDS.lonMin)) * drawingArea,
+    y: padding + (1 - ((lat - ROUTE_MAP_BOUNDS.latMin) / (ROUTE_MAP_BOUNDS.latMax - ROUTE_MAP_BOUNDS.latMin))) * drawingArea,
   };
 }
 
@@ -2131,7 +2153,20 @@ function routeMapPath(coordinates, close = false) {
   return close && path ? `${path} Z` : path;
 }
 
-function RouteSketchMap({ language, routeStops, routeGeometry = [] }) {
+function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoading = false }) {
+  const routeSignature = routeStops.map((stop) => stop.id).join('|');
+  const previousRouteSignature = useRef(routeSignature);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  useEffect(() => {
+    if (previousRouteSignature.current === routeSignature) return undefined;
+    previousRouteSignature.current = routeSignature;
+    setIsTransitioning(true);
+    const timer = window.setTimeout(() => setIsTransitioning(false), 550);
+    return () => window.clearTimeout(timer);
+  }, [routeSignature]);
+
+  const showRouteLoading = isRouteLoading || isTransitioning;
   const points = routeStops.map((stop) => {
     const live = liveFor(stop.id);
     const lon = live?.coordinates?.lon ?? stop.lon;
@@ -2145,14 +2180,18 @@ function RouteSketchMap({ language, routeStops, routeGeometry = [] }) {
       y: projected.y,
     };
   });
-  const displayGeometry = routeGeometry.length >= 2
+  const displayGeometry = !showRouteLoading && routeGeometry.length >= 2
     ? routeGeometry
-    : points.map((point) => [point.lon, point.lat]);
+    : [];
   const routeStep = Math.max(1, Math.floor(displayGeometry.length / 1200));
   const simplifiedRoute = displayGeometry.filter((_, index) => index % routeStep === 0);
 
   return (
-    <div className="paper-route-map" aria-label={language === 'zh' ? '手绘道路路线地图' : 'Hand-drawn road route map'}>
+    <div
+      className={`paper-route-map ${showRouteLoading ? 'is-loading' : ''}`}
+      aria-busy={showRouteLoading}
+      aria-label={language === 'zh' ? '手绘道路路线地图' : 'Hand-drawn road route map'}
+    >
       <svg viewBox="0 0 100 100" role="img" aria-hidden="true">
         <path className="paper-route-map__land" d={routeMapPath(ITALY_MAINLAND, true)} />
         {ROUTE_NETWORK.map((line, index) => <path key={index} className="paper-route-map__network" d={routeMapPath(line)} />)}
@@ -2166,6 +2205,12 @@ function RouteSketchMap({ language, routeStops, routeGeometry = [] }) {
         ))}
       </svg>
       {points.map((point) => <span key={point.stop.id} style={{ '--x': point.x + '%', '--y': point.y + '%' }}>{nameFor(point.stop, language)}</span>)}
+      {showRouteLoading && (
+        <div className="paper-route-map__loading" role="status">
+          <i aria-hidden="true" />
+          <strong>{language === 'zh' ? '加载中' : 'Loading'}</strong>
+        </div>
+      )}
     </div>
   );
 }
@@ -2293,7 +2338,7 @@ function PrintableItinerary({ language, routeStops, itinerary, pace }) {
 
 
 function RoutePlannerSection(props) {
-  const { language, routeStops, routeSegments, routeGeometry, routeQuery, setRouteQuery, routeMatches, days, setDays, pace, setPace, lockedIds } = props;
+  const { language, routeStops, routeSegments, routeGeometry, isRouteLoading, routeQuery, setRouteQuery, routeMatches, days, setDays, pace, setPace, lockedIds } = props;
   const itinerary = makeItinerary(routeStops, days, pace, language);
   const exportText = itineraryExportText(language, routeStops, days, pace);
   const printPdf = () => window.print();
@@ -2355,7 +2400,7 @@ function RoutePlannerSection(props) {
         <div className="cinematic-route-planner__visual">
           <section className="home-module home-module--map">
             <div className="home-module__head"><span>{homeText(language, '路线预览', 'Route preview')}</span><strong>{routeStops.length}</strong></div>
-            <RouteSketchMap language={language} routeStops={routeStops} routeGeometry={routeGeometry} />
+            <RouteSketchMap language={language} routeStops={routeStops} routeGeometry={routeGeometry} isRouteLoading={isRouteLoading} />
           </section>
           <section className="home-module home-module--schema">
             <div className="home-module__head"><span>{homeText(language, '站点连接', 'Stop connections')}</span><strong>{routeSegments.length}</strong></div>
@@ -2978,6 +3023,7 @@ export function HomeShowcase({ onOpenDrive }) {
     routeStops,
     routeSegments,
     routeGeometry: routeMetricsQuery.data?.geometryCoordinates ?? [],
+    isRouteLoading: routeMetricsQuery.isFetching,
     routeQuery,
     setRouteQuery,
     routeMatches,
