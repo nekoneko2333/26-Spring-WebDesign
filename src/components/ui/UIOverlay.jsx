@@ -308,10 +308,10 @@ export function UIOverlay({ isStarted }) {
             {isLoading && <p className="focus-review-empty">{locale.ui.loadingReviews}</p>}
             {!isLoading && comments.length === 0 && <p className="focus-review-empty">{locale.ui.noReviews}</p>}
             {comments.map((comment) => (
-              <article key={`${comment.author}-${comment.score}`} className="focus-review-card">
+              <article key={comment.id ?? `${comment.author}-${comment.source}`} className="focus-review-card">
                 <div className="focus-review-card__meta">
                   <span>{comment.author}</span>
-                  <span>{comment.score}</span>
+                  {comment.score != null && <span>{comment.score}</span>}
                 </div>
                 <p className="focus-review-card__body">{comment.comment}</p>
                 <p className="focus-review-card__source">{comment.source}</p>

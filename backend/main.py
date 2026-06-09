@@ -2,6 +2,7 @@ import math
 import os
 import secrets
 import hashlib
+import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,6 +11,13 @@ from threading import Lock
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:  # pragma: no cover
+    psycopg = None
+    dict_row = None
 
 app = FastAPI(title='Web3D Landmarks API', version='1.1.0')
 
@@ -33,6 +41,34 @@ _WORLD = 170
 _DB_PATH = Path(os.getenv('ACCOUNT_DB_PATH', Path(__file__).with_name('accounts.sqlite3')))
 _DB_LOCK = Lock()
 _PBKDF2_ROUNDS = 120_000
+_DATABASE_URL = os.getenv('DATABASE_URL') or os.getenv('POSTGRES_DSN')
+
+
+class _PostgresConnection:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def __enter__(self):
+        self.connection.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return self.connection.__exit__(exc_type, exc_value, traceback)
+
+    def execute(self, query, params=None):
+        return self.connection.execute(query.replace('?', '%s'), params)
+
+    def executescript(self, script):
+        with self.connection.cursor() as cursor:
+            for statement in script.split(';'):
+                if statement.strip():
+                    cursor.execute(statement)
+
+    def commit(self):
+        self.connection.commit()
+
+    def close(self):
+        self.connection.close()
 
 
 class AuthPayload(BaseModel):
@@ -46,11 +82,25 @@ class HistoryPayload(BaseModel):
     detail: str = Field(default='', max_length=240)
 
 
+class PlanPayload(BaseModel):
+    route_ids: list[str] = Field(default_factory=list, max_length=100)
+    locked_ids: list[str] = Field(default_factory=list, max_length=100)
+    favorites: list[str] = Field(default_factory=list, max_length=100)
+    compare: list[str] = Field(default_factory=list, max_length=100)
+    days: int = Field(default=3, ge=1, le=10)
+    pace: str = Field(default='Standard', pattern='^(Relaxed|Standard|Fast)$')
+    language: str = Field(default='zh', pattern='^(zh|en)$')
+
+
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
 def _connect_db():
+    if _DATABASE_URL:
+        if psycopg is None:
+            raise RuntimeError('DATABASE_URL is set but psycopg is not installed')
+        return _PostgresConnection(psycopg.connect(_DATABASE_URL, row_factory=dict_row))
     _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(_DB_PATH)
     connection.row_factory = sqlite3.Row
@@ -87,8 +137,95 @@ def _init_account_db():
 
             CREATE INDEX IF NOT EXISTS idx_account_history_email_created
             ON account_history(email, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS user_plans (
+                email TEXT PRIMARY KEY REFERENCES users(email) ON DELETE CASCADE,
+                plan_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS data_import_batches (
+                id TEXT PRIMARY KEY,
+                generated_at TEXT NOT NULL,
+                imported_at TEXT NOT NULL,
+                item_count INTEGER NOT NULL,
+                source_count INTEGER NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS landmarks_catalog (
+                id TEXT PRIMARY KEY,
+                wikidata_id TEXT,
+                category TEXT,
+                longitude DOUBLE PRECISION NOT NULL,
+                latitude DOUBLE PRECISION NOT NULL,
+                official_website TEXT,
+                heritage_id TEXT,
+                inception TEXT,
+                open_days TEXT,
+                image_url TEXT,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS landmark_localizations (
+                landmark_id TEXT NOT NULL REFERENCES landmarks_catalog(id) ON DELETE CASCADE,
+                language TEXT NOT NULL,
+                name TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                wikipedia_url TEXT NOT NULL,
+                thumbnail_url TEXT,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (landmark_id, language)
+            );
+
+            CREATE TABLE IF NOT EXISTS landmark_sources (
+                landmark_id TEXT NOT NULL REFERENCES landmarks_catalog(id) ON DELETE CASCADE,
+                source_type TEXT NOT NULL,
+                source_url TEXT NOT NULL,
+                fetched_at TEXT NOT NULL,
+                metadata_json TEXT NOT NULL,
+                PRIMARY KEY (landmark_id, source_type, source_url)
+            );
+
+            CREATE TABLE IF NOT EXISTS weather_observations (
+                landmark_id TEXT NOT NULL REFERENCES landmarks_catalog(id) ON DELETE CASCADE,
+                observed_at TEXT NOT NULL,
+                temperature_c DOUBLE PRECISION NOT NULL,
+                weather_code INTEGER NOT NULL,
+                wind_kph DOUBLE PRECISION NOT NULL,
+                source_url TEXT NOT NULL,
+                imported_at TEXT NOT NULL,
+                PRIMARY KEY (landmark_id, observed_at)
+            );
+
+            CREATE TABLE IF NOT EXISTS route_metrics (
+                from_landmark_id TEXT NOT NULL REFERENCES landmarks_catalog(id) ON DELETE CASCADE,
+                to_landmark_id TEXT NOT NULL REFERENCES landmarks_catalog(id) ON DELETE CASCADE,
+                distance_km DOUBLE PRECISION NOT NULL,
+                duration_hours DOUBLE PRECISION NOT NULL,
+                source_url TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (from_landmark_id, to_landmark_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_landmark_sources_type
+            ON landmark_sources(source_type);
+
+            CREATE INDEX IF NOT EXISTS idx_weather_landmark_observed
+            ON weather_observations(landmark_id, observed_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_route_metrics_from
+            ON route_metrics(from_landmark_id);
             """
         )
+        if _DATABASE_URL:
+            connection.execute(
+                'ALTER TABLE landmarks_catalog ADD COLUMN IF NOT EXISTS category TEXT'
+            )
+        else:
+            columns = connection.execute('PRAGMA table_info(landmarks_catalog)').fetchall()
+            if not any(column['name'] == 'category' for column in columns):
+                connection.execute('ALTER TABLE landmarks_catalog ADD COLUMN category TEXT')
 
 
 def _hash_password(password, salt=None):
@@ -133,6 +270,35 @@ def _add_history(connection, email, action, detail=''):
         """,
         (secrets.token_hex(8), email, action, detail, _now_iso()),
     )
+
+
+def _plan_for_email(connection, email):
+    row = connection.execute(
+        'SELECT plan_json, updated_at FROM user_plans WHERE email = ?',
+        (email,),
+    ).fetchone()
+    if row is None:
+        return None
+    try:
+        plan = json.loads(row['plan_json'])
+    except json.JSONDecodeError:
+        return None
+    return {**plan, 'updated_at': row['updated_at']}
+
+
+def _save_plan(connection, email, plan):
+    updated_at = _now_iso()
+    connection.execute(
+        """
+        INSERT INTO user_plans (email, plan_json, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(email) DO UPDATE SET
+            plan_json = excluded.plan_json,
+            updated_at = excluded.updated_at
+        """,
+        (email, json.dumps(plan, ensure_ascii=False), updated_at),
+    )
+    return {**plan, 'updated_at': updated_at}
 
 
 def _require_user(authorization):
@@ -311,17 +477,38 @@ def _find_landmark(landmark_id):
 
 
 def _review_payload(landmark, language):
-    reviews_by_language = MOCK_REVIEWS.get(language, MOCK_REVIEWS['en'])
-    reviews = reviews_by_language.get(landmark['id'], [])
-    scored_reviews = [item['score'] for item in reviews if item.get('score') is not None]
-    average_score = round(sum(scored_reviews) / len(scored_reviews), 2) if scored_reviews else None
+    with _connect_db() as connection:
+        row = connection.execute(
+            """
+            SELECT name, summary, wikipedia_url
+            FROM landmark_localizations
+            WHERE landmark_id = ? AND language = ?
+            """,
+            (landmark['id'], language),
+        ).fetchone()
+        if row is None and language != 'en':
+            row = connection.execute(
+                """
+                SELECT name, summary, wikipedia_url
+                FROM landmark_localizations
+                WHERE landmark_id = ? AND language = 'en'
+                """,
+                (landmark['id'],),
+            ).fetchone()
+    notes = [] if row is None else [{
+        'id': f"{landmark['id']}-{language}-wikipedia",
+        'author': 'Wikipedia',
+        'score': None,
+        'comment': row['summary'],
+        'source': row['wikipedia_url'],
+    }]
     return {
         'mode': 'backend',
         'landmark_id': landmark['id'],
-        'landmark_name': landmark['name'],
-        'average_score': average_score,
-        'review_count': len(reviews),
-        'reviews': reviews,
+        'landmark_name': row['name'] if row is not None else landmark['name'],
+        'average_score': None,
+        'review_count': len(notes),
+        'reviews': notes,
     }
 
 
@@ -331,7 +518,7 @@ def health():
         'status': 'ok',
         'mode': 'backend',
         'database_configured': True,
-        'account_database': str(_DB_PATH),
+        'account_database': 'postgresql' if _DATABASE_URL else str(_DB_PATH),
     }
 
 
@@ -363,7 +550,7 @@ def register(payload: AuthPayload):
         )
         _add_history(connection, email, 'registered', 'Account created')
         user = {'email': email, 'name': name, 'created_at': created_at, 'last_login_at': last_login_at}
-        return {'token': token, 'user': user, 'history': _history_for_email(connection, email)}
+        return {'token': token, 'user': user, 'history': _history_for_email(connection, email), 'plan': None}
 
 
 @app.post('/api/auth/login')
@@ -388,14 +575,23 @@ def login(payload: AuthPayload):
             'created_at': user['created_at'],
             'last_login_at': last_login_at,
         }
-        return {'token': token, 'user': public_user, 'history': _history_for_email(connection, email)}
+        return {
+            'token': token,
+            'user': public_user,
+            'history': _history_for_email(connection, email),
+            'plan': _plan_for_email(connection, email),
+        }
 
 
 @app.get('/api/auth/me')
 def get_me(authorization: str | None = Header(default=None)):
     _, email, user = _require_user(authorization)
     with _DB_LOCK, _connect_db() as connection:
-        return {'user': _public_user(email, user), 'history': _history_for_email(connection, email)}
+        return {
+            'user': _public_user(email, user),
+            'history': _history_for_email(connection, email),
+            'plan': _plan_for_email(connection, email),
+        }
 
 
 @app.post('/api/auth/logout')
@@ -419,6 +615,22 @@ def add_account_history(payload: HistoryPayload, authorization: str | None = Hea
     with _DB_LOCK, _connect_db() as connection:
         _add_history(connection, email, payload.action, payload.detail)
         return {'items': _history_for_email(connection, email)}
+
+
+@app.get('/api/account/plan')
+def get_account_plan(authorization: str | None = Header(default=None)):
+    _, email, _ = _require_user(authorization)
+    with _DB_LOCK, _connect_db() as connection:
+        return {'plan': _plan_for_email(connection, email)}
+
+
+@app.put('/api/account/plan')
+def save_account_plan(payload: PlanPayload, authorization: str | None = Header(default=None)):
+    _, email, _ = _require_user(authorization)
+    plan = payload.model_dump()
+    with _DB_LOCK, _connect_db() as connection:
+        saved = _save_plan(connection, email, plan)
+        return {'plan': saved}
 
 
 @app.get('/api/landmarks')

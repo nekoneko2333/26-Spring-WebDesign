@@ -2,7 +2,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { landmarks } from '../../data/landmarks.js';
+import { landmarks as baseLandmarks, lngLatToWorld } from '../../data/landmarks.js';
 import liveLandmarksData from '../../../public/data/live-landmarks.json';
 
 const versions = [
@@ -40,12 +40,55 @@ const storyModelPaths = {
 };
 
 const liveIndex = new Map((liveLandmarksData.items ?? []).map((item) => [item.id, item]));
+const baseLandmarkIndex = new Map(baseLandmarks.map((item) => [item.id, item]));
+const landmarks = (liveLandmarksData.items ?? []).map((item) => {
+  const existing = baseLandmarkIndex.get(item.id);
+  const lon = item.coordinates.lon;
+  const lat = item.coordinates.lat;
+  if (existing) {
+    return {
+      ...existing,
+      lon,
+      lat,
+      position: lngLatToWorld(lon, lat),
+      modelKind: item.category ?? existing.modelKind,
+    };
+  }
+  return {
+    id: item.id,
+    name: item.name.en,
+    description: item.wikipedia?.en?.extract ?? '',
+    modelPath: null,
+    lon,
+    lat,
+    position: lngLatToWorld(lon, lat),
+    rotation: [0, 0, 0],
+    scale: 5.8,
+    triggerRadius: 13,
+    modelKind: item.category ?? 'monument',
+  };
+});
+const routeMatrixIds = liveLandmarksData.routeMatrix?.ids ?? [];
+const routeMatrixIndex = new Map(routeMatrixIds.map((id, index) => [id, index]));
 const initialRouteIds = ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
 const STORY_PARTICLE_COUNT = 7600;
 const STORY_MODEL_SAMPLE_COUNT = 8200;
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
 const AUTH_TOKEN_KEY = 'web3d_auth_token';
 const HOME_ENTERED_KEY = 'trip3d_home_entered';
+const ONBOARDING_SEEN_KEY = 'trip3d_onboarding_seen';
+const ROUTE_IDS_KEY = 'trip3d_route_ids';
+const FAVORITES_KEY = 'trip3d_favorites';
+const COMPARE_KEY = 'trip3d_compare';
+const DAYS_KEY = 'trip3d_days';
+const PACE_KEY = 'trip3d_pace';
+const LANGUAGE_KEY = 'trip3d_language';
+
+const paceStopsPerDay = {
+  Relaxed: 2,
+  Standard: 3,
+  Fast: 4,
+};
 
 const storyScenes = [
   {
@@ -84,7 +127,7 @@ const copy = {
       ['home', 'Home'],
       ['destinations', 'Destinations'],
       ['planner', 'Plan'],
-      ['reviews', 'Reviews'],
+      ['reviews', 'Travel notes'],
       ['drive', 'Drive'],
       ['map', 'Map'],
       ['vr', 'Venice'],
@@ -131,7 +174,7 @@ const copy = {
     days: 'Days',
     pace: 'Pace',
     export: 'Export itinerary',
-    reviews: 'Destination context and reviews',
+    reviews: 'Destination notes',
     read: 'Read background',
     driveReady: 'Ready to go',
     driveBody: 'Follow your selected route and visit the focused stop.',
@@ -155,7 +198,7 @@ const copy = {
       ['home', '首页'],
       ['destinations', '目的地'],
       ['planner', '行程'],
-      ['reviews', '点评'],
+      ['reviews', '行前资料'],
       ['drive', '导览'],
       ['map', '地图'],
       ['vr', '威尼斯'],
@@ -202,7 +245,7 @@ const copy = {
     days: '天数',
     pace: '节奏',
     export: '导出行程',
-    reviews: '目的地背景和点评',
+    reviews: '景点资料',
     read: '查看背景资料',
     driveReady: '准备出发',
     driveBody: '跟随你选好的路线，查看当前关注的目的地。',
@@ -343,26 +386,15 @@ function seasonText(landmark, language) {
 }
 
 function distanceKm(routeStops) {
-  if (routeStops.length < 2) return 0;
-  let total = 0;
-  for (let index = 1; index < routeStops.length; index += 1) {
-    const a = routeStops[index - 1];
-    const b = routeStops[index];
-    const dx = (a.lon - b.lon) * 78;
-    const dy = (a.lat - b.lat) * 111;
-    total += Math.sqrt(dx * dx + dy * dy);
-  }
-  return Math.round(total);
+  return Math.round(routeSegmentsFor(routeStops).reduce((sum, segment) => sum + segment.distance, 0));
 }
 
 function segmentDistanceKm(a, b) {
   if (!a || !b) return 0;
-  const lat1 = a.lat * Math.PI / 180;
-  const lat2 = b.lat * Math.PI / 180;
-  const dLat = (b.lat - a.lat) * Math.PI / 180;
-  const dLon = (b.lon - a.lon) * Math.PI / 180;
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  const fromIndex = routeMatrixIndex.get(a.id);
+  const toIndex = routeMatrixIndex.get(b.id);
+  const distance = liveLandmarksData.routeMatrix?.distancesKm?.[fromIndex]?.[toIndex];
+  return Number.isFinite(distance) ? distance : Number.POSITIVE_INFINITY;
 }
 
 function optimizeRouteIds(routeIds, lockedIds) {
@@ -411,14 +443,19 @@ function optimizeRouteIds(routeIds, lockedIds) {
 function routeSegmentsFor(routeStops) {
   return routeStops.slice(1).map((stop, index) => {
     const from = routeStops[index];
-    const distance = segmentDistanceKm(from, stop);
+    const fromIndex = routeMatrixIndex.get(from.id);
+    const toIndex = routeMatrixIndex.get(stop.id);
+    const distance = liveLandmarksData.routeMatrix?.distancesKm?.[fromIndex]?.[toIndex];
+    const duration = liveLandmarksData.routeMatrix?.durationsHours?.[fromIndex]?.[toIndex];
+    if (!Number.isFinite(distance) || !Number.isFinite(duration)) return null;
     return {
       from,
       to: stop,
       distance,
-      duration: Math.max(0.4, distance / 72),
+      duration,
+      source: 'osrm',
     };
-  });
+  }).filter(Boolean);
 }
 
 function downloadTextFile(filename, content) {
@@ -666,16 +703,6 @@ function ModelPointCloudLoader({ onTargetsReady }) {
   return null;
 }
 
-function makeItinerary(routeStops, days) {
-  return Array.from({ length: days }, (_, index) => ({
-    day: index + 1,
-    stops: routeStops.filter((_, stopIndex) => stopIndex % days === index),
-  })).map((day, index) => ({
-    ...day,
-    stops: day.stops.length ? day.stops : [routeStops[index % routeStops.length]].filter(Boolean),
-  }));
-}
-
 function ParticleField({ version }) {
   const groupRef = useRef(null);
   const materialRef = useRef(null);
@@ -879,7 +906,12 @@ function LandmarkMorphFallback({ activeScene }) {
 function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
   const canvasRef = useRef(null);
   const data = useMemo(() => createStoryMorphData(), []);
-  const activeTarget = modelTargets?.[activeScene.kind] ?? data.proceduralTargets[activeScene.id] ?? data.proceduralTargets.intro;
+  const requiresLoadedModel = Object.hasOwn(storyModelPaths, activeScene.kind);
+  const loadedTarget = modelTargets?.[activeScene.kind] ?? null;
+  const activeTarget = requiresLoadedModel
+    ? loadedTarget ?? data.proceduralTargets.intro
+    : data.proceduralTargets[activeScene.id] ?? data.proceduralTargets.intro;
+  const shouldAssembleScene = activeScene.id !== 'intro' && (!requiresLoadedModel || Boolean(loadedTarget));
   const activeTargetRef = useRef(activeTarget);
   const morphRef = useRef(0);
   const mouseRef = useRef({ x: 0, y: 0 });
@@ -918,7 +950,7 @@ function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
 
     const draw = (time) => {
       const t = time * 0.001;
-      const shouldAssemble = activeScene.id !== 'intro';
+      const shouldAssemble = shouldAssembleScene;
       morphRef.current = THREE.MathUtils.lerp(morphRef.current, shouldAssemble ? 1 : 0, 0.18);
       const morph = morphRef.current;
       const target = activeTargetRef.current;
@@ -970,7 +1002,7 @@ function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
       window.removeEventListener('resize', resize);
       window.removeEventListener('pointermove', onMouseMove);
     };
-  }, [activeScene.id, data]);
+  }, [activeScene.id, data, shouldAssembleScene]);
 
   return <canvas ref={canvasRef} className="semantic-story__canvas2d" aria-hidden="true" />;
 }
@@ -1593,7 +1625,7 @@ function ReviewsPanel({ language, stops, favorites, onFavorite, onOpenDrive }) {
               <div>
                 <strong>{nameFor(stop, language)}</strong>
                 <p>{summaryFor(stop, language)}</p>
-                <span>{regionFor(stop)} / {seasonFor(stop)} / 4.{8 + (stop.name.length % 2)}</span>
+                <span>{regionFor(stop)} / {seasonFor(stop)} / {sourceLabelsFor(stop, language)}</span>
                 <div className="home-card-actions">
                   <button type="button" className={favorites.has(stop.id) ? 'is-on' : ''} onClick={() => onFavorite(stop.id)}>{c.favorite}</button>
                   {url && <a href={url} target="_blank" rel="noreferrer">{c.read}</a>}
@@ -1658,7 +1690,7 @@ function RouteSchemaPanel({ language, routeStops, routeSegments }) {
         <section><strong>{routeStops.length}</strong><span>{copy[language].routeStops}</span></section>
       </div>
       <div className="home-schema-list">
-        {routeSegments.slice(0, 8).map((segment, index) => (
+        {routeSegments.map((segment, index) => (
           <article key={`${segment.from.id}-${segment.to.id}`}>
             <span>{String(index + 1).padStart(2, '0')}</span>
             <strong>{`${nameFor(segment.from, language)} -> ${nameFor(segment.to, language)}`}</strong>
@@ -1793,9 +1825,189 @@ function homeText(language, zh, en) {
   return language === 'zh' ? zh : en;
 }
 
+function safeJsonParse(value, fallback) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function loadStoredArray(key, fallback) {
+  const parsed = safeJsonParse(window.localStorage.getItem(key), fallback);
+  return Array.isArray(parsed) ? parsed : fallback;
+}
+
+function loadStoredSet(key) {
+  return new Set(loadStoredArray(key, []));
+}
+
+function uniqueValidRouteIds(ids) {
+  const validIds = new Set(landmarks.map((stop) => stop.id));
+  return [...new Set(ids)].filter((id) => validIds.has(id));
+}
+
+function clampDays(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 3;
+  return Math.min(10, Math.max(1, Math.round(numeric)));
+}
+
+function visitFor(landmark, language) {
+  const live = liveFor(landmark.id);
+  const sourceVisit = live?.visit ?? {};
+  const firstTimerKinds = new Set(['arena', 'cathedral', 'dome', 'tower', 'bridge', 'fountain']);
+  const visitHours = sourceVisit.durationHours ?? (
+    landmark.modelKind === 'museum' ? 3
+      : landmark.modelKind === 'coast' || landmark.modelKind === 'lake' || landmark.modelKind === 'mountain' ? 4
+        : landmark.modelKind === 'ruins' || landmark.modelKind === 'temple' ? 2.5
+          : 2
+  );
+  const audiences = sourceVisit.audiences?.[language] ?? sourceVisit.audiences?.en ?? (
+    language === 'zh'
+      ? ['历史文化', '建筑摄影', firstTimerKinds.has(landmark.modelKind) ? '第一次来意大利' : '慢慢逛']
+      : ['history', 'architecture photos', firstTimerKinds.has(landmark.modelKind) ? 'first Italy trip' : 'slow travel']
+  );
+  return {
+    durationHours: visitHours,
+    bestTime: sourceVisit.bestTime?.[language] ?? sourceVisit.bestTime?.en ?? seasonText(landmark, language),
+    bookingNote: sourceVisit.bookingNote?.[language] ?? sourceVisit.bookingNote?.en ?? homeText(language, '开放时间和预约规则出发前再确认。', 'Check opening hours and reservation rules before you go.'),
+    fit: sourceVisit.fit?.[language] ?? sourceVisit.fit?.en ?? audiences.join(' / '),
+    firstTimer: sourceVisit.firstTimer ?? firstTimerKinds.has(landmark.modelKind),
+    sourceNote: sourceVisit.sourceNote?.[language] ?? sourceVisit.sourceNote?.en ?? homeText(language, '资料来自公开来源，适合做行前草稿。', 'Built from public sources for a planning draft.'),
+  };
+}
+
+function sourceLabelsFor(landmark, language) {
+  const live = liveFor(landmark.id);
+  const labels = [];
+  if (live?.wikipedia?.[language]?.pageUrl || live?.wikipedia?.en?.pageUrl) labels.push('Wikipedia');
+  if (live?.wikidata?.source) labels.push('Wikidata');
+  if (live?.wikidata?.officialWebsite) labels.push(homeText(language, '官方网站', 'Official site'));
+  if (live?.weather?.source) labels.push('Open-Meteo');
+  if (live?.routeHints?.some((hint) => hint.source === 'osrm')) labels.push('OSRM');
+  return labels.length ? labels.join(' / ') : homeText(language, '本地资料', 'Local notes');
+}
+
+function travelPreferenceTags(landmark, language) {
+  const visit = visitFor(landmark, language);
+  const tags = new Set();
+  const kindMapZh = {
+    arena: '历史文化',
+    bridge: '建筑摄影',
+    castle: '历史文化',
+    cathedral: '建筑摄影',
+    coast: '轻松散步',
+    dome: '建筑摄影',
+    fountain: '第一次来意大利',
+    lake: '亲子轻松',
+    mountain: '户外风景',
+    palace: '历史文化',
+    ruins: '历史文化',
+    temple: '历史文化',
+    tower: '建筑摄影',
+    village: '慢慢逛',
+  };
+  const kindMapEn = {
+    arena: 'history',
+    bridge: 'architecture photos',
+    castle: 'history',
+    cathedral: 'architecture photos',
+    coast: 'easy walk',
+    dome: 'architecture photos',
+    fountain: 'first Italy trip',
+    lake: 'family friendly',
+    mountain: 'landscape',
+    palace: 'history',
+    ruins: 'history',
+    temple: 'history',
+    tower: 'architecture photos',
+    village: 'slow travel',
+  };
+  tags.add((language === 'zh' ? kindMapZh : kindMapEn)[landmark.modelKind] ?? (language === 'zh' ? '顺路停靠' : 'route stop'));
+  if (visit.firstTimer) tags.add(homeText(language, '第一次来意大利', 'first Italy trip'));
+  if (!landmark.modelPath) tags.add(homeText(language, '预算友好', 'budget friendly'));
+  tags.add(homeText(language, '自驾顺路', 'good by car'));
+  return [...tags].slice(0, 3);
+}
+
+function nearbyStopsFor(stop, routeStops, language) {
+  return landmarks
+    .filter((item) => item.id !== stop.id)
+    .map((item) => ({ item, distance: segmentDistanceKm(stop, item), inRoute: routeStops.some((routeStop) => routeStop.id === item.id) }))
+    .sort((a, b) => Number(b.inRoute) - Number(a.inRoute) || a.distance - b.distance)
+    .slice(0, 3)
+    .map(({ item, distance }) => `${nameFor(item, language)} (${Math.round(distance)} km)`);
+}
+
+function paceText(pace, language) {
+  const zh = {
+    Relaxed: '今天留点空白，适合慢慢拍照和临时改主意。',
+    Standard: '节奏刚好，上午和下午各有重点。',
+    Fast: '安排比较满，适合想多看几个点的路线。',
+  };
+  const en = {
+    Relaxed: 'Leave some blank space for photos and small detours.',
+    Standard: 'A balanced day with one clear focus in each half.',
+    Fast: 'A full day for seeing more stops without adding hotels.',
+  };
+  return language === 'zh' ? zh[pace] : en[pace];
+}
+
+function makeItinerary(routeStops, days, pace = 'Standard', language = 'en') {
+  const safeDays = clampDays(days);
+  const uniqueStops = [...new Map(routeStops.map((stop) => [stop.id, stop])).values()];
+  if (!uniqueStops.length) return [];
+  const stopsPerDay = paceStopsPerDay[pace] ?? paceStopsPerDay.Standard;
+  const buckets = Array.from({ length: safeDays }, (_, index) => ({ day: index + 1, stops: [] }));
+  uniqueStops.forEach((stop, index) => {
+    const dayIndex = Math.min(safeDays - 1, Math.floor(index / stopsPerDay));
+    buckets[dayIndex].stops.push(stop);
+  });
+
+  return buckets.map((day) => {
+    const segments = routeSegmentsFor(day.stops);
+    const totalKm = Math.round(segments.reduce((sum, segment) => sum + segment.distance, 0));
+    const travelHours = segments.reduce((sum, segment) => sum + segment.duration, 0);
+    const visitHours = day.stops.reduce((sum, stop) => sum + visitFor(stop, language).durationHours, 0);
+    return {
+      ...day,
+      segments,
+      totalKm,
+      travelHours,
+      visitHours,
+      paceNote: paceText(pace, language),
+    };
+  });
+}
+
+function itineraryExportText(language, routeStops, days, pace) {
+  const itinerary = makeItinerary(routeStops, days, pace, language);
+  const lines = [
+    homeText(language, 'Trip3D 意大利行程草稿', 'Trip3D Italy planning draft'),
+    `${homeText(language, '节奏', 'Pace')}: ${pace}`,
+    `${homeText(language, '路线', 'Route')}: ${routeStops.map((stop) => nameFor(stop, language)).join(' -> ') || homeText(language, '还没有添加景点', 'No stops yet')}`,
+    '',
+  ];
+  itinerary.forEach((day) => {
+    lines.push(`${homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} · ${Math.round(day.visitHours + day.travelHours)}h · ${day.totalKm}km`);
+    if (!day.stops.length) {
+      lines.push(homeText(language, '  留作机动日。', '  Keep this as a buffer day.'));
+    }
+    day.stops.forEach((stop, index) => {
+      const visit = visitFor(stop, language);
+      lines.push(`  ${index + 1}. ${nameFor(stop, language)} · ${visit.bestTime} · ${visit.durationHours}h`);
+      lines.push(`     ${visit.bookingNote}`);
+    });
+    lines.push('');
+  });
+  lines.push(homeText(language, '来源：Wikipedia / Wikidata / Open-Meteo / OSRM；出发前请再次确认开放和预约信息。', 'Sources: Wikipedia / Wikidata / Open-Meteo / OSRM. Recheck opening and reservation details before departure.'));
+  return lines.join('\n');
+}
 
 
-function HomeHeader({ language, setLanguage, userSession, onAccount }) {
+function HomeHeader({ language, setLanguage, userSession, onAccount, onHelp }) {
   const items = language === 'zh'
     ? [
       ['home-hero', '\u9996\u9875'],
@@ -1810,14 +2022,14 @@ function HomeHeader({ language, setLanguage, userSession, onAccount }) {
       ['home-destinations', 'Destinations'],
       ['home-planner', 'Route planner'],
       ['home-3d', '3D guide'],
-      ['home-reviews', 'Reviews'],
+      ['home-reviews', 'Travel notes'],
       ['home-services', 'Services'],
     ];
   return (
     <header className="cinematic-home-nav">
       <button className="cinematic-home-nav__brand" type="button" onClick={() => scrollToHomeSection('home-hero')}><span>Trip3D</span><strong>{language === 'zh' ? '\u610f\u5927\u5229\u65c5\u884c\u624b\u518c' : 'Italy travel notebook'}</strong></button>
       <nav aria-label={language === 'zh' ? '\u9996\u9875\u5bfc\u822a' : 'Home sections'}>{items.map(([id, label]) => <button key={id} type="button" onClick={() => scrollToHomeSection(id)}>{label}</button>)}<button type="button" onClick={() => scrollToHomeSection('home-account')}>{language === 'zh' ? '\u8d26\u6237' : 'Account'}</button></nav>
-      <div className="cinematic-home-nav__tools"><div className="home-language-toggle" aria-label={homeText(language, '\u8bed\u8a00', 'Language')}><button type="button" className={language === 'zh' ? 'is-active' : ''} onClick={() => setLanguage('zh')}>{'\u4e2d\u6587'}</button><button type="button" className={language === 'en' ? 'is-active' : ''} onClick={() => setLanguage('en')}>EN</button></div><button className="cinematic-home-nav__account" type="button" onClick={onAccount}>{userSession ? userSession.name : (language === 'zh' ? '\u767b\u5f55' : 'Sign in')}</button></div>
+      <div className="cinematic-home-nav__tools"><div className="home-language-toggle" aria-label={homeText(language, '\u8bed\u8a00', 'Language')}><button type="button" className={language === 'zh' ? 'is-active' : ''} onClick={() => setLanguage('zh')}>{'\u4e2d\u6587'}</button><button type="button" className={language === 'en' ? 'is-active' : ''} onClick={() => setLanguage('en')}>EN</button></div><button className="cinematic-home-nav__help" type="button" onClick={onHelp}>{language === 'zh' ? '使用提示' : 'Quick guide'}</button><button className="cinematic-home-nav__account" type="button" onClick={onAccount}>{userSession ? userSession.name : (language === 'zh' ? '\u767b\u5f55' : 'Sign in')}</button></div>
     </header>
   );
 }
@@ -1828,29 +2040,240 @@ function HomeHero({ language, routeStops, selectedStop, onOpenDrive }) {
 }
 
 function HomeStats({ language }) {
-  const stats = language === 'zh' ? [['50+', '\u76ee\u7684\u5730'], ['12', '\u63a8\u8350\u8def\u7ebf'], ['3D', '\u5bfc\u89c8\u5165\u53e3'], ['\u672c\u5730', '\u8def\u7ebf\u89c4\u5212']] : [['50+', 'Destinations'], ['12', 'Recommended routes'], ['3D', 'Guide entry'], ['Local', 'Route planning']];
+  const generatedDate = new Date(liveLandmarksData.generatedAt);
+  const dateLabel = Number.isNaN(generatedDate.getTime())
+    ? homeText(language, '本次构建', 'This build')
+    : generatedDate.toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-GB');
+  const sourceCount = Object.keys(liveLandmarksData.sources ?? {}).length;
+  const stats = language === 'zh'
+    ? [[String(liveIndex.size), '真实景点资料'], [String(sourceCount), '公开数据源'], [String(routeMatrixIds.length ** 2), '道路组合'], [dateLabel, '数据更新时间']]
+    : [[String(liveIndex.size), 'Sourced landmarks'], [String(sourceCount), 'Public data sources'], [String(routeMatrixIds.length ** 2), 'Road combinations'], [dateLabel, 'Data updated']];
   return <section className="cinematic-stats" aria-label={language === 'zh' ? '\u6570\u636e\u6982\u89c8' : 'Overview stats'}>{stats.map(([value, label]) => <article key={label}><strong>{value}</strong><span>{label}</span></article>)}</section>;
 }
 
 function RouteSketchMap({ language, routeStops }) {
-  const stops = routeStops.slice(0, 6);
-  const points = stops.map((stop, index) => ({ stop, x: 14 + index * 14 + (index % 2) * 4, y: 68 - index * 8 + (index % 3) * 12 }));
-  const path = points.map((point, index) => { if (index === 0) return 'M ' + point.x + ' ' + point.y; const prev = points[index - 1]; const cx = (prev.x + point.x) / 2; const cy = (prev.y + point.y) / 2 + (index % 2 ? -16 : 14); return 'Q ' + cx + ' ' + cy + ' ' + point.x + ' ' + point.y; }).join(' ');
+  const points = routeStops.map((stop) => {
+    const live = liveFor(stop.id);
+    const lon = live?.coordinates?.lon ?? stop.lon;
+    const lat = live?.coordinates?.lat ?? stop.lat;
+    return {
+      stop,
+      x: 8 + ((lon - 6.6) / (18.5 - 6.6)) * 84,
+      y: 8 + ((47.1 - lat) / (47.1 - 36.6)) * 84,
+    };
+  });
+  const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
   return <div className="paper-route-map" aria-label={language === 'zh' ? '\u624b\u7ed8\u8def\u7ebf\u5730\u56fe' : 'Hand-drawn route map'}><svg viewBox="0 0 100 100" role="img" aria-hidden="true" preserveAspectRatio="none"><path className="paper-route-map__coast" d="M2 82 C18 74 22 62 35 60 C48 58 52 68 64 60 C76 52 74 36 90 24" /><path className="paper-route-map__river" d="M8 22 C24 30 26 42 42 42 C58 42 64 30 88 38" />{path && <path className="paper-route-map__path" d={path} />}{points.map((point, index) => <g key={point.stop.id} className="paper-route-map__stop"><circle cx={point.x} cy={point.y} r="3.8" /><text x={point.x} y={point.y + 1.6}>{index + 1}</text></g>)}</svg>{points.map((point) => <span key={point.stop.id} style={{ '--x': point.x + '%', '--y': point.y + '%' }}>{nameFor(point.stop, language)}</span>)}</div>;
 }
 
 function DestinationSection(props) {
-  const { language, query, setQuery, region, setRegion, kind, setKind, season, setSeason, sort, setSort, options, filteredStops, favorites, compare, selectedId, visibleCount, onShowMore, onOpenDetail } = props;
+  const {
+    language,
+    query,
+    setQuery,
+    region,
+    setRegion,
+    kind,
+    setKind,
+    season,
+    setSeason,
+    sort,
+    setSort,
+    preference,
+    setPreference,
+    preferenceOptions,
+    options,
+    filteredStops,
+    favorites,
+    compare,
+    selectedId,
+    visibleCount,
+    onShowMore,
+    onOpenDetail,
+  } = props;
   const visibleStops = filteredStops.slice(0, visibleCount);
-  return <section id="home-destinations" className="cinematic-section cinematic-destinations"><div className="cinematic-section__head"><span>{language === 'zh' ? '\u7cbe\u9009\u76ee\u7684\u5730' : 'Featured destinations'}</span><h2>{language === 'zh' ? '\u5148\u9009\u60f3\u505c\u7559\u7684\u5730\u65b9' : 'Choose the places worth a stop'}</h2><p>{language === 'zh' ? '\u4ece\u7ecf\u5178\u57ce\u5e02\u4e0e\u5730\u6807\u4e2d\uff0c\u6311\u9009\u4f60\u60f3\u52a0\u5165\u65c5\u7a0b\u7684\u505c\u9760\u70b9\u3002' : 'Choose the classic cities and landmarks you want to add to the journey.'}</p></div><section className="home-module home-module--search"><div className="home-module__head"><span>{homeText(language, '\u641c\u7d22\u4e0e\u89c4\u5212', 'Search & plan')}</span><strong>{homeText(language, '\u7b5b\u9009', 'Filters')}</strong></div><label className="home-search"><span>{homeText(language, '\u641c\u7d22', 'Search')}</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={homeText(language, '\u641c\u7d22\u666f\u70b9\u3001\u57ce\u5e02\u3001\u5730\u533a\u6216\u8def\u7ebf\u8bf4\u660e', 'Search landmarks, cities, regions, or route notes')} /></label><div className="home-filter-row home-filter-row--wide"><SelectField label={homeText(language, '\u5730\u533a', 'Region')} value={region} onChange={setRegion} options={options.regions} anyLabel={homeText(language, '\u4e0d\u9650', 'Any')} /><SelectField label={homeText(language, '\u7c7b\u578b', 'Type')} value={kind} onChange={setKind} options={options.kinds} anyLabel={homeText(language, '\u4e0d\u9650', 'Any')} /><SelectField label={homeText(language, '\u65f6\u95f4', 'Best time')} value={season} onChange={setSeason} options={options.seasons} anyLabel={homeText(language, '\u4e0d\u9650', 'Any')} /><label><span>{homeText(language, '\u6392\u5e8f', 'Sort')}</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="featured">{homeText(language, '\u63a8\u8350', 'Featured')}</option><option value="name">{homeText(language, '\u540d\u79f0', 'Name')}</option><option value="north">{homeText(language, '\u4ece\u5317\u5230\u5357', 'North to south')}</option><option value="model">{homeText(language, '\u4f18\u51483D\u6a21\u578b', '3D model first')}</option></select></label></div></section><div className="cinematic-destination-grid">{visibleStops.map((stop) => { const url = pageUrlFor(stop, language); return <article key={stop.id} className={'cinematic-destination-card ' + (selectedId === stop.id ? 'is-selected' : '')}>{imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}<div className="cinematic-destination-card__body"><strong>{nameFor(stop, language)}</strong><span>{regionText(stop, language)} / {kindText(stop, language)} / 4.{8 + (stop.name.length % 2)}</span><p>{summaryFor(stop, language)}</p></div><div className="home-card-actions"><button className={favorites.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => props.onFavorite(stop.id)}>{homeText(language, '\u6536\u85cf', 'Favorite')}</button><button className={compare.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => props.onCompare(stop.id)}>{homeText(language, '\u5bf9\u6bd4', 'Compare')}</button><button type="button" onClick={() => props.onAddRoute(stop.id)}>{homeText(language, '\u52a0\u5165\u8def\u7ebf', 'Add route')}</button><button type="button" onClick={() => onOpenDetail(stop.id)}>{homeText(language, '\u67e5\u770b\u8be6\u60c5', 'Details')}</button>{url && <a href={url} target="_blank" rel="noreferrer">{homeText(language, '\u80cc\u666f\u8d44\u6599', 'Background')}</a>}</div></article>; })}</div>{visibleStops.length < filteredStops.length && <button className="home-download-btn" type="button" onClick={onShowMore}>{language === 'zh' ? '\u5c55\u793a\u66f4\u591a\u666f\u70b9' : 'Show more destinations'}</button>}</section>;
+
+  return (
+    <section id="home-destinations" className="cinematic-section cinematic-destinations" data-guide="search">
+      <div className="cinematic-section__head">
+        <span>{language === 'zh' ? '精选目的地' : 'Featured destinations'}</span>
+        <h2>{language === 'zh' ? '先选想停留的地方' : 'Pick the stops that feel worth your time'}</h2>
+        <p>{language === 'zh' ? '从公开资料整理出的城市与地标里，挑出你想加入旅行手账的停靠点。' : 'Choose from public-source city and landmark notes, then turn them into a route.'}</p>
+      </div>
+
+      <section className="home-module home-module--search">
+        <div className="home-module__head"><span>{homeText(language, '搜索与规划', 'Search & plan')}</span><strong>{homeText(language, '筛选', 'Filters')}</strong></div>
+        <label className="home-search">
+          <span>{homeText(language, '搜索', 'Search')}</span>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={homeText(language, '搜景点、城市、地区，或者一句旅行想法', 'Search a stop, city, region, or travel idea')} />
+        </label>
+        <div className="home-filter-row home-filter-row--wide">
+          <SelectField label={homeText(language, '地区', 'Region')} value={region} onChange={setRegion} options={options.regions} anyLabel={homeText(language, '不限', 'Any')} />
+          <SelectField label={homeText(language, '类型', 'Type')} value={kind} onChange={setKind} options={options.kinds} anyLabel={homeText(language, '不限', 'Any')} />
+          <SelectField label={homeText(language, '时间', 'Best time')} value={season} onChange={setSeason} options={options.seasons} anyLabel={homeText(language, '不限', 'Any')} />
+          <label>
+            <span>{homeText(language, '排序', 'Sort')}</span>
+            <select value={sort} onChange={(event) => setSort(event.target.value)}>
+              <option value="featured">{homeText(language, '推荐', 'Featured')}</option>
+              <option value="name">{homeText(language, '名称', 'Name')}</option>
+              <option value="north">{homeText(language, '从北到南', 'North to south')}</option>
+              <option value="model">{homeText(language, '优先3D模型', '3D model first')}</option>
+            </select>
+          </label>
+        </div>
+        <div className="preference-chips" aria-label={homeText(language, '旅行偏好', 'Travel preferences')}>
+          <button type="button" className={preference === 'any' ? 'is-active' : ''} onClick={() => setPreference('any')}>{homeText(language, '都看看', 'All')}</button>
+          {preferenceOptions.map((item) => (
+            <button key={item} type="button" className={preference === item ? 'is-active' : ''} onClick={() => setPreference(item)}>{item}</button>
+          ))}
+        </div>
+      </section>
+
+      <div className="cinematic-destination-grid">
+        {visibleStops.map((stop) => {
+          const url = pageUrlFor(stop, language);
+          const visit = visitFor(stop, language);
+          return (
+            <article key={stop.id} className={'cinematic-destination-card ' + (selectedId === stop.id ? 'is-selected' : '')}>
+              {imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}
+              <div className="cinematic-destination-card__body">
+                <strong>{nameFor(stop, language)}</strong>
+                <span>{regionText(stop, language)} / {kindText(stop, language)} / {visit.bestTime}</span>
+                <p>{summaryFor(stop, language) || homeText(language, '这处资料还不完整，适合作为行程里的待确认点。', 'These notes are still thin, so keep this as a check-before-you-go stop.')}</p>
+                <div className="destination-tags">{travelPreferenceTags(stop, language).map((tag) => <small key={tag}>{tag}</small>)}</div>
+                <em>{homeText(language, '来源', 'Sources')}: {sourceLabelsFor(stop, language)}</em>
+              </div>
+              <div className="home-card-actions">
+                <button className={favorites.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => props.onFavorite(stop.id)}>{homeText(language, '收藏', 'Save')}</button>
+                <button className={compare.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => props.onCompare(stop.id)}>{homeText(language, '对比', 'Compare')}</button>
+                <button data-guide="add-route" type="button" onClick={() => props.onAddRoute(stop.id)}>{homeText(language, '加入路线', 'Add to route')}</button>
+                <button type="button" onClick={() => onOpenDetail(stop.id)}>{homeText(language, '查看详情', 'Details')}</button>
+                {url && <a href={url} target="_blank" rel="noreferrer">{homeText(language, '资料页', 'Source page')}</a>}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {visibleStops.length < filteredStops.length && <button className="home-download-btn" type="button" onClick={onShowMore}>{language === 'zh' ? '展示更多景点' : 'Show more destinations'}</button>}
+    </section>
+  );
+}
+
+function PrintableItinerary({ language, routeStops, itinerary, pace }) {
+  return (
+    <section className="print-itinerary" aria-label={homeText(language, '可打印行程', 'Printable itinerary')}>
+      <h1>{homeText(language, 'Trip3D 意大利行程草稿', 'Trip3D Italy planning draft')}</h1>
+      <p>{homeText(language, '路线', 'Route')}: {routeStops.map((stop) => nameFor(stop, language)).join(' -> ') || homeText(language, '还没有添加景点', 'No stops yet')}</p>
+      <p>{homeText(language, '节奏', 'Pace')}: {pace}</p>
+      {itinerary.map((day) => (
+        <article key={day.day}>
+          <h2>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} · {day.totalKm} km · {(day.visitHours + day.travelHours).toFixed(1)} h</h2>
+          {day.stops.length ? day.stops.map((stop) => {
+            const visit = visitFor(stop, language);
+            return (
+              <section key={stop.id}>
+                <h3>{nameFor(stop, language)}</h3>
+                <p>{summaryFor(stop, language)}</p>
+                <p>{homeText(language, '建议停留', 'Suggested visit')}: {visit.durationHours}h · {homeText(language, '适合', 'Good for')}: {visit.fit}</p>
+                <p>{homeText(language, '提示', 'Note')}: {visit.bookingNote}</p>
+                <p>{homeText(language, '来源', 'Sources')}: {sourceLabelsFor(stop, language)}</p>
+              </section>
+            );
+          }) : <p>{homeText(language, '留作机动日。', 'Keep this as a buffer day.')}</p>}
+        </article>
+      ))}
+      <footer>{homeText(language, '开放时间、预约和交通请在出发前再次确认。', 'Recheck opening hours, reservations, and transfers before departure.')}</footer>
+    </section>
+  );
 }
 
 
 function RoutePlannerSection(props) {
   const { language, routeStops, routeSegments, routeQuery, setRouteQuery, routeMatches, days, setDays, pace, setPace, lockedIds } = props;
-  const itinerary = makeItinerary(routeStops, days);
-  const exportText = [homeText(language, '\u884c\u7a0b', 'Itinerary'), homeText(language, '\u8282\u594f', 'Pace') + ': ' + pace, ...itinerary.map((day) => 'Day ' + day.day + ': ' + day.stops.map((stop) => nameFor(stop, language)).join(' / '))].join('\n');
-  return <section id="home-planner" className="cinematic-section cinematic-route-planner"><div className="cinematic-section__head"><span>{language === 'zh' ? '\u8def\u7ebf\u89c4\u5212' : 'Route planner'}</span><h2>{language === 'zh' ? '\u628a\u505c\u9760\u70b9\u6574\u7406\u6210\u6e05\u695a\u7684\u884c\u7a0b' : 'Turn stops into a readable route'}</h2><p>{language === 'zh' ? '\u8c03\u6574\u987a\u5e8f\u3001\u9501\u5b9a\u91cd\u70b9\u666f\u70b9\uff0c\u8ba9\u8def\u7ebf\u66f4\u7b26\u5408\u4f60\u7684\u65c5\u884c\u8282\u594f\u3002' : 'Adjust the order, lock key stops, and keep the route aligned with your travel pace.'}</p></div><div className="cinematic-route-planner__main"><div className="cinematic-route-planner__controls"><section className="home-module home-module--planner"><div className="home-module__head"><span>{homeText(language, '\u8def\u7ebf\u63a7\u5236', 'Route controls')}</span><strong>{routeStops.length}</strong></div><label className="home-search"><span>{homeText(language, '\u6dfb\u52a0\u666f\u70b9', 'Add stop')}</span><input value={routeQuery} onChange={(event) => setRouteQuery(event.target.value)} placeholder={homeText(language, '\u641c\u7d22\u666f\u70b9\u52a0\u5165\u5f53\u524d\u8def\u7ebf', 'Search stops to add to the route')} /></label>{routeQuery && <div className="concept-suggestion-list">{routeMatches.slice(0, 5).map((stop) => <button key={stop.id} type="button" onClick={() => props.onAddRoute(stop.id)}><strong>{nameFor(stop, language)}</strong><span>{regionFor(stop)} / {stop.modelKind}</span></button>)}</div>}<div className="home-planner-list">{routeStops.map((stop, index) => <section key={stop.id}><span>{String(index + 1).padStart(2, '0')}</span><strong>{nameFor(stop, language)}</strong><button type="button" onClick={() => props.onMove(stop.id, -1)}>{homeText(language, '\u4e0a\u79fb', 'Up')}</button><button type="button" onClick={() => props.onMove(stop.id, 1)}>{homeText(language, '\u4e0b\u79fb', 'Down')}</button><button type="button" onClick={() => props.onToggleLock(stop.id)}>{lockedIds.has(stop.id) ? homeText(language, '\u89e3\u9501', 'Unlock') : homeText(language, '\u9501\u5b9a', 'Lock')}</button><button type="button" onClick={() => props.onRemove(stop.id)}>{homeText(language, '\u79fb\u9664', 'Remove')}</button></section>)}</div><div className="concept-actions concept-actions--compact"><button className="concept-btn" type="button" onClick={props.onOptimize}>{homeText(language, '\u4f18\u5316\u8def\u7ebf', 'Optimize')}</button><button className="concept-btn" type="button" onClick={props.onResetRoute}>{homeText(language, '\u91cd\u7f6e', 'Reset')}</button></div></section><section className="home-module home-module--itinerary-controls"><div className="home-module__head"><span>{homeText(language, '\u6309\u5929\u884c\u7a0b', 'Day itinerary')}</span><strong>{days}</strong></div><div className="home-planner-controls"><label><span>{homeText(language, '\u5929\u6570', 'Days')}</span><input type="number" min="1" max="10" value={days} onChange={(event) => setDays(Number(event.target.value))} /></label><label><span>{homeText(language, '\u8282\u594f', 'Pace')}</span><select value={pace} onChange={(event) => setPace(event.target.value)}><option>Relaxed</option><option>Standard</option><option>Fast</option></select></label></div></section><section className="home-module home-module--export"><div className="home-module__head"><span>{homeText(language, '\u5bfc\u51fa\u884c\u7a0b', 'Export itinerary')}</span><strong>TXT</strong></div><textarea readOnly value={exportText} aria-label={homeText(language, '\u5bfc\u51fa\u884c\u7a0b', 'Export itinerary')} /><button className="home-download-btn" type="button" onClick={() => downloadTextFile('trip3d-itinerary.txt', exportText)}>{homeText(language, '\u4e0b\u8f7d\u884c\u7a0b', 'Download itinerary')}</button></section></div><div className="cinematic-route-planner__visual"><section className="home-module home-module--map"><div className="home-module__head"><span>{homeText(language, '\u8def\u7ebf\u9884\u89c8', 'Route preview')}</span><strong>{routeStops.length}</strong></div><RouteSketchMap language={language} routeStops={routeStops} /></section><section className="home-module home-module--schema"><div className="home-module__head"><span>{homeText(language, '\u7ad9\u70b9\u8fde\u63a5', 'Stop connections')}</span><strong>{routeSegments.length}</strong></div><div className="home-schema-list">{routeSegments.slice(0, 8).map((segment, index) => <article key={segment.from.id + '-' + segment.to.id}><span>{String(index + 1).padStart(2, '0')}</span><strong>{nameFor(segment.from, language) + ' -> ' + nameFor(segment.to, language)}</strong><small>{Math.round(segment.distance)} km</small></article>)}</div></section><section className="home-module home-module--metrics"><div className="home-module__head"><span>{homeText(language, '\u8def\u7ebf\u987a\u5e8f', 'Route order')}</span><strong>{pace}</strong></div><div className="home-metric-grid"><section><strong>{distanceKm(routeStops)} km</strong><span>{homeText(language, '\u9884\u8ba1\u91cc\u7a0b', 'Distance')}</span></section><section><strong>{days}</strong><span>{homeText(language, '\u5929\u6570', 'Days')}</span></section><section><strong>{routeStops.length}</strong><span>{homeText(language, '\u505c\u9760\u70b9', 'Stops')}</span></section><section><strong>{routeStops.filter((stop) => stop.modelPath).length}</strong><span>{homeText(language, '3D\u6a21\u578b', '3D models')}</span></section></div></section></div></div><div className="cinematic-day-grid">{itinerary.map((day) => <article key={day.day}><span>Day {day.day}</span><strong>{day.stops.map((stop, index) => (index + 1) + '. ' + nameFor(stop, language)).join(' / ')}</strong><p>{day.stops.map((stop) => regionText(stop, language)).join(' -> ')}</p></article>)}<article><span>{language === 'zh' ? '\u9501\u5b9a\u666f\u70b9' : 'Locked stops'}</span><strong>{lockedIds.size}</strong><p>{language === 'zh' ? '\u9501\u5b9a\u540e\u7684\u666f\u70b9\u4f1a\u4fdd\u7559\u5728\u4f60\u6307\u5b9a\u7684\u4f4d\u7f6e\u3002' : 'Locked stops stay in the position you choose.'}</p></article></div></section>;
+  const itinerary = makeItinerary(routeStops, days, pace, language);
+  const exportText = itineraryExportText(language, routeStops, days, pace);
+  const printPdf = () => window.print();
+
+  return (
+    <section id="home-planner" className="cinematic-section cinematic-route-planner" data-guide="planner">
+      <div className="cinematic-section__head">
+        <span>{language === 'zh' ? '路线规划' : 'Route planner'}</span>
+        <h2>{language === 'zh' ? '把停靠点整理成每天能走的行程' : 'Turn stops into days you can actually follow'}</h2>
+        <p>{language === 'zh' ? '不加酒店坐标，也不改 3D 导览。这里只把景点、路程、停留时间和出发前要确认的事写清楚。' : 'No hotel coordinates and no changes to the 3D guide. This keeps the stop order, timing, travel gaps, and check-before-you-go notes readable.'}</p>
+      </div>
+
+      <div className="cinematic-route-planner__main">
+        <div className="cinematic-route-planner__controls">
+          <section className="home-module home-module--planner">
+            <div className="home-module__head"><span>{homeText(language, '路线控制', 'Route controls')}</span><strong>{routeStops.length}</strong></div>
+            <label className="home-search">
+              <span>{homeText(language, '添加景点', 'Add stop')}</span>
+              <input value={routeQuery} onChange={(event) => setRouteQuery(event.target.value)} placeholder={homeText(language, '搜一个景点，放进当前路线', 'Search a stop and add it to this route')} />
+            </label>
+            {routeQuery && <div className="concept-suggestion-list">{routeMatches.slice(0, 5).map((stop) => <button key={stop.id} type="button" onClick={() => props.onAddRoute(stop.id)}><strong>{nameFor(stop, language)}</strong><span>{regionFor(stop)} / {stop.modelKind}</span></button>)}</div>}
+            <div className="home-planner-list">
+              {routeStops.map((stop, index) => (
+                <section key={stop.id}>
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  <strong>{nameFor(stop, language)}</strong>
+                  <button type="button" onClick={() => props.onMove(stop.id, -1)}>{homeText(language, '上移', 'Up')}</button>
+                  <button type="button" onClick={() => props.onMove(stop.id, 1)}>{homeText(language, '下移', 'Down')}</button>
+                  <button type="button" onClick={() => props.onToggleLock(stop.id)}>{lockedIds.has(stop.id) ? homeText(language, '解锁', 'Unlock') : homeText(language, '锁定', 'Lock')}</button>
+                  <button type="button" onClick={() => props.onRemove(stop.id)}>{homeText(language, '移除', 'Remove')}</button>
+                </section>
+              ))}
+            </div>
+            <div className="concept-actions concept-actions--compact">
+              <button className="concept-btn" type="button" onClick={props.onOptimize}>{homeText(language, '优化顺序', 'Optimize')}</button>
+              <button className="concept-btn" type="button" onClick={props.onResetRoute}>{homeText(language, '回到默认路线', 'Reset route')}</button>
+            </div>
+          </section>
+
+          <section className="home-module home-module--itinerary-controls">
+            <div className="home-module__head"><span>{homeText(language, '按天安排', 'Day plan')}</span><strong>{days}</strong></div>
+            <div className="home-planner-controls">
+              <label><span>{homeText(language, '天数', 'Days')}</span><input type="number" min="1" max="10" value={days} onChange={(event) => setDays(clampDays(event.target.value))} /></label>
+              <label><span>{homeText(language, '节奏', 'Pace')}</span><select value={pace} onChange={(event) => setPace(event.target.value)}><option>Relaxed</option><option>Standard</option><option>Fast</option></select></label>
+            </div>
+            <p className="planner-note">{paceText(pace, language)}</p>
+          </section>
+
+          <section className="home-module home-module--export" data-guide="export">
+            <div className="home-module__head"><span>{homeText(language, '导出行程', 'Export itinerary')}</span><strong>TXT / PDF</strong></div>
+            <textarea readOnly value={exportText} aria-label={homeText(language, '导出行程', 'Export itinerary')} />
+            <div className="concept-actions concept-actions--compact">
+              <button className="home-download-btn" type="button" onClick={() => downloadTextFile('trip3d-itinerary.txt', exportText)}>{homeText(language, '下载TXT', 'Download TXT')}</button>
+              <button className="home-download-btn home-download-btn--pdf" type="button" onClick={printPdf}>{homeText(language, '打印 / 保存PDF', 'Print / Save PDF')}</button>
+            </div>
+          </section>
+        </div>
+
+        <div className="cinematic-route-planner__visual">
+          <section className="home-module home-module--map">
+            <div className="home-module__head"><span>{homeText(language, '路线预览', 'Route preview')}</span><strong>{routeStops.length}</strong></div>
+            <RouteSketchMap language={language} routeStops={routeStops} />
+          </section>
+          <section className="home-module home-module--schema">
+            <div className="home-module__head"><span>{homeText(language, '站点连接', 'Stop connections')}</span><strong>{routeSegments.length}</strong></div>
+            <div className="home-schema-list">
+              {routeSegments.map((segment, index) => <article key={segment.from.id + '-' + segment.to.id}><span>{String(index + 1).padStart(2, '0')}</span><strong>{nameFor(segment.from, language) + ' -> ' + nameFor(segment.to, language)}</strong><small>{Math.round(segment.distance)} km / {segment.duration.toFixed(1)} h</small></article>)}
+            </div>
+          </section>
+          <section className="home-module home-module--metrics">
+            <div className="home-module__head"><span>{homeText(language, '路线概览', 'Route overview')}</span><strong>{pace}</strong></div>
+            <div className="home-metric-grid">
+              <section><strong>{distanceKm(routeStops)} km</strong><span>{homeText(language, '估算里程', 'Distance')}</span></section>
+              <section><strong>{days}</strong><span>{homeText(language, '天数', 'Days')}</span></section>
+              <section><strong>{routeStops.length}</strong><span>{homeText(language, '停靠点', 'Stops')}</span></section>
+              <section><strong>{sourceLabelsFor(routeStops[0] ?? landmarks[0], language)}</strong><span>{homeText(language, '公开来源', 'Public sources')}</span></section>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <PrintableItinerary language={language} routeStops={routeStops} itinerary={itinerary} pace={pace} />
+    </section>
+  );
 }
 
 function ThreeDGuideSection({ language, selectedStop, routeStops, onOpenDrive }) {
@@ -1865,7 +2288,32 @@ function FeatureSection({ language, favorites, compare, routeStops, userSession 
 
 function ReviewSection({ language, stops, visibleCount = 6, onShowMore }) {
   const visibleStops = stops.slice(0, visibleCount);
-  return <section id="home-reviews" className="cinematic-section cinematic-reviews"><div className="cinematic-section__head"><span>{language === 'zh' ? '\u65c5\u884c\u8005\u70b9\u8bc4' : 'Traveler reviews'}</span><h2>{language === 'zh' ? '\u65c5\u884c\u8005\u8fd9\u6837\u8bc4\u4ef7' : 'How travelers describe it'}</h2><p>{language === 'zh' ? '\u770b\u770b\u5176\u4ed6\u65c5\u884c\u8005\u5982\u4f55\u89c4\u5212\u4ed6\u4eec\u7684\u610f\u5927\u5229\u8def\u7ebf\u3002' : 'See how other travelers shape their Italy route.'}</p></div><div className="cinematic-review-grid">{visibleStops.map((stop, index) => <article key={stop.id}><p>{summaryFor(stop, language).slice(0, 180)}</p><div>{imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}<span>{language === 'zh' ? '\u65c5\u884c\u8005 ' + (index + 1) : 'Traveler ' + (index + 1)}</span><strong>{nameFor(stop, language)} / 4.{8 + (index % 2)}</strong></div></article>)}</div>{visibleStops.length < stops.length && <button className="home-download-btn cinematic-review-more" type="button" onClick={onShowMore}>{homeText(language, '\u663e\u793a\u66f4\u591a\u8bc4\u4ef7', 'Show more reviews')}</button>}</section>;
+  return (
+    <section id="home-reviews" className="cinematic-section cinematic-reviews">
+      <div className="cinematic-section__head">
+        <span>{language === 'zh' ? '景点资料' : 'Destination notes'}</span>
+        <h2>{language === 'zh' ? '出发前，先了解每一站' : 'Get to know each stop before departure'}</h2>
+        <p>{language === 'zh' ? '查看景点背景、适合人群、参观时长和预约信息。' : 'Review landmark background, suitable visitors, suggested visit time, and reservation details.'}</p>
+      </div>
+      <div className="cinematic-review-grid">
+        {visibleStops.map((stop) => {
+          const visit = visitFor(stop, language);
+          return (
+            <article key={stop.id}>
+              <p>{summaryFor(stop, language).slice(0, 190) || homeText(language, '这处资料还需要补充，先把它当作待确认灵感。', 'This source note needs more detail, so keep it as a planning lead.')}</p>
+              <div>
+                {imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}
+                <span>{visit.fit}</span>
+                <strong>{nameFor(stop, language)}</strong>
+                <small>{homeText(language, '来源', 'Sources')}: {sourceLabelsFor(stop, language)}</small>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {visibleStops.length < stops.length && <button className="home-download-btn cinematic-review-more" type="button" onClick={onShowMore}>{homeText(language, '显示更多资料卡', 'Show more notes')}</button>}
+    </section>
+  );
 }
 
 
@@ -1887,7 +2335,8 @@ function HomeFooter({ language }) {
 function DestinationDetailPage({ language, stop, routeStops, favorites, compare, onFavorite, onCompare, onAddRoute, onClose }) {
   if (!stop) return null;
   const galleryStops = [stop, ...routeStops.filter((item) => item.id !== stop.id), ...landmarks.filter((item) => item.id !== stop.id)].filter((item, index, list) => list.findIndex((match) => match.id === item.id) === index).slice(0, 5);
-  const reviews = galleryStops.slice(0, 3);
+  const nearbyStops = nearbyStopsFor(stop, routeStops, language);
+  const visit = visitFor(stop, language);
   const url = pageUrlFor(stop, language);
   return (
     <section className="destination-detail" role="dialog" aria-modal="true" aria-label={homeText(language, '\u76ee\u7684\u5730\u8be6\u60c5', 'Destination details')}>
@@ -1910,24 +2359,146 @@ function DestinationDetailPage({ language, stop, routeStops, favorites, compare,
         <div className="destination-detail__gallery">{galleryStops.map((item) => <figure key={item.id}>{imageFor(item, language) && <img src={imageFor(item, language)} alt="" loading="lazy" />}<figcaption>{nameFor(item, language)}</figcaption></figure>)}</div>
         <div className="destination-detail__facts">
           <article><span>{homeText(language, '\u6240\u5728\u533a\u57df', 'Region')}</span><strong>{regionText(stop, language)}</strong></article>
-          <article><span>{homeText(language, '\u9002\u5408\u65f6\u95f4', 'Best time')}</span><strong>{seasonText(stop, language)}</strong></article>
+          <article><span>{homeText(language, '\u9002\u5408\u65f6\u95f4', 'Best time')}</span><strong>{visit.bestTime}</strong></article>
+          <article><span>{homeText(language, '\u5efa\u8bae\u505c\u7559', 'Suggested visit')}</span><strong>{visit.durationHours} h</strong></article>
+          <article><span>{homeText(language, '\u9002\u5408\u4eba\u7fa4', 'Good for')}</span><strong>{visit.fit}</strong></article>
+          <article><span>{homeText(language, '\u9996\u6b21\u610f\u5927\u5229', 'First Italy trip')}</span><strong>{visit.firstTimer ? homeText(language, '\u5f88\u9002\u5408', 'Strong fit') : homeText(language, '\u53ef\u4f5c\u5907\u9009', 'Good backup')}</strong></article>
           <article><span>{homeText(language, '\u5750\u6807', 'Coordinates')}</span><strong>{stop.lat.toFixed(2)}, {stop.lon.toFixed(2)}</strong></article>
-          <article><span>{homeText(language, '3D\u5bfc\u89c8', '3D guide')}</span><strong>{stop.modelPath ? homeText(language, '\u53ef\u8fdb\u5165', 'Ready') : homeText(language, '\u8def\u7ebf\u4e2d\u53ef\u89c1', 'Route view')}</strong></article>
         </div>
         <div className="destination-detail__reviews">
-          <div className="cinematic-section__head"><span>{homeText(language, '\u7528\u6237\u8bc4\u4ef7', 'Traveler notes')}</span><h2>{homeText(language, '\u5230\u8fc7\u8fd9\u91cc\u7684\u4eba\u600e\u4e48\u8bf4', 'What travelers say')}</h2></div>
-          <div className="cinematic-review-grid">{reviews.map((item, index) => <article key={item.id}><p>{summaryFor(item, language).slice(0, 170)}</p><div>{imageFor(item, language) && <img src={imageFor(item, language)} alt="" loading="lazy" />}<span>{language === 'zh' ? '\u7528\u6237 ' + (index + 1) : 'Traveler ' + (index + 1)}</span><strong>{nameFor(item, language)} / 4.{8 + (index % 2)}</strong></div></article>)}</div>
+          <div className="cinematic-section__head"><span>{homeText(language, '\u884c\u524d\u4fbf\u7b7e', 'Planning note')}</span><h2>{homeText(language, '\u51fa\u53d1\u524d\u5148\u770b\u8fd9\u51e0\u9879', 'Check these before you go')}</h2></div>
+          <div className="destination-detail__planning">
+            <article><span>{homeText(language, '\u9884\u7ea6\u63d0\u9192', 'Reservation note')}</span><p>{visit.bookingNote}</p></article>
+            <article><span>{homeText(language, '\u9644\u8fd1\u987a\u8def', 'Nearby on route')}</span><p>{nearbyStops.join(' / ')}</p></article>
+            <article><span>{homeText(language, '\u8d44\u6599\u6765\u6e90', 'Sources')}</span><p>{sourceLabelsFor(stop, language)}{url ? ` / ${url}` : ''}</p></article>
+            <article><span>{homeText(language, '\u4e0d\u786e\u5b9a\u9879', 'Still confirm')}</span><p>{homeText(language, '\u5f00\u653e\u65f6\u95f4\u3001\u95e8\u7968\u548c\u73b0\u573a\u4ea4\u901a\u4f1a\u53d8\uff0c\u51fa\u53d1\u524d\u518d\u6838\u5bf9\u4e00\u6b21\u3002', 'Opening hours, tickets, and local transfers can change, so check once more before departure.')}</p></article>
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
+function OnboardingGuide({ language, onClose }) {
+  const steps = useMemo(() => (
+    language === 'zh'
+      ? [
+        { selector: '[data-guide="search"] .home-module--search', title: '先找一个想去的地方', detail: '输入城市、景点，或者用下面的旅行偏好缩小范围。' },
+        { selector: '[data-guide="add-route"]', title: '把景点放进路线', detail: '点“加入路线”，同一个景点不会被重复添加。' },
+        { selector: '[data-guide="planner"] .home-module--itinerary-controls', title: '调整天数和节奏', detail: 'Relaxed、Standard、Fast 会改变每天安排的景点数量。' },
+        { selector: '[data-guide="export"]', title: '带走你的行程', detail: '可以下载 TXT，也可以打印并保存为 PDF。' },
+        { selector: '#home-3d', title: '最后再看 3D', detail: '路线确定后再进入 3D；这里只介绍入口，不改导览本身。' },
+      ]
+      : [
+        { selector: '[data-guide="search"] .home-module--search', title: 'Start with a place', detail: 'Search a city or landmark, or narrow the list with a travel preference.' },
+        { selector: '[data-guide="add-route"]', title: 'Add it to the route', detail: 'Use Add to route. The same stop will not be added twice.' },
+        { selector: '[data-guide="planner"] .home-module--itinerary-controls', title: 'Set days and pace', detail: 'Relaxed, Standard, and Fast change how many stops fit into a day.' },
+        { selector: '[data-guide="export"]', title: 'Take the plan with you', detail: 'Download TXT or print the page and save it as a PDF.' },
+        { selector: '#home-3d', title: 'Open 3D when the route is ready', detail: 'This guide only points to the entry and leaves the 3D experience unchanged.' },
+      ]
+  ), [language]);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [targetRect, setTargetRect] = useState(null);
+  const step = steps[stepIndex];
+
+  useLayoutEffect(() => {
+    const target = document.querySelector(step.selector);
+    setTargetRect(null);
+    if (!target) return undefined;
+
+    const updateRect = () => {
+      const rect = target.getBoundingClientRect();
+      const top = Math.max(8, rect.top - 8);
+      const left = Math.max(8, rect.left - 8);
+      const right = Math.min(window.innerWidth - 8, rect.right + 8);
+      const bottom = Math.min(window.innerHeight - 8, rect.bottom + 8);
+      if (rect.width <= 0 || rect.height <= 0 || right <= left || bottom <= top) {
+        setTargetRect(null);
+        return;
+      }
+      setTargetRect({
+        top,
+        left,
+        width: right - left,
+        height: bottom - top,
+      });
+    };
+
+    const alignTarget = () => {
+      target.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+      window.requestAnimationFrame(updateRect);
+    };
+    const timers = [0, 120, 320, 560, 820].map((delay) => window.setTimeout(alignTarget, delay));
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateRect);
+    observer?.observe(target);
+    window.addEventListener('scroll', updateRect, true);
+    window.addEventListener('resize', updateRect);
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      observer?.disconnect();
+      window.removeEventListener('scroll', updateRect, true);
+      window.removeEventListener('resize', updateRect);
+    };
+  }, [step]);
+
+  const finish = () => onClose();
+  const next = () => {
+    if (stepIndex === steps.length - 1) finish();
+    else setStepIndex((index) => index + 1);
+  };
+  const previous = () => setStepIndex((index) => Math.max(0, index - 1));
+  const tooltipBelow = !targetRect || targetRect.top < window.innerHeight * 0.52;
+  const tooltipStyle = targetRect ? {
+    left: Math.min(Math.max(16, targetRect.left), Math.max(16, window.innerWidth - 360)),
+    top: tooltipBelow
+      ? Math.max(16, Math.min(window.innerHeight - 230, targetRect.top + targetRect.height + 24))
+      : Math.max(16, targetRect.top - 210),
+  } : {};
+
+  return (
+    <section className="onboarding-guide" role="dialog" aria-modal="true" aria-live="polite">
+      {targetRect && (
+        <>
+          <div className="onboarding-guide__shade onboarding-guide__shade--top" style={{ height: targetRect.top }} />
+          <div
+            className="onboarding-guide__shade onboarding-guide__shade--left"
+            style={{ top: targetRect.top, width: targetRect.left, height: targetRect.height }}
+          />
+          <div
+            className="onboarding-guide__shade onboarding-guide__shade--right"
+            style={{
+              top: targetRect.top,
+              left: targetRect.left + targetRect.width,
+              right: 0,
+              height: targetRect.height,
+            }}
+          />
+          <div
+            className="onboarding-guide__shade onboarding-guide__shade--bottom"
+            style={{ top: targetRect.top + targetRect.height }}
+          />
+          <div className="onboarding-guide__spotlight" style={targetRect} />
+        </>
+      )}
+      <aside className={`onboarding-guide__tooltip ${tooltipBelow ? 'is-below' : 'is-above'}`} style={tooltipStyle}>
+        <span>{homeText(language, `第 ${stepIndex + 1} 步，共 ${steps.length} 步`, `Step ${stepIndex + 1} of ${steps.length}`)}</span>
+        <h2>{step.title}</h2>
+        <p>{step.detail}</p>
+        <div>
+          <button type="button" onClick={finish}>{homeText(language, '跳过', 'Skip')}</button>
+          {stepIndex > 0 && <button type="button" onClick={previous}>{homeText(language, '上一步', 'Back')}</button>}
+          <button className="is-primary" type="button" onClick={next}>{stepIndex === steps.length - 1 ? homeText(language, '完成', 'Done') : homeText(language, '下一步', 'Next')}</button>
+        </div>
+      </aside>
+    </section>
+  );
+}
+
 function CinematicHomePage(props) {
-  const { language, setLanguage, userSession, selectedStop, routeStops, filteredStops, onOpenDrive, onSignIn } = props;
+  const { language, setLanguage, userSession, selectedStop, routeStops, filteredStops, onOpenDrive, onSignIn, onHelp } = props;
   return (
     <>
-      <HomeHeader language={language} setLanguage={setLanguage} userSession={userSession} onAccount={onSignIn} />
+      <HomeHeader language={language} setLanguage={setLanguage} userSession={userSession} onAccount={onSignIn} onHelp={onHelp} />
       <div className="cinematic-home-page">
         <HomeHero language={language} routeStops={routeStops} selectedStop={selectedStop} onOpenDrive={onOpenDrive} />
         <HomeStats language={language} />
@@ -1948,20 +2519,30 @@ export function HomeShowcase({ onOpenDrive }) {
   const activeVersion = versions[0];
   const [hasEnteredHome, setHasEnteredHome] = useState(() => window.sessionStorage.getItem(HOME_ENTERED_KEY) === '1');
   const [activePage, setActivePage] = useState('home');
-  const [language, setLanguage] = useState('zh');
+  const [language, setLanguage] = useState(() => {
+    const stored = window.localStorage.getItem(LANGUAGE_KEY);
+    return stored === 'en' || stored === 'zh' ? stored : 'zh';
+  });
   const [query, setQuery] = useState('');
   const [region, setRegion] = useState('any');
   const [kind, setKind] = useState('any');
   const [season, setSeason] = useState('any');
   const [sort, setSort] = useState('featured');
+  const [preference, setPreference] = useState('any');
   const [routeQuery, setRouteQuery] = useState('');
-  const [routeIds, setRouteIds] = useState(initialRouteIds);
+  const [routeIds, setRouteIds] = useState(() => {
+    const storedRoute = uniqueValidRouteIds(loadStoredArray(ROUTE_IDS_KEY, initialRouteIds));
+    return storedRoute.length ? storedRoute : initialRouteIds;
+  });
   const [lockedIds, setLockedIds] = useState(() => new Set());
-  const [favorites, setFavorites] = useState(() => new Set());
-  const [compare, setCompare] = useState(() => new Set());
+  const [favorites, setFavorites] = useState(() => loadStoredSet(FAVORITES_KEY));
+  const [compare, setCompare] = useState(() => loadStoredSet(COMPARE_KEY));
   const [selectedId, setSelectedId] = useState(initialRouteIds[0]);
-  const [days, setDays] = useState(3);
-  const [pace, setPace] = useState('Standard');
+  const [days, setDays] = useState(() => clampDays(window.localStorage.getItem(DAYS_KEY)));
+  const [pace, setPace] = useState(() => {
+    const stored = window.localStorage.getItem(PACE_KEY);
+    return paceStopsPerDay[stored] ? stored : 'Standard';
+  });
   const [userSession, setUserSession] = useState(null);
   const [authToken, setAuthToken] = useState(() => window.localStorage.getItem(AUTH_TOKEN_KEY) ?? '');
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
@@ -1970,25 +2551,34 @@ export function HomeShowcase({ onOpenDrive }) {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [accountHistory, setAccountHistory] = useState([]);
+  const [accountPlanReady, setAccountPlanReady] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [visibleCount, setVisibleCount] = useState(12);
   const [reviewVisibleCount, setReviewVisibleCount] = useState(6);
   const [detailStopId, setDetailStopId] = useState(null);
+  const [onboardingOpen, setOnboardingOpen] = useState(() => hasEnteredHome && window.localStorage.getItem(ONBOARDING_SEEN_KEY) !== '1');
 
   const options = useMemo(() => ({
     regions: [...new Set(landmarks.map(regionFor))].sort(),
     kinds: [...new Set(landmarks.map((stop) => stop.modelKind))].sort(),
     seasons: [...new Set(landmarks.map(seasonFor))].sort(),
   }), []);
+  const preferenceOptions = useMemo(() => {
+    const tags = new Set();
+    landmarks.forEach((stop) => travelPreferenceTags(stop, language).forEach((tag) => tags.add(tag)));
+    return [...tags].slice(0, 8);
+  }, [language]);
 
   const filteredStops = useMemo(() => {
     const q = query.trim().toLowerCase();
     const base = landmarks.filter((stop) => {
       const text = `${stop.name} ${nameFor(stop, language)} ${summaryFor(stop, language)} ${regionFor(stop)} ${stop.modelKind} ${seasonFor(stop)}`.toLowerCase();
+      const tags = travelPreferenceTags(stop, language);
       return (!q || text.includes(q))
         && (region === 'any' || regionFor(stop) === region)
         && (kind === 'any' || stop.modelKind === kind)
-        && (season === 'any' || seasonFor(stop) === season);
+        && (season === 'any' || seasonFor(stop) === season)
+        && (preference === 'any' || tags.includes(preference));
     });
     return [...base].sort((a, b) => {
       if (sort === 'name') return nameFor(a, language).localeCompare(nameFor(b, language));
@@ -1996,12 +2586,38 @@ export function HomeShowcase({ onOpenDrive }) {
       if (sort === 'model') return Number(Boolean(b.modelPath)) - Number(Boolean(a.modelPath));
       return landmarks.findIndex((stop) => stop.id === a.id) - landmarks.findIndex((stop) => stop.id === b.id);
     });
-  }, [kind, language, query, region, season, sort]);
+  }, [kind, language, preference, query, region, season, sort]);
 
   useEffect(() => {
     setVisibleCount(12);
     setReviewVisibleCount(6);
-  }, [kind, query, region, season, sort]);
+  }, [kind, preference, query, region, season, sort]);
+
+  useEffect(() => {
+    window.localStorage.setItem(LANGUAGE_KEY, language);
+  }, [language]);
+
+  useEffect(() => {
+    const cleanRouteIds = uniqueValidRouteIds(routeIds);
+    window.localStorage.setItem(ROUTE_IDS_KEY, JSON.stringify(cleanRouteIds));
+    if (cleanRouteIds.length !== routeIds.length) setRouteIds(cleanRouteIds.length ? cleanRouteIds : initialRouteIds);
+  }, [routeIds]);
+
+  useEffect(() => {
+    window.localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites]));
+  }, [favorites]);
+
+  useEffect(() => {
+    window.localStorage.setItem(COMPARE_KEY, JSON.stringify([...compare]));
+  }, [compare]);
+
+  useEffect(() => {
+    window.localStorage.setItem(DAYS_KEY, String(days));
+  }, [days]);
+
+  useEffect(() => {
+    window.localStorage.setItem(PACE_KEY, pace);
+  }, [pace]);
 
   useLayoutEffect(() => {
     if (!hasEnteredHome) return;
@@ -2018,10 +2634,31 @@ export function HomeShowcase({ onOpenDrive }) {
     window.sessionStorage.setItem(HOME_ENTERED_KEY, '1');
     resetPageScroll();
     setHasEnteredHome(true);
+    if (window.localStorage.getItem(ONBOARDING_SEEN_KEY) !== '1') setOnboardingOpen(true);
+  }, []);
+
+  const closeOnboarding = useCallback(() => {
+    window.localStorage.setItem(ONBOARDING_SEEN_KEY, '1');
+    setOnboardingOpen(false);
+  }, []);
+
+  const applyAccountPlan = useCallback((plan) => {
+    if (!plan) return;
+    const cleanRouteIds = uniqueValidRouteIds(plan.route_ids ?? []);
+    if (cleanRouteIds.length) setRouteIds(cleanRouteIds);
+    setLockedIds(new Set(uniqueValidRouteIds(plan.locked_ids ?? [])));
+    setFavorites(new Set(uniqueValidRouteIds(plan.favorites ?? [])));
+    setCompare(new Set(uniqueValidRouteIds(plan.compare ?? [])));
+    setDays(clampDays(plan.days));
+    if (paceStopsPerDay[plan.pace]) setPace(plan.pace);
+    if (plan.language === 'zh' || plan.language === 'en') setLanguage(plan.language);
   }, []);
 
   useEffect(() => {
-    if (!authToken) return undefined;
+    if (!authToken) {
+      setAccountPlanReady(false);
+      return undefined;
+    }
     let cancelled = false;
     fetch(`${API_BASE_URL}/api/auth/me`, {
       headers: { Authorization: `Bearer ${authToken}` },
@@ -2034,6 +2671,8 @@ export function HomeShowcase({ onOpenDrive }) {
         if (cancelled) return;
         setUserSession(payload.user);
         setAccountHistory(payload.history ?? []);
+        applyAccountPlan(payload.plan);
+        setAccountPlanReady(true);
       })
       .catch(() => {
         if (cancelled) return;
@@ -2041,11 +2680,35 @@ export function HomeShowcase({ onOpenDrive }) {
         setAuthToken('');
         setUserSession(null);
         setAccountHistory([]);
+        setAccountPlanReady(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [authToken]);
+  }, [applyAccountPlan, authToken]);
+
+  useEffect(() => {
+    if (!authToken || !userSession || !accountPlanReady) return undefined;
+    const timer = window.setTimeout(() => {
+      fetch(`${API_BASE_URL}/api/account/plan`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          route_ids: uniqueValidRouteIds(routeIds),
+          locked_ids: uniqueValidRouteIds([...lockedIds]),
+          favorites: uniqueValidRouteIds([...favorites]),
+          compare: uniqueValidRouteIds([...compare]),
+          days,
+          pace,
+          language,
+        }),
+      }).catch(() => {});
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [accountPlanReady, authToken, compare, days, favorites, language, lockedIds, pace, routeIds, userSession]);
 
   const routeStops = useMemo(() => routeIds.map((id) => landmarks.find((stop) => stop.id === id)).filter(Boolean), [routeIds]);
   const routeSegments = useMemo(() => routeSegmentsFor(routeStops), [routeStops]);
@@ -2097,6 +2760,8 @@ export function HomeShowcase({ onOpenDrive }) {
     setAuthToken(payload.token);
     setUserSession(payload.user);
     setAccountHistory(payload.history ?? []);
+    applyAccountPlan(payload.plan);
+    setAccountPlanReady(true);
     setAuthDialogOpen(false);
     setAuthError('');
   };
@@ -2130,6 +2795,7 @@ export function HomeShowcase({ onOpenDrive }) {
     setAuthToken('');
     setUserSession(null);
     setAccountHistory([]);
+    setAccountPlanReady(false);
     setAuthDialogOpen(false);
   };
   const addAccountHistory = async (action, detail) => {
@@ -2159,6 +2825,9 @@ export function HomeShowcase({ onOpenDrive }) {
     setSeason,
     sort,
     setSort,
+    preference,
+    setPreference,
+    preferenceOptions,
     options,
     filteredStops,
     visibleCount,
@@ -2199,6 +2868,7 @@ export function HomeShowcase({ onOpenDrive }) {
     onOpenDetail: (id) => setDetailStopId(id),
     onSignIn: () => setAuthDialogOpen(true),
     onSignOut: handleSignOut,
+    onHelp: () => setOnboardingOpen(true),
     onOpenDrive,
   };
 
@@ -2213,6 +2883,7 @@ export function HomeShowcase({ onOpenDrive }) {
   return (
     <main className={`showcase-home showcase-home--${activeVersion.id} is-${language}`} style={{ '--concept-accent': activeVersion.accent }}>
       <CinematicHomePage {...commonPageProps} setLanguage={setLanguage} onSignIn={() => setAuthDialogOpen(true)} />
+      {onboardingOpen && <OnboardingGuide language={language} onClose={closeOnboarding} />}
       {detailStop && (
         <DestinationDetailPage
           language={language}

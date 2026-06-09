@@ -1,42 +1,137 @@
-# 启动指令
+# 当前启动方式
 
-这个项目现在默认加载本地后端接口，后端需要单独启动。
+以下步骤是当前项目的有效启动方式，以本节为准。
 
-## 1. 安装前端依赖
+## 1. 首次安装
 
-```bash
+```powershell
 npm install
+conda run -n web3d-backend pip install -r backend/requirements.txt
 ```
 
-## 2. 后端环境
+## 2. 创建 PostgreSQL 数据库
 
-后端使用本机 conda 环境 `web3d-backend`。
+在 pgAdmin Query Tool 或 SQL Shell 中执行：
 
-## 3. 启动后端
-
-```bash
-npm run dev:backend
+```sql
+CREATE USER trip3d_app WITH PASSWORD '你的强密码';
+CREATE DATABASE trip3d OWNER trip3d_app;
 ```
 
-后端地址：
+用户和数据库已经创建过时，不需要重复执行。
 
-```txt
-http://127.0.0.1:8000
+## 3. 配置数据库
+
+复制 `.env.backend.example` 为 `.env.backend`，填写真实密码：
+
+```env
+DATABASE_URL=postgresql://trip3d_app:你的强密码@127.0.0.1:5432/trip3d
+CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+BACKEND_PORT=8001
 ```
 
-## 4. 另开终端启动前端
+`.env.backend` 包含数据库密码，已被 Git 忽略，不要提交。
 
-```bash
+前端的 `.env.local` 应为：
+
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8001
+```
+
+## 4. 日常启动
+
+打开两个终端。
+
+终端一，启动 PostgreSQL 后端：
+
+```powershell
+npm run dev:backend:postgres
+```
+
+终端二，启动前端：
+
+```powershell
 npm run dev
 ```
 
-前端地址：
+访问地址：
 
 ```txt
-http://127.0.0.1:5173
+前端：http://127.0.0.1:5173
+后端：http://127.0.0.1:8001
+接口文档：http://127.0.0.1:8001/docs
+健康检查：http://127.0.0.1:8001/api/health
 ```
 
-前端默认请求 `http://127.0.0.1:8000`。如果后端端口改了，再设置 `VITE_API_BASE_URL` 覆盖。
+健康检查成功时应返回：
+
+```json
+{
+  "status": "ok",
+  "mode": "backend",
+  "database_configured": true,
+  "account_database": "postgresql"
+}
+```
+
+如果显示 `accounts.sqlite3`，说明访问的是旧 SQLite 后端。请使用 `npm run dev:backend:postgres` 启动，并访问 8001 端口。
+
+## 5. 检查数据库
+
+后端首次启动时会自动创建：
+
+- `users`
+- `sessions`
+- `account_history`
+- `user_plans`
+- `data_import_batches`
+- `landmarks_catalog`
+- `landmark_localizations`
+- `landmark_sources`
+- `weather_observations`
+- `route_metrics`
+
+刷新并导入景点资料：
+
+```powershell
+npm run fetch:live-data
+npm run import:live-data:postgres
+```
+
+当前抓取流程从 Wikidata 发现意大利景点，并补充 Wikipedia 双语资料、Open-Meteo 天气和 OSRM 道路矩阵。前端景点目录会跟随 `public/data/live-landmarks.json` 自动更新。
+
+加载 `.env.backend` 后可运行检查脚本：
+
+```powershell
+$envFile = ".env.backend"
+Get-Content $envFile | ForEach-Object {
+  if ($_ -match "^([^#][^=]*)=(.*)$") {
+    Set-Item -Path "Env:$($matches[1].Trim())" -Value $matches[2].Trim()
+  }
+}
+conda run -n web3d-backend python tools/check-postgres.py
+```
+
+正常输出：
+
+```txt
+database=trip3d
+user=trip3d_app
+tables=account_history,data_import_batches,landmark_localizations,landmark_sources,landmarks_catalog,route_metrics,sessions,user_plans,users,weather_observations
+```
+
+---
+
+# Phase 1 practical travel planning update
+
+- The home page includes a first-run guide with sticky-note cards and dashed hand-drawn arrows for search, adding stops, editing the itinerary, exporting, and entering 3D.
+- The route planner builds a day-by-day landmark itinerary with suggested visit time, travel estimates, daily distance, pace notes, and check-before-you-go reminders.
+- Destination data comes from Wikipedia, Wikidata, Open-Meteo, and OSRM, with source URLs and import timestamps stored in PostgreSQL.
+- Export keeps the TXT download and adds browser print / save as PDF without adding a PDF dependency.
+- Destination details include fit, recommended visit time, best time, first-Italy suitability, nearby route-friendly stops, and source notes.
+- Browser local storage preserves guest planning state after refresh.
+- Signed-in users save route stops, locked stops, favorites, comparisons, days, pace, and language in PostgreSQL.
+- The database work does not add hotel coordinates or change the 3D Drive / Venice VR / V2 core implementation.
 
 # Web3D Travel Platform
 
@@ -71,7 +166,7 @@ http://127.0.0.1:5173/#/venice-vr    # Venice 城市漫游实验
 - 04 首页：粒子展示开场、现代化首屏、目的地浏览、行程规划、点评、服务、账户和 3D Drive 入口。
 - 目的地浏览：搜索、筛选、排序、收藏、对比、加入路线、查看背景资料。
 - 行程规划：路线顺序调整、景点锁定、路线优化、按天生成行程、导出文本。
-- 账户状态：本地游客模式、登录态、收藏、路线和锁定景点状态保存。
+- 账户状态：游客使用本地保存；登录用户将收藏、路线、对比、锁定景点、天数和节奏同步到 PostgreSQL。
 - 3D Drive：Three.js 场景、车辆沿路线行驶、地标聚焦、模型预览。
 - V2 路线视图：基于 `public/data/italy-route-topology.json` 展示路线拓扑、地形和站点进度。
 - Venice VR：独立威尼斯城市漫游实验入口。

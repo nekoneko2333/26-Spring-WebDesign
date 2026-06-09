@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
     "dev:backend": "conda run -n web3d-backend python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000",
+    "dev:backend:postgres": "powershell -ExecutionPolicy Bypass -File tools/start-backend.ps1",
     "fetch:live-data": "node tools/fetch-live-landmark-data.mjs",
+    "import:live-data:postgres": "powershell -ExecutionPolicy Bypass -File tools/import-live-data.ps1",
     "build": "vite build",
     "preview": "vite preview"
   },
