@@ -2085,6 +2085,7 @@ function itineraryExportText(language, routeStops, days, pace) {
 
 
 function HomeHeader({ language, setLanguage, userSession, onAccount, onHelp }) {
+  const [mobileExpanded, setMobileExpanded] = useState(false);
   const items = language === 'zh'
     ? [
       ['home-hero', '\u9996\u9875'],
@@ -2102,10 +2103,24 @@ function HomeHeader({ language, setLanguage, userSession, onAccount, onHelp }) {
       ['home-reviews', 'Travel notes'],
       ['home-services', 'Services'],
     ];
+  const navigateTo = (id) => {
+    scrollToHomeSection(id);
+    setMobileExpanded(false);
+  };
   return (
-    <header className="cinematic-home-nav">
-      <button className="cinematic-home-nav__brand" type="button" onClick={() => scrollToHomeSection('home-hero')}><span>Trip3D</span><strong>{language === 'zh' ? '\u610f\u5927\u5229\u65c5\u884c\u624b\u518c' : 'Italy travel notebook'}</strong></button>
-      <nav aria-label={language === 'zh' ? '\u9996\u9875\u5bfc\u822a' : 'Home sections'}>{items.map(([id, label]) => <button key={id} type="button" onClick={() => scrollToHomeSection(id)}>{label}</button>)}<button type="button" onClick={() => scrollToHomeSection('home-account')}>{language === 'zh' ? '\u8d26\u6237' : 'Account'}</button></nav>
+    <header className={`cinematic-home-nav ${mobileExpanded ? 'is-expanded' : 'is-collapsed'}`}>
+      <button className="cinematic-home-nav__brand" type="button" onClick={() => navigateTo('home-hero')}><span>Trip3D</span><strong>{language === 'zh' ? '\u610f\u5927\u5229\u65c5\u884c\u624b\u518c' : 'Italy travel notebook'}</strong></button>
+      <button
+        className="cinematic-home-nav__toggle"
+        type="button"
+        aria-expanded={mobileExpanded}
+        aria-controls="cinematic-home-navigation"
+        onClick={() => setMobileExpanded((expanded) => !expanded)}
+      >
+        <span>{language === 'zh' ? (mobileExpanded ? '\u6536\u8d77' : '\u83dc\u5355') : (mobileExpanded ? 'Close' : 'Menu')}</span>
+        <strong aria-hidden="true">{mobileExpanded ? '\u00d7' : '\u2630'}</strong>
+      </button>
+      <nav id="cinematic-home-navigation" aria-label={language === 'zh' ? '\u9996\u9875\u5bfc\u822a' : 'Home sections'}>{items.map(([id, label]) => <button key={id} type="button" onClick={() => navigateTo(id)}>{label}</button>)}<button type="button" onClick={() => navigateTo('home-account')}>{language === 'zh' ? '\u8d26\u6237' : 'Account'}</button></nav>
       <div className="cinematic-home-nav__tools"><div className="home-language-toggle" aria-label={homeText(language, '\u8bed\u8a00', 'Language')}><button type="button" className={language === 'zh' ? 'is-active' : ''} onClick={() => setLanguage('zh')}>{'\u4e2d\u6587'}</button><button type="button" className={language === 'en' ? 'is-active' : ''} onClick={() => setLanguage('en')}>EN</button></div><button className="cinematic-home-nav__help" type="button" onClick={onHelp}>{language === 'zh' ? '使用提示' : 'Quick guide'}</button><button className="cinematic-home-nav__account" type="button" onClick={onAccount}>{userSession ? userSession.name : (language === 'zh' ? '\u767b\u5f55' : 'Sign in')}</button></div>
     </header>
   );

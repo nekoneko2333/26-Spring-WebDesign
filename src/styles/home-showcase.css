@@ -3106,6 +3106,10 @@
   gap: 8px;
 }
 
+.cinematic-home-nav__toggle {
+  display: none;
+}
+
 .cinematic-home-page {
   width: min(100%, 1840px);
   display: grid;
@@ -4281,18 +4285,6 @@
 }
 
 @media (max-width: 1120px) {
-  .cinematic-home-nav {
-    grid-template-columns: 1fr;
-  }
-
-  .cinematic-home-nav nav {
-    justify-content: start;
-  }
-
-  .cinematic-home-nav__tools {
-    justify-content: space-between;
-  }
-
   .cinematic-hero,
   .cinematic-route-planner__main,
   .cinematic-3d__layout {
@@ -4331,6 +4323,11 @@
 
 @media (max-width: 720px) {
   .showcase-home--cinema {
+    scroll-padding-top: 88px;
+    padding-top: 90px;
+  }
+
+  .showcase-home--cinema:has(.cinematic-home-nav.is-expanded) {
     scroll-padding-top: 162px;
     padding-top: 164px;
   }
@@ -4342,6 +4339,33 @@
     max-height: calc(100vh - 16px);
     overflow: auto;
     margin-bottom: 18px;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    gap: 8px 12px;
+  }
+
+  .cinematic-home-nav__toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 42px;
+    padding-inline: 14px;
+    white-space: nowrap;
+  }
+
+  .cinematic-home-nav__toggle strong {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .cinematic-home-nav nav,
+  .cinematic-home-nav__tools {
+    grid-column: 1 / -1;
+  }
+
+  .cinematic-home-nav.is-collapsed nav,
+  .cinematic-home-nav.is-collapsed .cinematic-home-nav__tools {
+    display: none;
   }
 
   .cinematic-home-nav nav,
@@ -4449,14 +4473,6 @@
     padding-inline: clamp(12px, 3vw, 22px);
   }
 
-  .cinematic-home-nav {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .cinematic-home-nav nav {
-    justify-content: start;
-  }
-
   .cinematic-home-nav nav button,
   .cinematic-home-nav__tools button,
   .cinematic-home-nav__account {
@@ -4481,6 +4497,44 @@
   .cinematic-notes-grid,
   .cinematic-entry-grid {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1180px) {
+  .showcase-home--cinema {
+    scroll-padding-top: 92px;
+    padding-top: 96px;
+  }
+
+  .cinematic-home-nav {
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    gap: 6px;
+    padding-inline: 10px;
+  }
+
+  .cinematic-home-nav__brand {
+    min-width: 76px;
+  }
+
+  .cinematic-home-nav__brand strong {
+    display: none;
+  }
+
+  .cinematic-home-nav nav {
+    flex-wrap: nowrap;
+    gap: 3px;
+  }
+
+  .cinematic-home-nav nav button,
+  .cinematic-home-nav__tools button,
+  .cinematic-home-nav__account {
+    min-height: 34px;
+    padding-inline: clamp(5px, 0.65vw, 9px);
+    font-size: clamp(13px, 1.15vw, 15px);
+  }
+
+  .cinematic-home-nav__tools {
+    gap: 3px;
   }
 }
 
