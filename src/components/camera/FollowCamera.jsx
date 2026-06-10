@@ -5,12 +5,12 @@ import { useAppStore } from '../../state/useAppStore.js';
 import { landmarks } from '../../data/landmarks.js';
 import * as THREE from 'three';
 
-const followOffset = new THREE.Vector3(0, 3.2, -7.8);
-const lookOffset = new THREE.Vector3(0, 1.0, 1.8);
+const followOffset = new THREE.Vector3(0, 2.2, -5.4);
+const lookOffset = new THREE.Vector3(0, 0.72, 1.4);
 const tempOffset = new THREE.Vector3();
 const tempLook = new THREE.Vector3();
-const mapTarget = new THREE.Vector3(0, 82, 18);
-const mapLookAt = new THREE.Vector3(0, 0, 2);
+const mapTarget = new THREE.Vector3(0, 175, 145);
+const mapLookAt = new THREE.Vector3(0, 0, 0);
 const targetWorldPosition = new THREE.Vector3();
 const targetWorldQuaternion = new THREE.Quaternion();
 const cameraTarget = new THREE.Vector3();
@@ -22,7 +22,7 @@ export function FollowCamera({ targetRef }) {
   const controlsRef = useRef(null);
   const lastModeRef = useRef(cameraMode);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (!targetRef.current) return;
 
     targetRef.current.getWorldPosition(targetWorldPosition);
@@ -60,7 +60,9 @@ export function FollowCamera({ targetRef }) {
     tempOffset.copy(followOffset).applyQuaternion(targetWorldQuaternion);
     tempLook.copy(lookOffset).add(targetWorldPosition);
     cameraTarget.copy(targetWorldPosition).add(tempOffset);
-    camera.position.lerp(cameraTarget, 0.095);
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, cameraTarget.x, 0.095);
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, cameraTarget.z, 0.095);
+    camera.position.y = THREE.MathUtils.damp(camera.position.y, cameraTarget.y, 3.2, delta);
     camera.lookAt(tempLook);
   });
 

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { MAP_BOUNDS, worldToLngLat } from './landmarks.js';
 import { getRouteSegmentAtProgress, roadCurve } from './routes.js';
 
-const HEIGHT_SCALE = 0.0011;
+const HEIGHT_SCALE = 0.0022;
 const DEM_SIZE = 640;
 const listeners = new Set();
 let terrainState = {
@@ -99,17 +99,37 @@ function pointInPolygon(lon, lat, polygon) {
   return inside;
 }
 
-const italyMainlandMask = [
-  [6.6, 47.1], [13.2, 47.1], [13.55, 46.3], [12.7, 45.55], [13.25, 44.4],
-  [13.05, 43.4], [12.6, 42.4], [13.35, 41.35], [14.75, 40.7], [15.75, 39.45],
-  [16.35, 38.35], [15.72, 37.85], [14.78, 38.9], [14.25, 40.58], [12.85, 41.28],
-  [11.1, 42.25], [10.4, 43.35], [9.72, 43.72], [8.95, 44.08], [7.55, 44.18],
-  [6.78, 45.05],
+const italyLandMasks = [
+  [
+    [6.62, 45.09], [7.05, 44.72], [7.48, 44.14], [8.16, 43.92], [8.95, 44.02],
+    [9.72, 43.73], [10.31, 43.48], [10.72, 42.97], [11.1, 42.42], [11.58, 42.1],
+    [12.13, 41.88], [12.72, 41.31], [13.41, 41.13], [14.1, 40.83], [14.73, 40.6],
+    [15.14, 40.03], [15.64, 39.73], [16.08, 39.06], [16.56, 38.72], [16.91, 38.88],
+    [17.18, 38.99], [16.57, 39.38], [16.51, 39.72], [16.95, 40.23], [17.78, 40.32],
+    [18.48, 40.07], [18.51, 40.52], [17.93, 40.82], [17.29, 40.98], [16.72, 41.31],
+    [16.08, 41.9], [15.42, 41.94], [14.91, 42.28], [14.2, 42.61], [13.77, 43.12],
+    [13.53, 43.6], [13.67, 44.08], [13.3, 44.55], [12.86, 45.05], [13.07, 45.62],
+    [12.57, 45.81], [12.1, 45.69], [11.45, 45.92], [10.78, 46.49], [10.1, 46.62],
+    [9.42, 46.47], [8.74, 46.14], [8.11, 46.25], [7.52, 45.96], [7.05, 45.55],
+  ],
+  [
+    [12.36, 38.2], [12.64, 37.72], [13.18, 37.5], [13.66, 37.34], [14.08, 37.08],
+    [14.59, 36.72], [15.1, 36.7], [15.36, 37.1], [15.29, 37.48], [15.08, 37.82],
+    [14.6, 38.02], [14.1, 38.1], [13.57, 38.18], [13.05, 38.18], [12.65, 38.14],
+  ],
+  [
+    [8.13, 41.26], [8.2, 40.77], [8.37, 40.31], [8.47, 39.81], [8.39, 39.3],
+    [8.55, 38.88], [8.85, 38.86], [9.17, 39.16], [9.55, 39.12], [9.7, 39.58],
+    [9.63, 40.08], [9.76, 40.55], [9.55, 40.91], [9.17, 41.22], [8.64, 41.29],
+  ],
+  [
+    [12.23, 45.56], [12.35, 45.47], [12.42, 45.34], [12.29, 45.22],
+    [12.12, 45.31], [12.08, 45.45],
+  ],
 ];
 
 function isLikelyLand(lon, lat) {
-  if (pointInPolygon(lon, lat, italyMainlandMask)) return true;
-  if (lon >= 12.12 && lon <= 12.34 && lat >= 45.41 && lat <= 45.55) return true;
+  if (italyLandMasks.some((polygon) => pointInPolygon(lon, lat, polygon))) return true;
   if (lon >= 14.12 && lon <= 14.56 && lat >= 40.68 && lat <= 41.12) return true;
   return false;
 }
@@ -238,7 +258,7 @@ function buildStylizedTexture(heightData, width, height) {
 
 function buildGeometry() {
   const segments = 120;
-  const geometry = new THREE.PlaneGeometry(MAP_BOUNDS.worldSize, MAP_BOUNDS.worldSize, segments, segments);
+  const geometry = new THREE.PlaneGeometry(MAP_BOUNDS.worldWidth, MAP_BOUNDS.worldSize, segments, segments);
   geometry.rotateX(-Math.PI / 2);
   const positions = geometry.attributes.position;
   const width = segments + 1;
@@ -248,9 +268,12 @@ function buildGeometry() {
     const row = Math.floor(i / width);
     const u = col / segments;
     const v = row / segments;
-    const x = (u - 0.5) * MAP_BOUNDS.worldSize;
+    const x = (u - 0.5) * MAP_BOUNDS.worldWidth;
     const z = (v - 0.5) * MAP_BOUNDS.worldSize;
-    positions.setY(i, applyRouteCorridorCut(x, z, sampleHeight(u, v), routeCorridor));
+    const lon = lonAtU(u);
+    const lat = latAtV(v);
+    const terrainHeight = isLikelyLand(lon, lat) ? sampleHeight(u, v) : 0;
+    positions.setY(i, applyRouteCorridorCut(x, z, terrainHeight, routeCorridor));
   }
   positions.needsUpdate = true;
   geometry.computeVertexNormals();
@@ -260,7 +283,12 @@ function buildGeometry() {
 function buildRouteCorridorProfile() {
   const samples = activeRouteCorridorPoints?.length >= 2 ? activeRouteCorridorPoints : roadCurve.getPoints(220);
   const heights = activeRouteCorridorPoints?.length >= 2
-    ? buildRouteHeightProfile(samples, { clearance: 0.18, maxGrade: 0.025, smoothPasses: 2 })
+    ? buildRouteHeightProfile(samples, {
+      footprint: 0.72,
+      clearance: 0.16,
+      maxGrade: 0.035,
+      smoothPasses: 2,
+    })
     : buildSemanticRouteHeightProfile(samples, getRouteSegmentAtProgress, { clearance: 0.12 });
   return samples.map((point, index) => ({
     x: point.x,
@@ -341,7 +369,7 @@ export function loadTerrainData() {
     for (let i = 0; i < croppedRaw.length; i += 1) {
       heightMap[i] = Math.max(0, croppedRaw[i]) * HEIGHT_SCALE;
     }
-    heightMap = smoothHeightMap(heightMap, hmWidth, hmHeight, 3);
+    heightMap = smoothHeightMap(heightMap, hmWidth, hmHeight, 1);
 
     terrainState = {
       status: 'ready',
@@ -368,7 +396,10 @@ export function getTerrainState() {
 
 export function setTerrainRouteCorridor(points) {
   const nextKey = points?.length >= 2
-    ? `${points.length}:${points[0].x.toFixed(2)},${points[0].z.toFixed(2)}:${points[points.length - 1].x.toFixed(2)},${points[points.length - 1].z.toFixed(2)}`
+    ? `${points.length}:${[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+      const point = points[Math.min(points.length - 1, Math.round((points.length - 1) * ratio))];
+      return `${point.x.toFixed(2)},${point.z.toFixed(2)}`;
+    }).join(':')}`
     : '';
   if (nextKey === activeRouteCorridorKey) return;
 
@@ -384,7 +415,7 @@ export function setTerrainRouteCorridor(points) {
 }
 
 export function worldPosToHeight(worldX, worldZ) {
-  const u = THREE.MathUtils.clamp(worldX / MAP_BOUNDS.worldSize + 0.5, 0, 1);
+  const u = THREE.MathUtils.clamp(worldX / MAP_BOUNDS.worldWidth + 0.5, 0, 1);
   const v = THREE.MathUtils.clamp(worldZ / MAP_BOUNDS.worldSize + 0.5, 0, 1);
   const { lon, lat } = worldToLngLat(worldX, worldZ);
   const baseHeight = sampleHeight(u, v);

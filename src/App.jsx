@@ -57,7 +57,7 @@ function DriveExperience({ onClose, initialLandmarkId }) {
     <AppShell isStarted={isStarted} onStart={handleStart} onClose={onClose}>
       <Canvas shadows dpr={[1, 1.5]} gl={{ antialias: true, powerPreference: 'high-performance' }}>
         <color attach="background" args={[THEME.sky]} />
-        <fog attach="fog" args={[THEME.haze, 75, 220]} />
+        <fog attach="fog" args={[THEME.haze, 160, 520]} />
         <Experience isStarted={isStarted} initialLandmarkId={initialLandmarkId} />
       </Canvas>
     </AppShell>

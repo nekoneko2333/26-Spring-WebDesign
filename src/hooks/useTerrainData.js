@@ -21,7 +21,7 @@ export function useTerrainData() {
   }, []);
 
   useEffect(() => {
-    setTerrainRouteCorridor(activeRoute.curve.getPoints(activeRoute.source === 'osrm' ? 240 : 120));
+    setTerrainRouteCorridor(activeRoute.curve.getPoints(activeRoute.source === 'routed' ? 240 : 120));
   }, [activeRoute]);
 
   return terrain;

@@ -3,7 +3,7 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useKeyboardDrive } from '../../hooks/useKeyboardDrive.js';
 import { useTerrainData } from '../../hooks/useTerrainData.js';
-import { useActiveRoute3d } from '../../hooks/useActiveRoute3d.js';
+import { DistancePolylineCurve3, useActiveRoute3d } from '../../hooks/useActiveRoute3d.js';
 import { useAppStore } from '../../state/useAppStore.js';
 import { landmarks } from '../../data/landmarks.js';
 import { getRouteProfile } from '../../data/routes.js';
@@ -12,13 +12,13 @@ import { buildRouteHeightProfile, worldPosToRouteHeight } from '../../data/terra
 const START_PROGRESS = 0;
 const BASE_CLEARANCE = 0.22;
 const VEHICLE_TUNING = {
-  simulationTimeScale: 1680,
-  displaySpeedMultiplier: 4.2,
-  exhibitionTargetMultiplier: 1.34,
-  maxSpeed: 132,
+  simulationTimeScale: 720,
+  displaySpeedMultiplier: 1,
+  exhibitionTargetMultiplier: 1,
+  maxSpeed: 118,
   maxReverseKmh: 24,
-  acceleration: 82,
-  brakeDeceleration: 66,
+  acceleration: 34,
+  brakeDeceleration: 42,
   turnSpeedFactor: 2.8,
   lookAheadDistance: 0.012,
   stopDistance: 22,
@@ -91,15 +91,20 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
   const nearbyLandmarkIdRef = useRef(null);
 
   const routeCurve = useMemo(() => {
-    const sampledPoints = activeRoute.curve.getPoints(activeRoute.source === 'osrm' ? 420 : 180);
-    const roadProfile = buildRouteHeightProfile(sampledPoints, { clearance: 0.22, maxGrade: 0.025, smoothPasses: 2 });
+    const sampledPoints = activeRoute.curve.getPoints(activeRoute.source === 'routed' ? 720 : 220);
+    const roadProfile = buildRouteHeightProfile(sampledPoints, {
+      footprint: activeRoute.source === 'routed' ? 0.72 : 2.4,
+      clearance: 0.18,
+      maxGrade: 0.035,
+      smoothPasses: 2,
+    });
 
     const terrainAwarePoints = sampledPoints.map((point, index) => new THREE.Vector3(
       point.x,
       roadProfile[index] + BASE_CLEARANCE,
       point.z,
     ));
-    return new THREE.CatmullRomCurve3(terrainAwarePoints, false, 'centripetal', 0.08);
+    return new DistancePolylineCurve3(terrainAwarePoints);
   }, [activeRoute, terrain.version]);
 
   const stationTriggers = useMemo(() => {
@@ -117,8 +122,7 @@ export function VehicleController({ bodyRef, drivingEnabled, initialLandmarkId }
     const vehicle = bodyRef.current;
     if (!vehicle) return;
 
-    const routeSignature = activeRoute.points.map((point) => `${point.x.toFixed(2)},${point.z.toFixed(2)}`).join('|');
-    const routeInitKey = `${initialLandmarkId ?? 'start'}-${tourResetToken}-${terrain.version}-${activeRoute.source}-${routeSignature}`;
+    const routeInitKey = `${initialLandmarkId ?? 'start'}-${tourResetToken}-${terrain.version}-${activeRoute.source}-${activeRoute.signature}`;
     if (initializedTargetRef.current !== routeInitKey) {
       progressRef.current = getInitialProgress(initialLandmarkId, routeCurve);
       speedRef.current = 0;
@@ -447,18 +451,18 @@ function getRouteContext(progress, activeRoute, curve) {
   const point = {
     id: `route-${routePoint.index}`,
     landmarkId: null,
-    roadType: activeRoute.source === 'osrm' ? '实景道路' : '规划路线',
+    roadType: activeRoute.source === 'routed' ? '实景道路' : '规划路线',
   };
   const segment = {
-    id: activeRoute.source === 'osrm' ? 'osrm-road' : 'planned-road',
-    type: activeRoute.source === 'osrm' ? 'motorway' : 'scenic',
+    id: activeRoute.source === 'routed' ? 'routed-road' : 'planned-road',
+    type: activeRoute.source === 'routed' ? 'motorway' : 'scenic',
     trafficState: 'normal',
-    speedLimit: activeRoute.source === 'osrm' ? 90 : 70,
+    speedLimit: activeRoute.source === 'routed' ? 90 : 70,
     profile: {
-      label: activeRoute.source === 'osrm' ? '道路路线' : '规划路线',
-      surfaceLabel: activeRoute.source === 'osrm' ? '地图道路' : '导览路径',
+      label: activeRoute.source === 'routed' ? '道路路线' : '规划路线',
+      surfaceLabel: activeRoute.source === 'routed' ? '地图道路' : '导览路径',
       speedFactor: 0.9,
-      roughness: activeRoute.source === 'osrm' ? 0.018 : 0.032,
+      roughness: activeRoute.source === 'routed' ? 0.008 : 0.02,
       turnLean: 0.92,
       curveIntensity: 0.7,
       elevationStyle: 'rolling',
@@ -619,7 +623,7 @@ export function VehicleChassis({ bodyRef }) {
   });
 
   return (
-    <group ref={bodyRef} scale={0.24}>
+    <group ref={bodyRef} scale={0.16}>
       <group ref={rootRef}>
         <mesh castShadow position={[0, 0.58, -0.02]}>
           <boxGeometry args={[2.16, 0.46, 4.12]} />
