@@ -1,106 +1,201 @@
-# 当前启动方式
+# Trip3D 意大利旅行导览
 
-以下步骤是当前项目的有效启动方式，以本节为准。
+基于 React、Vite 和 CesiumJS 的意大利旅行规划与 3D 驾驶导览项目。项目包含景点筛选、路线规划、行程导出、账户状态，以及使用 Cesium World Terrain、全球影像和 OSM Buildings 的 3D 地图。
 
-## 1. 首次安装
+## 快速启动
+
+### 环境要求
+
+- Node.js `20.19+` 或 `22.12+`
+- npm
+- 一个 [Cesium ion](https://ion.cesium.com/) Access Token
+
+克隆并安装依赖：
 
 ```powershell
+git clone <repository-url>
+cd web3d-project
 npm install
-conda run -n web3d-backend pip install -r backend/requirements.txt
 ```
 
-## 2. 创建 PostgreSQL 数据库
-
-在 pgAdmin Query Tool 或 SQL Shell 中执行：
-
-```sql
-CREATE USER trip3d_app WITH PASSWORD '你的强密码';
-CREATE DATABASE trip3d OWNER trip3d_app;
-```
-
-用户和数据库已经创建过时，不需要重复执行。
-
-## 3. 配置数据库
-
-复制 `.env.backend.example` 为 `.env.backend`，填写真实密码：
-
-```env
-DATABASE_URL=postgresql://trip3d_app:你的强密码@127.0.0.1:5432/trip3d
-CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
-BACKEND_PORT=8001
-```
-
-`.env.backend` 包含数据库密码，已被 Git 忽略，不要提交。
-
-前端的 `.env.local` 应为：
-
-```env
-VITE_API_BASE_URL=http://127.0.0.1:8001
-```
-
-## 4. 日常启动
-
-打开两个终端。
-
-终端一，启动 PostgreSQL 后端：
+复制前端环境变量模板：
 
 ```powershell
-npm run dev:backend:postgres
+Copy-Item .env.example .env.local
 ```
 
-终端二，启动前端：
+编辑 `.env.local`：
+
+```env
+VITE_CESIUM_ION_TOKEN=your-cesium-ion-token
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+启动前端：
 
 ```powershell
 npm run dev
 ```
 
-访问地址：
+如果 PowerShell 阻止执行 `npm.ps1`，改用：
 
-```txt
-前端：http://127.0.0.1:5173
-后端：http://127.0.0.1:8001
-接口文档：http://127.0.0.1:8001/docs
-健康检查：http://127.0.0.1:8001/api/health
+```powershell
+npm.cmd run dev
 ```
 
-健康检查成功时应返回：
+访问：
 
-```json
-{
-  "status": "ok",
-  "mode": "backend",
-  "database_configured": true,
-  "account_database": "postgresql"
-}
+```text
+http://127.0.0.1:5173/
 ```
 
-如果显示 `accounts.sqlite3`，说明访问的是旧 SQLite 后端。请使用 `npm run dev:backend:postgres` 启动，并访问 8001 端口。
+仅启动前端也可以浏览主页和使用 3D 导览。路线规划会优先请求本地后端；后端不可用时，会尝试直接请求公共 OSRM 服务。
 
-## 5. 检查数据库
+## Cesium 配置
 
-后端首次启动时会自动创建：
+3D 导览必须配置 `VITE_CESIUM_ION_TOKEN`。Token 用于加载：
 
-- `users`
-- `sessions`
-- `account_history`
-- `user_plans`
-- `data_import_batches`
-- `landmarks_catalog`
-- `landmark_localizations`
-- `landmark_sources`
-- `weather_observations`
-- `route_metrics`
+- Cesium World Terrain
+- 全球影像
+- Cesium OSM Buildings
 
-刷新并导入景点资料：
+### 创建和配置 Token
+
+1. 打开 [Cesium ion](https://ion.cesium.com/) 并注册或登录账户。
+2. 进入 **Access Tokens** 页面。
+3. 点击 **Create token** 创建新的访问令牌。
+4. 为 Token 填写容易识别的名称，例如 `Trip3D Local Development`。
+5. 在权限设置中允许读取 ion 资源。项目需要访问：
+   - Cesium World Terrain
+   - Cesium World Imagery
+   - Cesium OSM Buildings，ion Asset ID 为 `96188`
+6. 保存后复制生成的 Token 字符串。
+
+首次本地开发建议先不要设置 URL/域名限制，确认地图能够正常加载后，再按需要限制允许来源。需要限制时至少加入：
+
+```text
+http://127.0.0.1:5173
+http://localhost:5173
+```
+
+部署后还要加入正式站点来源，例如：
+
+```text
+https://example.com
+```
+
+### 写入项目配置
+
+如果还没有 `.env.local`，先复制模板：
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+将复制的 Token 写入 `.env.local`，不要添加引号：
+
+```env
+VITE_CESIUM_ION_TOKEN=eyJhbGciOi...
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+环境变量由 Vite 在启动时读取，因此修改后必须停止并重新启动开发服务器：
+
+```powershell
+npm run dev
+```
+
+进入 3D 导览后，如果能看到真实卫星影像、地形起伏和建筑，则配置成功。
+
+`.env.local` 已被 Git 忽略。不要把真实 Token 写入源码、README、聊天截图或提交记录。前端 Token 最终会发送到浏览器，因此生产环境应使用最小读取权限和来源限制，不能将它当作后端密钥使用。
+
+Vite 在生产构建时会自动复制 Cesium 的 `Workers`、`Assets`、`Widgets` 和 `ThirdParty` 静态资源，无需手动复制。
+
+## 完整后端
+
+后端基于 FastAPI。它提供账户、路线代理、景点、点评和 PostgreSQL 数据接口。
+
+### 安装 Python 依赖
+
+推荐使用 Python `3.11+`。现有 PowerShell 脚本默认使用名为 `web3d-backend` 的 Conda 环境：
+
+```powershell
+conda create -n web3d-backend python=3.11
+conda run -n web3d-backend pip install -r backend/requirements.txt
+```
+
+不使用 Conda 时也可以自行创建虚拟环境并运行：
+
+```powershell
+python -m pip install -r backend/requirements.txt
+python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+此方式未配置 PostgreSQL 时会使用本地 SQLite 保存账户数据。
+
+### PostgreSQL 模式
+
+创建数据库和用户：
+
+```sql
+CREATE USER trip3d_app WITH PASSWORD 'replace-with-a-strong-password';
+CREATE DATABASE trip3d OWNER trip3d_app;
+```
+
+复制后端环境变量：
+
+```powershell
+Copy-Item .env.backend.example .env.backend
+```
+
+编辑 `.env.backend`：
+
+```env
+DATABASE_URL=postgresql://trip3d_app:replace-with-a-strong-password@127.0.0.1:5432/trip3d
+CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+BACKEND_PORT=8001
+GOOGLE_MAPS_API_KEY=
+```
+
+使用项目脚本启动：
+
+```powershell
+npm run dev:backend:postgres
+```
+
+此时需要同步修改 `.env.local`：
+
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8001
+```
+
+后端地址：
+
+```text
+API:    http://127.0.0.1:8001
+Docs:   http://127.0.0.1:8001/docs
+Health: http://127.0.0.1:8001/api/health
+```
+
+`GOOGLE_MAPS_API_KEY` 可选。配置后，后端优先使用 Google Routes；未配置或请求失败时使用 OSRM。
+
+## 数据更新
+
+仓库已包含 `public/data/live-landmarks.json`，首次运行不需要重新抓取。
+
+重新获取 Wikipedia、Wikidata、Open-Meteo 和 OSRM 数据：
 
 ```powershell
 npm run fetch:live-data
+```
+
+将数据导入 PostgreSQL：
+
+```powershell
 npm run import:live-data:postgres
 ```
 
-当前抓取流程从 Wikidata 发现意大利景点，并补充 Wikipedia 双语资料、Open-Meteo 天气和 OSRM 道路矩阵。前端景点目录会跟随 `public/data/live-landmarks.json` 自动更新。
-
-加载 `.env.backend` 后可运行检查脚本：
+检查 PostgreSQL 表：
 
 ```powershell
 $envFile = ".env.backend"
@@ -112,105 +207,86 @@ Get-Content $envFile | ForEach-Object {
 conda run -n web3d-backend python tools/check-postgres.py
 ```
 
-正常输出：
+## 常用命令
 
-```txt
-database=trip3d
-user=trip3d_app
-tables=account_history,data_import_batches,landmark_localizations,landmark_sources,landmarks_catalog,route_metrics,sessions,user_plans,users,weather_observations
+```powershell
+npm run dev                       # 前端开发服务器，127.0.0.1:5173
+npm run dev:backend               # SQLite 后端，127.0.0.1:8000
+npm run dev:backend:postgres      # PostgreSQL 后端，端口来自 .env.backend
+npm run fetch:live-data           # 更新公开景点数据
+npm run import:live-data:postgres # 导入 PostgreSQL
+npm run build                     # 生产构建
+npm run preview                   # 本地预览生产构建
 ```
 
----
+## 主要功能
 
-# Phase 1 practical travel planning update
+- 景点搜索、筛选、收藏、对比和路线排序
+- 按天生成行程并导出 TXT 或打印为 PDF
+- 游客本地状态及登录用户 PostgreSQL 状态同步
+- OSRM 或 Google Routes 道路级路线
+- Cesium World Terrain、全球影像和 OSM Buildings
+- 车辆驾驶、自动驾驶、Shift 加速、俯视及景点聚焦
+- 自适应瓦片加载、路线分块和长期运行内存控制
 
-- The home page includes a first-run guide with sticky-note cards and dashed hand-drawn arrows for search, adding stops, editing the itinerary, exporting, and entering 3D.
-- The route planner builds a day-by-day landmark itinerary with suggested visit time, travel estimates, daily distance, pace notes, and check-before-you-go reminders.
-- Destination data comes from Wikipedia, Wikidata, Open-Meteo, and OSRM, with source URLs and import timestamps stored in PostgreSQL.
-- Export keeps the TXT download and adds browser print / save as PDF without adding a PDF dependency.
-- Destination details include fit, recommended visit time, best time, first-Italy suitability, nearby route-friendly stops, and source notes.
-- Browser local storage preserves guest planning state after refresh.
-- Signed-in users save route stops, locked stops, favorites, comparisons, days, pace, and language in PostgreSQL.
-- The database work does not add hotel coordinates or change the 3D Drive core implementation.
+## 项目结构
 
-# Web3D Travel Platform
-
-基于 React、Vite、Three.js / React Three Fiber 的 3D 旅行规划项目。当前默认入口已经整合为 04 Cinematic Portal 首页，保留完整的目的地、行程、点评、账户、服务和 3D 导览功能。
-
-## 当前技术栈
-
-- `React`：页面与状态编排
-- `Vite`：开发服务器与生产构建
-- `Three.js` + `@react-three/fiber` + `@react-three/drei`：3D 场景、相机、模型与粒子效果
-- `Zustand`：全局状态管理
-- 原生 `CSS`：页面布局、主题和动效
-- `fetch` + 本地 API：登录、账户历史与会话状态
-- 本地静态数据：景点、路线、天气、百科、点评和 3D 资源
-
-生产构建检查：
-
-```bash
-npm.cmd run build
+```text
+backend/                    FastAPI、账户和路线接口
+public/data/                已生成的景点数据
+public/models/              车辆与景点 GLB 模型
+src/components/cesium/      Cesium 3D 驾驶场景
+src/components/home/        首页、景点和路线规划
+src/components/ui/          HUD、时间轴和景点卡片
+src/hooks/                  路线、天气和数据请求
+src/state/                  Zustand 全局状态
+tools/                      数据抓取、导入和后端启动脚本
+vite.config.js              Cesium 静态资源构建配置
 ```
 
-## 页面入口
+## 生产构建
 
-```txt
-http://127.0.0.1:5173/               # 04 Cinematic Portal 首页
+```powershell
+npm run build
+npm run preview
 ```
 
-## 当前功能
+构建产物位于 `dist/`。部署时必须保持 `/cesium/Workers`、`/cesium/Assets`、`/cesium/Widgets` 和 `/cesium/ThirdParty` 路径可访问。部署到非根路径时，需要同步调整 Vite `base` 和 Cesium 的静态资源基础路径。
 
-- 04 首页：粒子展示开场、现代化首屏、目的地浏览、行程规划、点评、服务、账户和 3D Drive 入口。
-- 目的地浏览：搜索、筛选、排序、收藏、对比、加入路线、查看背景资料。
-- 行程规划：路线顺序调整、景点锁定、路线优化、按天生成行程、导出文本。
-- 账户状态：游客使用本地保存；登录用户将收藏、路线、对比、锁定景点、天数和节奏同步到 PostgreSQL。
-- 3D Drive：Three.js 场景、车辆沿路线行驶、地标聚焦、模型预览。
-- 设计风格：当前首页图片和卡片已经偏向手绘笔记本风格，使用虚线边框、轻微旋转、硬阴影和更有“草图感”的视觉处理。
+## 常见问题
 
-## 目录结构
+### 3D 地图提示 Token 未配置
 
-```txt
-web3d-project/
-├── backend/                         # FastAPI 后端预留
-├── public/
-│   ├── data/                        # 前端静态数据
-│   └── models/                      # 3D 模型资源
-├── src/
-│   ├── App.jsx                      # 应用入口和 hash 路由
-│   ├── components/
-│   │   ├── home/                    # 04 首页和原主页功能模块
-│   │   ├── layout/                  # 3D 导览外层布局
-│   │   ├── scene/                   # 3D 场景层
-│   │   ├── camera/                  # 摄像机跟随逻辑
-│   │   ├── vehicle/                 # 车辆控制和模型
-│   │   ├── landmarks/               # 意大利地标模型
-│   │   └── ui/                      # HUD、弹层、模型预览
-│   ├── data/                        # 路线、地标、文案、点评本地数据
-│   ├── experiments/
-│   ├── hooks/                       # 天气、Wikipedia、路线、实时数据 hooks
-│   ├── state/                       # Zustand 全局状态
-│   └── styles/                      # CSS 模块和首页样式
-│       ├── base.css
-│       ├── home.css
-│       └── home-showcase.css
-├── Styles/
-│   └── sketch.txt                   # 手绘风设计参考
-├── tools/                           # 本地数据准备脚本
-├── package.json
-└── vite.config.js
+确认 `.env.local` 存在，并包含：
+
+```env
+VITE_CESIUM_ION_TOKEN=your-token
 ```
 
-## 维护约定
+修改环境变量后需要重启 Vite。
 
-- `node_modules/`、`dist/`、`data/raw/`、`__pycache__/` 和工具缓存不进入版本管理。
-- 运行时静态资源放在 `public/`。
-- 主站功能放在 `src/components/home/`。
-- 独立实验功能放在 `src/experiments/`。
-- 通用数据 hook 放在 `src/hooks/`，全局状态放在 `src/state/`。
+### Cesium 请求返回 401 或 403
 
-## 已知限制
+- 检查 Token 是否复制完整，等号右侧不要包含引号或多余空格。
+- 检查 Token 是否有读取 ion 资源的权限。
+- 检查来源限制是否包含当前使用的协议、域名和端口。
+- `127.0.0.1` 与 `localhost` 是不同来源，需要分别配置。
+- 在 Cesium ion 控制台重新生成或修改 Token 后，更新 `.env.local` 并重启 Vite。
 
-- 3D Drive 仍是路线曲线驱动，不是真实道路物理驾驶。
-- 票务、酒店、餐厅和预算目前是基于本地路线数据的功能面板，尚未接入真实供应商 API。
-- 本地账户不是正式认证系统，只适合原型阶段。
+### 路线变成景点间直线
+
+这通常表示本地后端和公共 OSRM 均未返回道路几何。检查网络、本地后端健康状态，以及浏览器控制台中的路线请求。
+
+### 地图加载跟不上车辆
+
+应用会根据 Cesium 瓦片队列自动降低时间压缩倍率，严重积压时暂时停止路线推进。网络较慢或显存较小时，建筑和地形会先以较低细节显示。
+
+### `Array buffer allocation failed`
+
+当前实现已经限制 OSM Buildings 缓存，并将已走路线按固定距离分块。若仍出现该错误，请记录浏览器、运行时长、路线点数和设备内存后再排查。
+
+## 安全说明
+
+- 不要提交 `.env.local`、`.env.backend`、数据库密码或 Cesium/Google Token。
+- 本地账户系统用于项目演示，不应直接作为生产认证系统。
+- 公共 OSRM 适合开发和低频测试；正式部署应使用自建或有服务保障的路线提供方。
