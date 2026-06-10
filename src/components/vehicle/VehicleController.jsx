@@ -3,17 +3,17 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useKeyboardDrive } from '../../hooks/useKeyboardDrive.js';
 import { useTerrainData } from '../../hooks/useTerrainData.js';
-import { DistancePolylineCurve3, useActiveRoute3d } from '../../hooks/useActiveRoute3d.js';
+import { useActiveRoute3d } from '../../hooks/useActiveRoute3d.js';
 import { useAppStore } from '../../state/useAppStore.js';
-import { landmarks } from '../../data/landmarks.js';
+import { landmarks, worldUnitsFromMeters } from '../../data/landmarks.js';
 import { getRouteProfile } from '../../data/routes.js';
 import { sampleRoadSurface, worldPosToHeight } from '../../data/terrain.js';
 
 const START_PROGRESS = 0;
-const VEHICLE_SCALE = 0.075;
-const WHEEL_GROUND_CLEARANCE = (0.34 - 0.2) * VEHICLE_SCALE + 0.003;
+const VEHICLE_SCALE = worldUnitsFromMeters(4.6) / 4.12;
+const WHEEL_GROUND_CLEARANCE = (0.34 - 0.2) * VEHICLE_SCALE + worldUnitsFromMeters(0.04);
 const VEHICLE_TUNING = {
-  simulationTimeScale: 1080,
+  simulationTimeScale: 120,
   displaySpeedMultiplier: 1,
   exhibitionTargetMultiplier: 1,
   maxSpeed: 248,
@@ -24,8 +24,8 @@ const VEHICLE_TUNING = {
   boostCruiseKmh: 228,
   brakeDeceleration: 42,
   turnSpeedFactor: 2.8,
-  minLookAheadDistance: 0.0025,
-  maxLookAheadDistance: 0.007,
+  minLookAheadDistance: worldUnitsFromMeters(35),
+  maxLookAheadDistance: worldUnitsFromMeters(140),
   stopDistance: 22,
   poiApproachDistance: 72,
   poiCruiseFactor: 0.7,
@@ -96,15 +96,7 @@ export function VehicleController({ bodyRef, drivingEnabled, driveEntry }) {
   const uiSyncElapsedRef = useRef(UI_SYNC_INTERVAL);
   const nearbyLandmarkIdRef = useRef(null);
 
-  const routeCurve = useMemo(() => {
-    const sampledPoints = activeRoute.curve.getPoints(activeRoute.source === 'routed' ? 720 : 220);
-    const terrainAwarePoints = sampledPoints.map((point) => new THREE.Vector3(
-      point.x,
-      worldPosToHeight(point.x, point.z) + WHEEL_GROUND_CLEARANCE,
-      point.z,
-    ));
-    return new DistancePolylineCurve3(terrainAwarePoints);
-  }, [activeRoute, terrain.version]);
+  const routeCurve = activeRoute.curve;
 
   const stationTriggers = useMemo(() => {
     const routeStopIds = activeRoute.routeIds.length
@@ -493,7 +485,8 @@ function getRouteContext(progress, activeRoute, curve) {
 function getCurvatureSpeedFactor(progress, curve) {
   if (!curve) return 1;
   curve.getTangentAt(progress, tangentPoint);
-  curve.getTangentAt(THREE.MathUtils.clamp(progress + VEHICLE_TUNING.minLookAheadDistance, 0, 1), aheadTangent);
+  const lookAheadProgress = VEHICLE_TUNING.minLookAheadDistance / Math.max(curve.totalDistance, Number.EPSILON);
+  curve.getTangentAt(THREE.MathUtils.clamp(progress + lookAheadProgress, 0, 1), aheadTangent);
   flatTangent.copy(tangentPoint).setY(0).normalize();
   flatAheadTangent.copy(aheadTangent).setY(0).normalize();
   if (flatTangent.lengthSq() === 0 || flatAheadTangent.lengthSq() === 0) return 1;
@@ -528,8 +521,13 @@ function applyCurvePose(vehicle, curve, progress, speed, poseYawRef, posePitchRe
   // 小车朝向直接取路线切线，并向前采样一小段用于计算转向角。
   curve.getTangentAt(safeProgress, tangentPoint);
   const speedRatio = THREE.MathUtils.clamp(Math.abs(speed) / VEHICLE_TUNING.maxSpeed, 0, 1);
-  const lookAhead = THREE.MathUtils.lerp(VEHICLE_TUNING.minLookAheadDistance, VEHICLE_TUNING.maxLookAheadDistance, speedRatio);
-  curve.getTangentAt(THREE.MathUtils.clamp(safeProgress + lookAhead, 0, 1), aheadTangent);
+  const lookAheadWorldDistance = THREE.MathUtils.lerp(
+    VEHICLE_TUNING.minLookAheadDistance,
+    VEHICLE_TUNING.maxLookAheadDistance,
+    speedRatio,
+  );
+  const lookAheadProgress = lookAheadWorldDistance / Math.max(curve.totalDistance, Number.EPSILON);
+  curve.getTangentAt(THREE.MathUtils.clamp(safeProgress + lookAheadProgress, 0, 1), aheadTangent);
 
   flatTangent.copy(tangentPoint).setY(0).normalize();
   if (flatTangent.lengthSq() === 0) return 0;
@@ -541,10 +539,30 @@ function applyCurvePose(vehicle, curve, progress, speed, poseYawRef, posePitchRe
     lookTarget.copy(currentPoint).add(reverseTangent);
   }
 
-  const surface = sampleRoadSurface(currentPoint.x, currentPoint.z, flatTangent.x, flatTangent.z, 0.07, 0.004);
+  const surface = sampleRoadSurface(
+    currentPoint.x,
+    currentPoint.z,
+    flatTangent.x,
+    flatTangent.z,
+    worldUnitsFromMeters(0.9),
+    worldUnitsFromMeters(0.05),
+  );
   vehicle.position.set(currentPoint.x, surface.centerHeight + WHEEL_GROUND_CLEARANCE, currentPoint.z);
   const targetYaw = Math.atan2(lookTarget.x - currentPoint.x, lookTarget.z - currentPoint.z);
-  const targetPitch = -Math.atan2(tangentPoint.y, Math.hypot(tangentPoint.x, tangentPoint.z));
+  const pitchSampleDistance = worldUnitsFromMeters(2.7);
+  const frontHeight = worldPosToHeight(
+    currentPoint.x + flatTangent.x * pitchSampleDistance,
+    currentPoint.z + flatTangent.z * pitchSampleDistance,
+  );
+  const rearHeight = worldPosToHeight(
+    currentPoint.x - flatTangent.x * pitchSampleDistance,
+    currentPoint.z - flatTangent.z * pitchSampleDistance,
+  );
+  const targetPitch = THREE.MathUtils.clamp(
+    -Math.atan2(frontHeight - rearHeight, pitchSampleDistance * 2),
+    -0.28,
+    0.28,
+  );
   const targetRoll = -surface.roll;
   if (!Number.isFinite(poseYawRef.current)) poseYawRef.current = targetYaw;
   poseYawRef.current = THREE.MathUtils.damp(poseYawRef.current, targetYaw, THREE.MathUtils.lerp(7.2, 3.8, speedRatio), delta);

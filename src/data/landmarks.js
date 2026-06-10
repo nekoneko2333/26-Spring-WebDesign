@@ -7,6 +7,14 @@ export const MAP_BOUNDS = {
   worldSize: 170,
 };
 
+// The Italy map spans roughly 1,200 km north-to-south and 990 km east-to-west.
+// A single scene unit therefore represents about 7.1 km on the ground.
+export const WORLD_METERS_PER_UNIT = 7100;
+
+export function worldUnitsFromMeters(meters) {
+  return meters / WORLD_METERS_PER_UNIT;
+}
+
 function mercY(lat) {
   return Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
 }

@@ -16,10 +16,11 @@ import { useAppStore } from './state/useAppStore.js';
 
 function Experience({ isStarted, driveEntry }) {
   const vehicleRef = useRef(null);
+  const cameraMode = useAppStore((state) => state.cameraMode);
 
   return (
     <>
-      <PerspectiveCamera makeDefault position={[0, 95, 120]} fov={42} />
+      <PerspectiveCamera makeDefault position={[0, 95, 120]} fov={42} near={0.00001} far={700} />
       <FollowCamera targetRef={vehicleRef} />
 
       <Suspense fallback={null}>
@@ -28,9 +29,13 @@ function Experience({ isStarted, driveEntry }) {
         <VehicleChassis bodyRef={vehicleRef} />
         <VehicleController bodyRef={vehicleRef} drivingEnabled={isStarted} driveEntry={driveEntry} />
         <MapSurface />
-        <TilesLayer />
         <RoadRibbon />
-        <LandmarkModels />
+        {cameraMode === 'focus' && (
+          <>
+            <TilesLayer />
+            <LandmarkModels />
+          </>
+        )}
       </Suspense>
     </>
   );
@@ -50,7 +55,7 @@ function DriveExperience({ onClose, driveEntry }) {
 
   return (
     <AppShell isStarted={isStarted} onStart={handleStart} onClose={onClose}>
-      <Canvas shadows dpr={[1, 1.5]} gl={{ antialias: true, powerPreference: 'high-performance' }}>
+      <Canvas shadows dpr={[1, 1.5]} gl={{ antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' }}>
         <color attach="background" args={[THEME.sky]} />
         <fog attach="fog" args={[THEME.haze, 160, 520]} />
         <Experience isStarted={isStarted} driveEntry={driveEntry} />

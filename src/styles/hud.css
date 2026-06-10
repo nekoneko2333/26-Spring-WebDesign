@@ -236,7 +236,7 @@
    HUD - MAP VIEW BUTTON
    ============================================================ */
 .btn-map-view {
-  position: fixed; top: 20px; left: 20px; z-index: 25;
+  position: fixed; top: 84px; left: 24px; z-index: 25;
   display: flex; align-items: center; gap: 7px;
   padding: 9px 16px;
   border: 1px solid rgba(22, 42, 68, 0.16); border-radius: var(--radius-pill);

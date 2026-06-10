@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { MAP_BOUNDS } from './landmarks.js';
 
 const HEIGHT_SCALE = 0.0022;
-const DEM_SIZE = 640;
+const DEM_SIZE = 512;
 const TERRAIN_SEGMENTS = 120;
 const listeners = new Set();
 let terrainState = {
@@ -16,6 +16,7 @@ let hmWidth = 0;
 let hmHeight = 0;
 let loadPromise = null;
 let activeRouteCorridorKey = '';
+let terrainLoadAttempt = 0;
 
 function emit() {
   for (const listener of listeners) listener(terrainState);
@@ -182,6 +183,14 @@ function smoothHeightMap(source, width, height, passes = 2) {
 function loadDemTile(z, tx, ty) {
   return new Promise((resolve) => {
     const img = new Image();
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutHandle);
+      resolve(result);
+    };
+    const timeoutHandle = window.setTimeout(() => finish(null), 4500);
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       const canvas = document.createElement('canvas');
@@ -197,9 +206,9 @@ function loadDemTile(z, tx, ty) {
         const b = data[i * 4 + 2];
         out[i] = (r * 256 + g + b / 256) - 32768;
       }
-      resolve({ data: out, width: img.width, height: img.height, tx, ty });
+      finish({ data: out, width: img.width, height: img.height, tx, ty });
     };
-    img.onerror = () => resolve(null);
+    img.onerror = () => finish(null);
     img.src = demTileUrl(z, tx, ty);
   });
 }
@@ -255,6 +264,33 @@ function buildStylizedTexture(heightData, width, height) {
   return texture;
 }
 
+function buildFallbackHeightMap() {
+  const fallback = new Float32Array(DEM_SIZE * DEM_SIZE);
+  for (let y = 0; y < DEM_SIZE; y += 1) {
+    const v = y / (DEM_SIZE - 1);
+    const lat = latAtV(v);
+    for (let x = 0; x < DEM_SIZE; x += 1) {
+      const u = x / (DEM_SIZE - 1);
+      const lon = lonAtU(u);
+      if (!isLikelyLand(lon, lat)) continue;
+
+      const alpine = Math.max(0, 1 - Math.hypot((lon - 10.3) / 4.2, (lat - 46.1) / 1.8));
+      const apenninesAxis = 44.9 - (lon - 9.2) * 0.58;
+      const apennines = Math.max(0, 1 - Math.abs(lat - apenninesAxis) / 1.05)
+        * Math.max(0, 1 - Math.abs(lon - 12.4) / 5.6);
+      const localVariation = 0.08 * (
+        Math.sin(lon * 5.3 + lat * 2.1)
+        + Math.sin(lon * 9.7 - lat * 4.2)
+      );
+      fallback[y * DEM_SIZE + x] = Math.max(
+        0,
+        alpine * 6.2 + apennines * 2.8 + localVariation * 2.4,
+      );
+    }
+  }
+  return smoothHeightMap(fallback, DEM_SIZE, DEM_SIZE, 2);
+}
+
 function sampleTerrainGridVertex(col, row) {
   const u = THREE.MathUtils.clamp(col / TERRAIN_SEGMENTS, 0, 1);
   const v = THREE.MathUtils.clamp(row / TERRAIN_SEGMENTS, 0, 1);
@@ -287,6 +323,7 @@ export function loadTerrainData() {
   emit();
 
   loadPromise = (async () => {
+    terrainLoadAttempt += 1;
     const zoom = 6;
     const tileMin = lonLatToTile(MAP_BOUNDS.lonMin, MAP_BOUNDS.latMax, zoom);
     const tileMax = lonLatToTile(MAP_BOUNDS.lonMax, MAP_BOUNDS.latMin, zoom);
@@ -301,12 +338,13 @@ export function loadTerrainData() {
         return loadDemTile(zoom, tx, ty);
       }),
     );
+    const loadedResults = results.filter(Boolean);
 
     const rawWidth = tcX * tilePx;
     const rawHeight = tcY * tilePx;
     const raw = new Float32Array(rawWidth * rawHeight);
 
-    for (const result of results) {
+    for (const result of loadedResults) {
       if (!result) continue;
       const offX = (result.tx - tileMin.x) * tilePx;
       const offY = (result.ty - tileMin.y) * tilePx;
@@ -317,20 +355,28 @@ export function loadTerrainData() {
       }
     }
 
-    const croppedRaw = resampleRawToBounds(raw, rawWidth, rawHeight, tileMin, zoom);
     hmWidth = DEM_SIZE;
     hmHeight = DEM_SIZE;
-    heightMap = new Float32Array(croppedRaw.length);
-    for (let i = 0; i < croppedRaw.length; i += 1) {
-      heightMap[i] = Math.max(0, croppedRaw[i]) * HEIGHT_SCALE;
+    const hasUsableDemCoverage = loadedResults.length >= Math.ceil(results.length * 0.8);
+    if (!hasUsableDemCoverage) {
+      heightMap = buildFallbackHeightMap();
+    } else {
+      const croppedRaw = resampleRawToBounds(raw, rawWidth, rawHeight, tileMin, zoom);
+      heightMap = new Float32Array(croppedRaw.length);
+      for (let i = 0; i < croppedRaw.length; i += 1) {
+        heightMap[i] = Math.max(0, croppedRaw[i]) * HEIGHT_SCALE;
+      }
+      heightMap = smoothHeightMap(heightMap, hmWidth, hmHeight, 1);
     }
-    heightMap = smoothHeightMap(heightMap, hmWidth, hmHeight, 1);
 
     terrainState = {
       status: 'ready',
       geometry: buildGeometry(),
       texture: buildStylizedTexture(heightMap, hmWidth, hmHeight),
       version: terrainState.version + 1,
+      source: hasUsableDemCoverage ? 'dem' : 'fallback',
+      loadedTileCount: loadedResults.length,
+      loadAttempt: terrainLoadAttempt,
     };
     loadPromise = null;
     emit();
@@ -364,6 +410,13 @@ export function setTerrainRouteCorridor(points) {
 export function worldPosToHeight(worldX, worldZ) {
   const u = THREE.MathUtils.clamp(worldX / MAP_BOUNDS.worldWidth + 0.5, 0, 1);
   const v = THREE.MathUtils.clamp(worldZ / MAP_BOUNDS.worldSize + 0.5, 0, 1);
+  if (!isLikelyLand(lonAtU(u), latAtV(v))) return 0;
+  return sampleHeight(u, v);
+}
+
+export function worldPosToRenderedHeight(worldX, worldZ) {
+  const u = THREE.MathUtils.clamp(worldX / MAP_BOUNDS.worldWidth + 0.5, 0, 1);
+  const v = THREE.MathUtils.clamp(worldZ / MAP_BOUNDS.worldSize + 0.5, 0, 1);
   const gridX = u * TERRAIN_SEGMENTS;
   const gridZ = v * TERRAIN_SEGMENTS;
   const x0 = Math.floor(gridX);
@@ -376,10 +429,16 @@ export function worldPosToHeight(worldX, worldZ) {
   const h10 = sampleTerrainGridVertex(x1, z0);
   const h01 = sampleTerrainGridVertex(x0, z1);
   const h11 = sampleTerrainGridVertex(x1, z1);
-  return h00 * (1 - fx) * (1 - fz) + h10 * fx * (1 - fz) + h01 * (1 - fx) * fz + h11 * fx * fz;
+
+  // PlaneGeometry uses triangles (top-left, bottom-left, top-right) and
+  // (bottom-left, bottom-right, top-right). Match those faces exactly.
+  if (fx + fz <= 1) {
+    return h00 + (h10 - h00) * fx + (h01 - h00) * fz;
+  }
+  return h11 + (h01 - h11) * (1 - fx) + (h10 - h11) * (1 - fz);
 }
 
-export function sampleRoadSurface(worldX, worldZ, tangentX, tangentZ, halfWidth = 0.18, clearance = 0.004) {
+export function sampleRoadSurface(worldX, worldZ, tangentX, tangentZ, halfWidth, clearance) {
   const tangentLength = Math.hypot(tangentX, tangentZ) || 1;
   const tx = tangentX / tangentLength;
   const tz = tangentZ / tangentLength;
