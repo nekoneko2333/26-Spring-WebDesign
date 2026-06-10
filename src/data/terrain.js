@@ -41,7 +41,7 @@ function lonLatToTileFloat(lon, lat, zoom) {
 }
 
 function demTileUrl(z, x, y) {
-  return `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
+  return `/terrain-dem/${z}/${x}/${y}.png`;
 }
 
 function sampleHeight(u, v) {
@@ -264,33 +264,6 @@ function buildStylizedTexture(heightData, width, height) {
   return texture;
 }
 
-function buildFallbackHeightMap() {
-  const fallback = new Float32Array(DEM_SIZE * DEM_SIZE);
-  for (let y = 0; y < DEM_SIZE; y += 1) {
-    const v = y / (DEM_SIZE - 1);
-    const lat = latAtV(v);
-    for (let x = 0; x < DEM_SIZE; x += 1) {
-      const u = x / (DEM_SIZE - 1);
-      const lon = lonAtU(u);
-      if (!isLikelyLand(lon, lat)) continue;
-
-      const alpine = Math.max(0, 1 - Math.hypot((lon - 10.3) / 4.2, (lat - 46.1) / 1.8));
-      const apenninesAxis = 44.9 - (lon - 9.2) * 0.58;
-      const apennines = Math.max(0, 1 - Math.abs(lat - apenninesAxis) / 1.05)
-        * Math.max(0, 1 - Math.abs(lon - 12.4) / 5.6);
-      const localVariation = 0.08 * (
-        Math.sin(lon * 5.3 + lat * 2.1)
-        + Math.sin(lon * 9.7 - lat * 4.2)
-      );
-      fallback[y * DEM_SIZE + x] = Math.max(
-        0,
-        alpine * 6.2 + apennines * 2.8 + localVariation * 2.4,
-      );
-    }
-  }
-  return smoothHeightMap(fallback, DEM_SIZE, DEM_SIZE, 2);
-}
-
 function sampleTerrainGridVertex(col, row) {
   const u = THREE.MathUtils.clamp(col / TERRAIN_SEGMENTS, 0, 1);
   const v = THREE.MathUtils.clamp(row / TERRAIN_SEGMENTS, 0, 1);
@@ -358,15 +331,25 @@ export function loadTerrainData() {
     hmWidth = DEM_SIZE;
     hmHeight = DEM_SIZE;
     const hasUsableDemCoverage = loadedResults.length >= Math.ceil(results.length * 0.8);
-    if (!hasUsableDemCoverage) {
-      heightMap = buildFallbackHeightMap();
-    } else {
+    if (hasUsableDemCoverage) {
       const croppedRaw = resampleRawToBounds(raw, rawWidth, rawHeight, tileMin, zoom);
       heightMap = new Float32Array(croppedRaw.length);
       for (let i = 0; i < croppedRaw.length; i += 1) {
         heightMap[i] = Math.max(0, croppedRaw[i]) * HEIGHT_SCALE;
       }
       heightMap = smoothHeightMap(heightMap, hmWidth, hmHeight, 1);
+    } else {
+      heightMap = null;
+      terrainState = {
+        ...terrainState,
+        status: 'error',
+        source: 'unavailable',
+        loadedTileCount: loadedResults.length,
+        loadAttempt: terrainLoadAttempt,
+      };
+      loadPromise = null;
+      emit();
+      return terrainState;
     }
 
     terrainState = {
@@ -374,7 +357,7 @@ export function loadTerrainData() {
       geometry: buildGeometry(),
       texture: buildStylizedTexture(heightMap, hmWidth, hmHeight),
       version: terrainState.version + 1,
-      source: hasUsableDemCoverage ? 'dem' : 'fallback',
+      source: 'dem',
       loadedTileCount: loadedResults.length,
       loadAttempt: terrainLoadAttempt,
     };

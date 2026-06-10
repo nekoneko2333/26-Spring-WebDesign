@@ -6,9 +6,9 @@ import { useActiveRoute3d } from '../../hooks/useActiveRoute3d.js';
 import { useTerrainData } from '../../hooks/useTerrainData.js';
 import { useAppStore } from '../../state/useAppStore.js';
 
-const LOCAL_PATCH_SIZE = 5.2;
-const LOCAL_PATCH_SEGMENTS = 128;
-const PATCH_PROGRESS_STEP = 0.0005;
+const LOCAL_PATCH_SIZE = 4.5;
+const LOCAL_PATCH_SEGMENTS = 144;
+const PATCH_PROGRESS_STEP = 0.00075;
 
 function buildLocalTerrainGeometry(centerX, centerZ) {
   const geometry = new THREE.PlaneGeometry(
@@ -65,15 +65,16 @@ export function MapSurface() {
 
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.24, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.24, 0]} renderOrder={-2}>
         <planeGeometry args={[260, 260, 1, 1]} />
         <meshStandardMaterial color="#23455d" roughness={1} />
       </mesh>
-      {localPatch && (
-        <mesh geometry={localPatch} receiveShadow>
+      {terrain.status === 'ready' && localPatch && (
+        <mesh geometry={localPatch} receiveShadow renderOrder={0}>
           <meshBasicMaterial
-            map={terrain.texture ?? null}
-            color={terrain.texture ? '#ffffff' : '#789b72'}
+            map={terrain.texture}
+            color="#ffffff"
+            side={THREE.DoubleSide}
           />
         </mesh>
       )}

@@ -291,7 +291,9 @@ export function UIOverlay({ isStarted, onClose }) {
   const timelineLandmark = landmarks.find((item) => item.id === timelineLandmarkId);
   const timelineMeta = getArrivalMeta(timelineLandmark?.id);
   const visitedCount = Math.max(arrivedLandmarkIds.length, isComplete ? routeStops.length : 0);
-  const distanceText = activeRouteDistanceKm ? `${Math.round(activeRouteDistanceKm)} km` : '约 920 km';
+  const distanceText = activeRouteDistanceKm
+    ? `${activeRouteDistanceKm < 10 ? activeRouteDistanceKm.toFixed(1) : Math.round(activeRouteDistanceKm)} km`
+    : '约 920 km';
   const showPoiBriefing = Boolean(
     displayLandmark
       && !focusPanelOpen

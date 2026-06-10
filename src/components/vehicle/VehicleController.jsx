@@ -13,7 +13,7 @@ const START_PROGRESS = 0;
 const VEHICLE_SCALE = worldUnitsFromMeters(4.6) / 4.12;
 const WHEEL_GROUND_CLEARANCE = (0.34 - 0.2) * VEHICLE_SCALE + worldUnitsFromMeters(0.04);
 const VEHICLE_TUNING = {
-  simulationTimeScale: 120,
+  simulationTimeScale: 60,
   displaySpeedMultiplier: 1,
   exhibitionTargetMultiplier: 1,
   maxSpeed: 248,

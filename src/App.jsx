@@ -1,45 +1,8 @@
-import { Canvas } from '@react-three/fiber';
-import { PerspectiveCamera } from '@react-three/drei';
-import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
 import { AppShell } from './components/layout/AppShell.jsx';
 import { HomeShowcase } from './components/home/HomeShowcase.jsx';
-import { SceneLights } from './components/scene/SceneLights.jsx';
-import { GroundPlane } from './components/scene/GroundPlane.jsx';
-import { FollowCamera } from './components/camera/FollowCamera.jsx';
-import { MapSurface } from './components/scene/MapSurface.jsx';
-import { RoadRibbon } from './components/scene/RoadRibbon.jsx';
-import { TilesLayer } from './components/scene/TilesLayer.jsx';
-import { LandmarkModels } from './components/landmarks/LandmarkModels.jsx';
-import { VehicleController, VehicleChassis } from './components/vehicle/VehicleController.jsx';
-import { THEME } from './config/theme.js';
+import { CesiumDriveScene } from './components/cesium/CesiumDriveScene.jsx';
 import { useAppStore } from './state/useAppStore.js';
-
-function Experience({ isStarted, driveEntry }) {
-  const vehicleRef = useRef(null);
-  const cameraMode = useAppStore((state) => state.cameraMode);
-
-  return (
-    <>
-      <PerspectiveCamera makeDefault position={[0, 95, 120]} fov={42} near={0.00001} far={700} />
-      <FollowCamera targetRef={vehicleRef} />
-
-      <Suspense fallback={null}>
-        <SceneLights />
-        <GroundPlane />
-        <VehicleChassis bodyRef={vehicleRef} />
-        <VehicleController bodyRef={vehicleRef} drivingEnabled={isStarted} driveEntry={driveEntry} />
-        <MapSurface />
-        <RoadRibbon />
-        {cameraMode === 'focus' && (
-          <>
-            <TilesLayer />
-            <LandmarkModels />
-          </>
-        )}
-      </Suspense>
-    </>
-  );
-}
 
 function DriveExperience({ onClose, driveEntry }) {
   const [isStarted, setIsStarted] = useState(driveEntry?.mode === 'route-start');
@@ -55,11 +18,7 @@ function DriveExperience({ onClose, driveEntry }) {
 
   return (
     <AppShell isStarted={isStarted} onStart={handleStart} onClose={onClose}>
-      <Canvas shadows dpr={[1, 1.5]} gl={{ antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' }}>
-        <color attach="background" args={[THEME.sky]} />
-        <fog attach="fog" args={[THEME.haze, 160, 520]} />
-        <Experience isStarted={isStarted} driveEntry={driveEntry} />
-      </Canvas>
+      <CesiumDriveScene isStarted={isStarted} />
     </AppShell>
   );
 }
