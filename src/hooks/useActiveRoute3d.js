@@ -19,6 +19,16 @@ function routeIdsToWorldPoints(routeIds) {
     .map((landmark) => new THREE.Vector3(landmark.position[0], 0, landmark.position[2]));
 }
 
+function orientPointsToFirstStop(points, routeIds) {
+  if (points.length < 2 || routeIds.length === 0) return points;
+  const firstStop = landmarks.find((landmark) => landmark.id === routeIds[0]);
+  if (!firstStop) return points;
+  const stopPoint = new THREE.Vector3(firstStop.position[0], 0, firstStop.position[2]);
+  const startDistance = points[0].distanceToSquared(stopPoint);
+  const endDistance = points[points.length - 1].distanceToSquared(stopPoint);
+  return endDistance < startDistance ? [...points].reverse() : points;
+}
+
 function cumulativeDistances(points) {
   if (points.length === 0) return [0];
   const distances = [0];
@@ -84,9 +94,13 @@ export function useActiveRoute3d() {
   return useMemo(() => {
     let points = coordinatesToWorldPoints(geometryCoordinates);
     const source = points.length >= 2 ? 'osrm' : 'waypoints';
+    const effectiveRouteIds = routeIds.length
+      ? routeIds
+      : ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
 
     if (points.length < 2) points = routeIdsToWorldPoints(routeIds);
-    if (points.length < 2) points = routeIdsToWorldPoints(['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii']);
+    if (points.length < 2) points = routeIdsToWorldPoints(effectiveRouteIds);
+    points = orientPointsToFirstStop(points, effectiveRouteIds);
 
     const curve = new DistancePolylineCurve3(points);
     const distances = cumulativeDistances(points);

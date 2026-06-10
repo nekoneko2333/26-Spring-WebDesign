@@ -292,6 +292,14 @@ export function UIOverlay({ isStarted, onClose }) {
   const timelineMeta = getArrivalMeta(timelineLandmark?.id);
   const visitedCount = Math.max(arrivedLandmarkIds.length, isComplete ? routeStops.length : 0);
   const distanceText = activeRouteDistanceKm ? `${Math.round(activeRouteDistanceKm)} km` : '约 920 km';
+  const showPoiBriefing = Boolean(
+    displayLandmark
+      && !focusPanelOpen
+      && cameraMode !== 'map'
+      && !arrivalLandmark
+      && !timelineLandmark
+      && !isComplete,
+  );
 
   useEffect(() => {
     if (!isStarted) return undefined;
@@ -358,6 +366,11 @@ export function UIOverlay({ isStarted, onClose }) {
     document.body.classList.toggle('route-locked', routeLocked);
     return () => document.body.classList.remove('route-locked');
   }, [routeLocked]);
+
+  useEffect(() => {
+    document.body.classList.toggle('poi-briefing-visible', showPoiBriefing);
+    return () => document.body.classList.remove('poi-briefing-visible');
+  }, [showPoiBriefing]);
 
   useEffect(() => {
     if (!selectedLandmarkId || !nearbyLandmarkId || selectedLandmarkId === nearbyLandmarkId) return;
@@ -491,6 +504,7 @@ export function UIOverlay({ isStarted, onClose }) {
 
       <div className="hud-hints is-visible">
         <span className="hud-key"><kbd>W</kbd><kbd>S</kbd> {locale.ui.cruise}</span>
+        <span className="hud-key hud-key--boost"><kbd>Shift</kbd> {language === 'zh' ? '加速' : 'Boost'}</span>
         <span className="hud-key"><kbd>R</kbd> {locale.ui.auto}</span>
         <span className="hud-key"><kbd>V</kbd> {locale.ui.view}</span>
         <span className="hud-key"><kbd>F</kbd> {locale.ui.explore}</span>
@@ -526,7 +540,7 @@ export function UIOverlay({ isStarted, onClose }) {
         <span className="interact-prompt__text">{nearbyLandmarkId ? locale.ui.openSideBriefing : locale.ui.cruiseAndDiscover}</span>
       </div>
 
-      <aside className={`poi-side poi-side--left ${displayLandmark && !focusPanelOpen && cameraMode !== 'map' ? 'is-visible' : ''}`} aria-live="polite">
+      <aside className={`poi-side poi-side--left ${showPoiBriefing ? 'is-visible' : ''}`} aria-live="polite">
         <div className="poi-side__panel">
           <p className="poi-side__eyebrow">{locale.ui.routeBriefing}</p>
           <h2 className="poi-side__title">{getLandmarkName(displayLandmark, language) || 'Landmark'}</h2>

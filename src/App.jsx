@@ -14,7 +14,7 @@ import { VehicleController, VehicleChassis } from './components/vehicle/VehicleC
 import { THEME } from './config/theme.js';
 import { useAppStore } from './state/useAppStore.js';
 
-function Experience({ isStarted, initialLandmarkId }) {
+function Experience({ isStarted, driveEntry }) {
   const vehicleRef = useRef(null);
 
   return (
@@ -26,7 +26,7 @@ function Experience({ isStarted, initialLandmarkId }) {
         <SceneLights />
         <GroundPlane />
         <VehicleChassis bodyRef={vehicleRef} />
-        <VehicleController bodyRef={vehicleRef} drivingEnabled={isStarted} initialLandmarkId={initialLandmarkId} />
+        <VehicleController bodyRef={vehicleRef} drivingEnabled={isStarted} driveEntry={driveEntry} />
         <MapSurface />
         <TilesLayer />
         <RoadRibbon />
@@ -36,29 +36,24 @@ function Experience({ isStarted, initialLandmarkId }) {
   );
 }
 
-function DriveExperience({ onClose, initialLandmarkId }) {
-  const [isStarted, setIsStarted] = useState(Boolean(initialLandmarkId));
+function DriveExperience({ onClose, driveEntry }) {
+  const [isStarted, setIsStarted] = useState(driveEntry?.mode === 'route-start');
   const handleStart = useCallback(() => setIsStarted(true), []);
   const clearLandmark = useAppStore((state) => state.clearLandmark);
-  const openLandmarkFocus = useAppStore((state) => state.openLandmarkFocus);
   const setCameraMode = useAppStore((state) => state.setCameraMode);
 
   useLayoutEffect(() => {
-    setIsStarted(Boolean(initialLandmarkId));
-    if (initialLandmarkId) {
-      openLandmarkFocus(initialLandmarkId);
-      return;
-    }
+    setIsStarted(driveEntry?.mode === 'route-start');
     clearLandmark();
-    setCameraMode('map');
-  }, [clearLandmark, initialLandmarkId, openLandmarkFocus, setCameraMode]);
+    setCameraMode(driveEntry?.mode === 'route-start' ? 'follow' : 'map');
+  }, [clearLandmark, driveEntry, setCameraMode]);
 
   return (
     <AppShell isStarted={isStarted} onStart={handleStart} onClose={onClose}>
       <Canvas shadows dpr={[1, 1.5]} gl={{ antialias: true, powerPreference: 'high-performance' }}>
         <color attach="background" args={[THEME.sky]} />
         <fog attach="fog" args={[THEME.haze, 160, 520]} />
-        <Experience isStarted={isStarted} initialLandmarkId={initialLandmarkId} />
+        <Experience isStarted={isStarted} driveEntry={driveEntry} />
       </Canvas>
     </AppShell>
   );
@@ -66,16 +61,16 @@ function DriveExperience({ onClose, initialLandmarkId }) {
 
 export default function App() {
   const [driveOpen, setDriveOpen] = useState(false);
-  const [initialLandmarkId, setInitialLandmarkId] = useState(null);
+  const [driveEntry, setDriveEntry] = useState(null);
 
-  const handleOpenDrive = useCallback((landmarkId = null) => {
-    setInitialLandmarkId(landmarkId);
+  const handleOpenDrive = useCallback(() => {
+    setDriveEntry({ mode: 'route-start' });
     setDriveOpen(true);
   }, []);
 
   const handleCloseDrive = useCallback(() => {
     setDriveOpen(false);
-    setInitialLandmarkId(null);
+    setDriveEntry(null);
     window.requestAnimationFrame(() => {
       const home = document.getElementById('home-hero');
       if (home) home.scrollIntoView({ block: 'start' });
@@ -86,7 +81,7 @@ export default function App() {
   return (
     <>
       <HomeShowcase onOpenDrive={handleOpenDrive} />
-      {driveOpen && <DriveExperience onClose={handleCloseDrive} initialLandmarkId={initialLandmarkId} />}
+      {driveOpen && <DriveExperience onClose={handleCloseDrive} driveEntry={driveEntry} />}
     </>
   );
 }

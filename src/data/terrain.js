@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { MAP_BOUNDS, worldToLngLat } from './landmarks.js';
-import { getRouteSegmentAtProgress, roadCurve } from './routes.js';
+import { MAP_BOUNDS } from './landmarks.js';
 
 const HEIGHT_SCALE = 0.0022;
 const DEM_SIZE = 640;
+const TERRAIN_SEGMENTS = 120;
 const listeners = new Set();
 let terrainState = {
   status: 'idle',
@@ -15,7 +15,6 @@ let heightMap = null;
 let hmWidth = 0;
 let hmHeight = 0;
 let loadPromise = null;
-let activeRouteCorridorPoints = null;
 let activeRouteCorridorKey = '';
 
 function emit() {
@@ -256,72 +255,28 @@ function buildStylizedTexture(heightData, width, height) {
   return texture;
 }
 
+function sampleTerrainGridVertex(col, row) {
+  const u = THREE.MathUtils.clamp(col / TERRAIN_SEGMENTS, 0, 1);
+  const v = THREE.MathUtils.clamp(row / TERRAIN_SEGMENTS, 0, 1);
+  return isLikelyLand(lonAtU(u), latAtV(v)) ? sampleHeight(u, v) : 0;
+}
+
 function buildGeometry() {
-  const segments = 120;
+  const segments = TERRAIN_SEGMENTS;
   const geometry = new THREE.PlaneGeometry(MAP_BOUNDS.worldWidth, MAP_BOUNDS.worldSize, segments, segments);
   geometry.rotateX(-Math.PI / 2);
   const positions = geometry.attributes.position;
   const width = segments + 1;
-  const routeCorridor = buildRouteCorridorProfile();
   for (let i = 0; i < positions.count; i += 1) {
     const col = i % width;
     const row = Math.floor(i / width);
     const u = col / segments;
     const v = row / segments;
-    const x = (u - 0.5) * MAP_BOUNDS.worldWidth;
-    const z = (v - 0.5) * MAP_BOUNDS.worldSize;
-    const lon = lonAtU(u);
-    const lat = latAtV(v);
-    const terrainHeight = isLikelyLand(lon, lat) ? sampleHeight(u, v) : 0;
-    positions.setY(i, applyRouteCorridorCut(x, z, terrainHeight, routeCorridor));
+    positions.setY(i, sampleTerrainGridVertex(col, row));
   }
   positions.needsUpdate = true;
   geometry.computeVertexNormals();
   return geometry;
-}
-
-function buildRouteCorridorProfile() {
-  const samples = activeRouteCorridorPoints?.length >= 2 ? activeRouteCorridorPoints : roadCurve.getPoints(220);
-  const heights = activeRouteCorridorPoints?.length >= 2
-    ? buildRouteHeightProfile(samples, {
-      footprint: 0.72,
-      clearance: 0.16,
-      maxGrade: 0.035,
-      smoothPasses: 2,
-    })
-    : buildSemanticRouteHeightProfile(samples, getRouteSegmentAtProgress, { clearance: 0.12 });
-  return samples.map((point, index) => ({
-    x: point.x,
-    z: point.z,
-    height: heights[index],
-    segment: activeRouteCorridorPoints?.length >= 2 ? { type: 'realRoad' } : getRouteSegmentAtProgress(index / Math.max(samples.length - 1, 1)),
-  }));
-}
-
-function applyRouteCorridorCut(worldX, worldZ, terrainHeight, corridor) {
-  let nearest = null;
-  let nearestDistance = Number.POSITIVE_INFINITY;
-
-  for (const sample of corridor) {
-    const distance = Math.hypot(worldX - sample.x, worldZ - sample.z);
-    if (distance < nearestDistance) {
-      nearest = sample;
-      nearestDistance = distance;
-    }
-  }
-
-  if (!nearest) return terrainHeight;
-
-  const isTunnel = nearest.segment?.type === 'tunnel';
-  const innerWidth = isTunnel ? 1.45 : 2.25;
-  const outerWidth = isTunnel ? 3.2 : 5.2;
-  if (nearestDistance >= outerWidth) return terrainHeight;
-
-  const cutTarget = nearest.height - (isTunnel ? 0.2 : 0.16);
-  if (terrainHeight <= cutTarget) return terrainHeight;
-
-  const edgeBlend = 1 - THREE.MathUtils.smoothstep(nearestDistance, innerWidth, outerWidth);
-  return THREE.MathUtils.lerp(terrainHeight, cutTarget, edgeBlend);
 }
 
 export function loadTerrainData() {
@@ -404,22 +359,46 @@ export function setTerrainRouteCorridor(points) {
   if (nextKey === activeRouteCorridorKey) return;
 
   activeRouteCorridorKey = nextKey;
-  activeRouteCorridorPoints = points?.length >= 2 ? points : null;
-  if (terrainState.status !== 'ready') return;
-  terrainState = {
-    ...terrainState,
-    geometry: buildGeometry(),
-    version: terrainState.version + 1,
-  };
-  emit();
 }
 
 export function worldPosToHeight(worldX, worldZ) {
   const u = THREE.MathUtils.clamp(worldX / MAP_BOUNDS.worldWidth + 0.5, 0, 1);
   const v = THREE.MathUtils.clamp(worldZ / MAP_BOUNDS.worldSize + 0.5, 0, 1);
-  const { lon, lat } = worldToLngLat(worldX, worldZ);
-  const baseHeight = sampleHeight(u, v);
-  return isLikelyLand(lon, lat) ? baseHeight : Math.min(baseHeight, 0.02);
+  const gridX = u * TERRAIN_SEGMENTS;
+  const gridZ = v * TERRAIN_SEGMENTS;
+  const x0 = Math.floor(gridX);
+  const x1 = Math.min(x0 + 1, TERRAIN_SEGMENTS);
+  const z0 = Math.floor(gridZ);
+  const z1 = Math.min(z0 + 1, TERRAIN_SEGMENTS);
+  const fx = gridX - x0;
+  const fz = gridZ - z0;
+  const h00 = sampleTerrainGridVertex(x0, z0);
+  const h10 = sampleTerrainGridVertex(x1, z0);
+  const h01 = sampleTerrainGridVertex(x0, z1);
+  const h11 = sampleTerrainGridVertex(x1, z1);
+  return h00 * (1 - fx) * (1 - fz) + h10 * fx * (1 - fz) + h01 * (1 - fx) * fz + h11 * fx * fz;
+}
+
+export function sampleRoadSurface(worldX, worldZ, tangentX, tangentZ, halfWidth = 0.18, clearance = 0.004) {
+  const tangentLength = Math.hypot(tangentX, tangentZ) || 1;
+  const tx = tangentX / tangentLength;
+  const tz = tangentZ / tangentLength;
+  const nx = -tz;
+  const nz = tx;
+  const leftX = worldX - nx * halfWidth;
+  const leftZ = worldZ - nz * halfWidth;
+  const rightX = worldX + nx * halfWidth;
+  const rightZ = worldZ + nz * halfWidth;
+  const centerHeight = worldPosToHeight(worldX, worldZ) + clearance;
+  const leftHeight = worldPosToHeight(leftX, leftZ) + clearance;
+  const rightHeight = worldPosToHeight(rightX, rightZ) + clearance;
+
+  return {
+    centerHeight,
+    left: new THREE.Vector3(leftX, leftHeight, leftZ),
+    right: new THREE.Vector3(rightX, rightHeight, rightZ),
+    roll: Math.atan2(rightHeight - leftHeight, Math.max(halfWidth * 2, Number.EPSILON)),
+  };
 }
 
 export function worldPosToRouteHeight(worldX, worldZ, footprint = 4.5) {
@@ -470,8 +449,13 @@ export function buildRouteHeightProfile(points, {
   clearance = 0.28,
   maxGrade = 0.018,
   smoothPasses = 3,
+  followTerrain = false,
 } = {}) {
   if (points.length === 0) return [];
+
+  if (followTerrain) {
+    return points.map((point) => worldPosToRouteHeight(point.x, point.z, footprint) + clearance);
+  }
 
   const safeHeights = points.map((point) => worldPosToRouteSafeHeight(point.x, point.z, footprint) + clearance);
   let profile = smoothHeightSamples(safeHeights, 10, smoothPasses)

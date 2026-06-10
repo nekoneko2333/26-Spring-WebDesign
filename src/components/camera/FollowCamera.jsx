@@ -5,8 +5,8 @@ import { useAppStore } from '../../state/useAppStore.js';
 import { landmarks } from '../../data/landmarks.js';
 import * as THREE from 'three';
 
-const followOffset = new THREE.Vector3(0, 2.2, -5.4);
-const lookOffset = new THREE.Vector3(0, 0.72, 1.4);
+const followOffset = new THREE.Vector3(0, 1.35, -3.15);
+const lookOffset = new THREE.Vector3(0, 0.38, 1.05);
 const tempOffset = new THREE.Vector3();
 const tempLook = new THREE.Vector3();
 const mapTarget = new THREE.Vector3(0, 175, 145);
@@ -19,6 +19,7 @@ export function FollowCamera({ targetRef }) {
   const camera = useThree((state) => state.camera);
   const cameraMode = useAppStore((state) => state.cameraMode);
   const selectedLandmarkId = useAppStore((state) => state.selectedLandmarkId);
+  const vehicleSpeed = useAppStore((state) => state.vehicleSpeed);
   const controlsRef = useRef(null);
   const lastModeRef = useRef(cameraMode);
 
@@ -57,12 +58,17 @@ export function FollowCamera({ targetRef }) {
     }
 
     // 跟随视角：相机位于小车后上方，平滑看向车头前方，避免贴车晃动。
-    tempOffset.copy(followOffset).applyQuaternion(targetWorldQuaternion);
+    const speedRatio = THREE.MathUtils.clamp(vehicleSpeed / 228, 0, 1);
+    tempOffset.copy(followOffset);
+    tempOffset.y += speedRatio * 0.34;
+    tempOffset.z -= speedRatio * 0.9;
+    tempOffset.applyQuaternion(targetWorldQuaternion);
     tempLook.copy(lookOffset).add(targetWorldPosition);
     cameraTarget.copy(targetWorldPosition).add(tempOffset);
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, cameraTarget.x, 0.095);
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, cameraTarget.z, 0.095);
-    camera.position.y = THREE.MathUtils.damp(camera.position.y, cameraTarget.y, 3.2, delta);
+    const followRate = THREE.MathUtils.lerp(0.11, 0.055, speedRatio);
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, cameraTarget.x, followRate);
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, cameraTarget.z, followRate);
+    camera.position.y = THREE.MathUtils.damp(camera.position.y, cameraTarget.y, THREE.MathUtils.lerp(4.2, 2.4, speedRatio), delta);
     camera.lookAt(tempLook);
   });
 
