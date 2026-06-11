@@ -2,6 +2,8 @@
 
 基于 React、Vite 和 CesiumJS 的意大利旅行规划与 3D 驾驶导览项目。项目包含景点筛选、路线规划、行程导出、账户状态，以及使用 Cesium World Terrain、全球影像和 OSM Buildings 的 3D 地图。
 
+完整的功能说明、技术架构和数据流请查看 [FEATURES_AND_TECH_STACK.md](./FEATURES_AND_TECH_STACK.md)。
+
 ## 快速启动
 
 ### 环境要求
