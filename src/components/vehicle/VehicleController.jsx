@@ -80,6 +80,8 @@ export function VehicleController({ bodyRef, drivingEnabled, driveEntry }) {
   const arrivalNotice = useAppStore((state) => state.arrivalNotice);
   const showArrivalNotice = useAppStore((state) => state.showArrivalNotice);
   const cameraMode = useAppStore((state) => state.cameraMode);
+  const routePlaybackSpeed = useAppStore((state) => state.routePlaybackSpeed);
+  const vehicleJumpTarget = useAppStore((state) => state.vehicleJumpTarget);
   const progressRef = useRef(START_PROGRESS);
   const speedRef = useRef(0);
   const targetSpeedRef = useRef(0);
@@ -95,6 +97,7 @@ export function VehicleController({ bodyRef, drivingEnabled, driveEntry }) {
   const previousProgressRef = useRef(START_PROGRESS);
   const uiSyncElapsedRef = useRef(UI_SYNC_INTERVAL);
   const nearbyLandmarkIdRef = useRef(null);
+  const handledJumpTokenRef = useRef(null);
 
   const routeCurve = activeRoute.curve;
 
@@ -134,6 +137,31 @@ export function VehicleController({ bodyRef, drivingEnabled, driveEntry }) {
       setNearbyLandmarkId(initialNearbyLandmarkId);
       setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.IDLE));
       setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve), ...getRouteTimeline(progressRef.current) });
+    }
+
+    if (vehicleJumpTarget?.token && handledJumpTokenRef.current !== vehicleJumpTarget.token) {
+      handledJumpTokenRef.current = vehicleJumpTarget.token;
+      const jumpProgress = getLandmarkProgress(vehicleJumpTarget.landmarkId, routeCurve);
+      progressRef.current = jumpProgress;
+      previousProgressRef.current = jumpProgress;
+      speedRef.current = 0;
+      targetSpeedRef.current = 0;
+      steerRef.current = 0;
+      guidedTourStateRef.current = GUIDED_TOUR_STATES.IDLE;
+      focusedLandmarkIdRef.current = null;
+      focusTimerRef.current = 0;
+      poseYawRef.current = Number.NaN;
+      applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, posePitchRef, poseRollRef, delta);
+      const jumpedNearbyLandmarkId = getNearbyLandmarkId(currentPoint.x, currentPoint.z);
+      nearbyLandmarkIdRef.current = jumpedNearbyLandmarkId;
+      setNearbyLandmarkId(jumpedNearbyLandmarkId);
+      setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.IDLE));
+      setVehicleState({
+        vehicleSpeed: 0,
+        vehicleSteer: 0,
+        routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve),
+        ...getRouteTimeline(progressRef.current),
+      });
     }
 
     if (!drivingEnabled) {
@@ -249,7 +277,7 @@ export function VehicleController({ bodyRef, drivingEnabled, driveEntry }) {
 
     const travelSpeedKmh = Math.sign(speedRef.current) * Math.min(Math.abs(speedRef.current), 145);
     const progressDelta = (travelSpeedKmh / Math.max(activeRoute.distanceKm ?? activeRoute.distance ?? activeRoute.totalDistanceKm ?? 1, 1) / 3600)
-      * VEHICLE_TUNING.simulationTimeScale * delta;
+      * VEHICLE_TUNING.simulationTimeScale * routePlaybackSpeed * delta;
 
     // 使用 delta time 推进路线进度，并始终限制在 0-1，避免不同帧率或自动巡航导致越界。
     const nextProgress = THREE.MathUtils.clamp(progressRef.current + progressDelta, 0, 1);
@@ -656,7 +684,7 @@ export function VehicleChassis({ bodyRef }) {
 
   return (
     <group ref={bodyRef} scale={VEHICLE_SCALE}>
-      <group ref={rootRef}>
+      <group ref={rootRef} scale={[1.18, 1.12, 1.18]}>
         <mesh castShadow position={[0, 0.58, -0.02]}>
           <boxGeometry args={[2.16, 0.46, 4.12]} />
           <meshStandardMaterial color={autoDrive ? '#d29b62' : '#b87452'} roughness={0.48} metalness={0.16} />
@@ -665,13 +693,29 @@ export function VehicleChassis({ bodyRef }) {
           <boxGeometry args={[1.62, 0.54, 2.02]} />
           <meshStandardMaterial color="#c48a63" roughness={0.46} metalness={0.06} />
         </mesh>
+        <mesh castShadow position={[0, 1.37, -0.18]}>
+          <boxGeometry args={[1.18, 0.12, 1.36]} />
+          <meshStandardMaterial color="#7a4b37" roughness={0.5} metalness={0.12} />
+        </mesh>
         <mesh castShadow position={[0, 0.84, 0.22]}>
           <boxGeometry args={[1.48, 0.34, 1.48]} />
           <meshStandardMaterial color="#dfe8ef" roughness={0.2} metalness={0.1} opacity={0.75} transparent />
         </mesh>
+        <mesh castShadow position={[0, 0.91, 1.19]}>
+          <boxGeometry args={[1.28, 0.28, 0.08]} />
+          <meshStandardMaterial color="#253245" roughness={0.26} metalness={0.08} opacity={0.82} transparent />
+        </mesh>
+        <mesh castShadow position={[0, 0.88, -1.18]}>
+          <boxGeometry args={[1.3, 0.24, 0.08]} />
+          <meshStandardMaterial color="#253245" roughness={0.28} metalness={0.08} opacity={0.72} transparent />
+        </mesh>
         <mesh castShadow position={[0, 0.32, 1.82]}>
           <boxGeometry args={[1.68, 0.16, 0.12]} />
           <meshStandardMaterial color="#fff0c9" emissive="#f8dc9b" emissiveIntensity={0.42} />
+        </mesh>
+        <mesh castShadow position={[0, 1.52, 0.12]}>
+          <boxGeometry args={[0.86, 0.08, 0.16]} />
+          <meshStandardMaterial color="#78bdd0" emissive="#2e91a8" emissiveIntensity={0.18} roughness={0.38} />
         </mesh>
         <pointLight ref={headLightRef} position={[0, 0.55, 2.35]} color="#ffe6a8" distance={13} intensity={0.8} />
         <mesh position={[0, 0.3, -2.18]}>
