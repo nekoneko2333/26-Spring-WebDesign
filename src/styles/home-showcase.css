@@ -3558,6 +3558,26 @@
   stroke-linecap: round;
 }
 
+.paper-route-map__city path {
+  fill: none;
+  stroke: rgba(45, 93, 161, 0.36);
+  stroke-width: 1.1;
+  stroke-dasharray: 2.4 1.2;
+  stroke-linecap: round;
+}
+
+.paper-route-map__city path:nth-child(-n + 3) {
+  stroke: rgba(45, 93, 161, 0.62);
+  stroke-width: 1.8;
+  stroke-dasharray: none;
+}
+
+.paper-route-map__city rect {
+  fill: rgba(255, 255, 255, 0.58);
+  stroke: rgba(45, 45, 45, 0.28);
+  stroke-width: 0.55;
+}
+
 .paper-route-map__path-casing {
   fill: none;
   stroke: #2d2d2d;
@@ -3590,6 +3610,7 @@
   position: absolute;
   left: var(--x);
   top: var(--y);
+  z-index: 2;
   max-width: 150px;
   padding: 5px 8px;
   border: 2px solid #2d2d2d;
@@ -3599,6 +3620,35 @@
   box-shadow: 2px 2px 0 #2d2d2d;
   font: 400 15px/1.1 "Patrick Hand", "Noto Sans SC", cursive;
   transform: translate(8px, -28px) rotate(-1deg);
+}
+
+.paper-route-map.is-city-route > span {
+  max-width: 118px;
+  padding: 4px 6px;
+  font-size: 12px;
+  line-height: 1.05;
+}
+
+.paper-route-map > span.is-compact {
+  min-width: 18px;
+  max-width: 24px;
+  padding: 3px 5px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.paper-route-map__city-label {
+  position: absolute;
+  z-index: 1;
+  left: 18px;
+  top: 16px;
+  padding: 6px 10px;
+  border: 2px solid rgba(45, 45, 45, 0.72);
+  border-radius: 18px;
+  background: rgba(255, 249, 196, 0.82);
+  color: #2d2d2d;
+  font: 700 18px/1.1 "Kalam", "Noto Serif SC", cursive;
+  box-shadow: 2px 2px 0 rgba(45, 45, 45, 0.56);
 }
 
 .cinematic-day-grid {

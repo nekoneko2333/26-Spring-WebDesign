@@ -8,6 +8,9 @@
     "dev:backend": "conda run -n web3d-backend python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000",
     "dev:backend:postgres": "powershell -ExecutionPolicy Bypass -File tools/start-backend.ps1",
     "fetch:live-data": "node tools/fetch-live-landmark-data.mjs",
+    "enrich:live-data": "node tools/enrich-live-landmark-metadata.mjs",
+    "clean:live-data": "node tools/convert-json-to-simplified.mjs",
+    "validate:live-data": "node tools/validate-landmark-data.mjs",
     "import:live-data:postgres": "powershell -ExecutionPolicy Bypass -File tools/import-live-data.ps1",
     "build": "vite build",
     "preview": "vite preview"

@@ -79,6 +79,29 @@ const routePresets = [
 const STORY_PARTICLE_COUNT = 7600;
 const STORY_MODEL_SAMPLE_COUNT = 8200;
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
+
+function safeNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function formatHours(value, digits = 1) {
+  return safeNumber(value).toFixed(digits);
+}
+
+function formatKm(value) {
+  return Math.round(safeNumber(value));
+}
+
+function textValue(value, language = 'en') {
+  if (value == null) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
+  if (Array.isArray(value)) return value.map((item) => textValue(item, language)).filter(Boolean).join(' / ');
+  if (typeof value === 'object') {
+    return textValue(value[language] ?? value.en ?? value.zh ?? value.label ?? value.name ?? '', language);
+  }
+  return '';
+}
 const AUTH_TOKEN_KEY = 'web3d_auth_token';
 const HOME_ENTERED_KEY = 'trip3d_home_entered';
 const ONBOARDING_SEEN_KEY = 'trip3d_onboarding_seen';
@@ -387,6 +410,98 @@ function regionFor(landmark) {
   return 'Islands';
 }
 
+function locationValue(landmark, field, language) {
+  const liveValue = cleanWikipediaExtract(textValue(liveFor(landmark.id)?.location?.[field], language));
+  if (liveValue) return liveValue;
+  return cleanWikipediaExtract(textValue(landmark.location?.[field], language));
+}
+
+function locationLabel(landmark, language) {
+  return [
+    locationValue(landmark, 'city', language),
+    locationValue(landmark, 'province', language),
+    locationValue(landmark, 'region', language),
+  ].filter((value, index, values) => value && values.indexOf(value) === index).join(' / ');
+}
+
+function normalizeSearchText(value) {
+  return textValue(value)
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .replace(/[’'`]/g, '')
+    .replace(/[(),，。·/\\_-]/g, ' ')
+    .replace(/(?:城内|市内|附近|周边|里面|当地|景点|地点|地方|旅游|旅行|attractions?|sights?|places?|near|in city)/giu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function editDistance(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= a.length; row += 1) {
+    let diagonal = previous[0];
+    previous[0] = row;
+    for (let column = 1; column <= b.length; column += 1) {
+      const above = previous[column];
+      previous[column] = Math.min(
+        previous[column] + 1,
+        previous[column - 1] + 1,
+        diagonal + (a[row - 1] === b[column - 1] ? 0 : 1),
+      );
+      diagonal = above;
+    }
+  }
+  return previous[b.length];
+}
+
+function fuzzyFieldScore(query, value, weight) {
+  const normalized = normalizeSearchText(value);
+  if (!normalized) return 0;
+  if (normalized === query) return weight;
+  if (normalized.startsWith(query)) return weight * 0.9;
+  if (normalized.includes(query) || query.includes(normalized)) return weight * 0.78;
+  if (query.length < 3) return 0;
+  const words = normalized.split(' ');
+  const distance = Math.min(...words.map((word) => editDistance(query, word)));
+  const maxLength = Math.max(query.length, ...words.map((word) => word.length));
+  const similarity = 1 - distance / Math.max(1, maxLength);
+  return similarity >= 0.68 ? weight * similarity * 0.65 : 0;
+}
+
+function landmarkSearchScore(landmark, rawQuery, language) {
+  const query = normalizeSearchText(rawQuery);
+  if (!query) return 1;
+  const live = liveFor(landmark.id);
+  const aliases = [
+    ...(live?.search?.aliases?.[language] ?? []),
+    ...(live?.search?.aliases?.en ?? []),
+    ...(landmark.searchMeta?.aliases?.[language] ?? []),
+    ...(landmark.searchMeta?.aliases?.en ?? []),
+  ].map((value) => textValue(value, language)).filter(Boolean);
+  const tags = [
+    ...(live?.search?.tags?.[language] ?? []),
+    ...(live?.search?.tags?.en ?? []),
+    ...(landmark.searchMeta?.tags?.[language] ?? []),
+    ...(landmark.searchMeta?.tags?.en ?? []),
+  ].map((value) => textValue(value, language)).filter(Boolean);
+  const fields = [
+    [nameFor(landmark, language), 120],
+    [landmark.name, 105],
+    ...aliases.map((value) => [value, 100]),
+    [locationValue(landmark, 'city', language), 115],
+    [locationValue(landmark, 'administrativeArea', language), 90],
+    [locationValue(landmark, 'province', language), 82],
+    [locationValue(landmark, 'region', language), 76],
+    [locationValue(landmark, 'country', language), 35],
+    [kindText(landmark, language), 55],
+    [landmark.modelKind, 50],
+    ...tags.map((value) => [value, 45]),
+  ];
+  return fields.reduce((best, [value, weight]) => Math.max(best, fuzzyFieldScore(query, value, weight)), 0);
+}
+
 function seasonFor(landmark) {
   const map = {
     coast: 'Spring',
@@ -404,8 +519,46 @@ function regionText(landmark, language) {
   return regionLabels[language]?.[region] ?? region;
 }
 
+function locationFilterOptions(language) {
+  const byRegion = new Map();
+  landmarks.forEach((stop) => {
+    const region = locationValue(stop, 'region', language) || regionText(stop, language);
+    const city = locationValue(stop, 'city', language);
+    if (!region) return;
+    if (!byRegion.has(region)) byRegion.set(region, new Set());
+    if (city) byRegion.get(region).add(city);
+  });
+  return [...byRegion.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, language === 'zh' ? 'zh-CN' : 'en'))
+    .flatMap(([region, cities]) => [
+      { value: `region:${region}`, label: homeText(language, `全部 ${region}`, `All ${region}`), group: region },
+      ...[...cities]
+        .sort((a, b) => a.localeCompare(b, language === 'zh' ? 'zh-CN' : 'en'))
+        .map((city) => ({ value: `city:${city}`, label: city, group: region })),
+    ]);
+}
+
+function locationMatchesFilter(stop, value, language) {
+  if (value === 'any') return true;
+  const [scope, target] = value.split(':');
+  if (!target) return regionFor(stop) === value;
+  if (scope === 'city') return locationValue(stop, 'city', language) === target;
+  if (scope === 'region') {
+    return [locationValue(stop, 'region', language), locationValue(stop, 'province', language), regionText(stop, language)].includes(target);
+  }
+  return true;
+}
+
 function kindText(landmark, language) {
   return kindLabels[language]?.[landmark.modelKind] ?? landmark.modelKind;
+}
+
+function filterOptionLabel(value, language) {
+  if (typeof value === 'object') return value.label;
+  return kindLabels[language]?.[value]
+    ?? seasonLabels[language]?.[value]
+    ?? regionLabels[language]?.[value]
+    ?? value;
 }
 
 function seasonText(landmark, language) {
@@ -427,7 +580,20 @@ function segmentDistanceKm(a, b) {
   const fromIndex = routeMatrixIndex.get(a.id);
   const toIndex = routeMatrixIndex.get(b.id);
   const distance = liveLandmarksData.routeMatrix?.distancesKm?.[fromIndex]?.[toIndex];
-  return Number.isFinite(distance) ? distance : Number.POSITIVE_INFINITY;
+  if (Number.isFinite(distance)) return distance;
+  const earthRadiusKm = 6371;
+  const lat1 = a.lat * Math.PI / 180;
+  const lat2 = b.lat * Math.PI / 180;
+  const deltaLat = (b.lat - a.lat) * Math.PI / 180;
+  const deltaLon = (b.lon - a.lon) * Math.PI / 180;
+  const haversine = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine)) * 1.22;
+}
+
+function segmentDurationHours(distance, source = 'estimated') {
+  if (!Number.isFinite(distance) || distance <= 0) return 0;
+  return distance / (source === 'osrm' ? 62 : 58);
 }
 
 function routeDistanceForOrderedIds(routeIds) {
@@ -523,10 +689,81 @@ function sortRouteIdsByLatitude(routeIds, lockedIds, direction) {
   return routeIds.map((id) => (locked.has(id) ? id : unlockedIds[unlockedIndex++]));
 }
 
+function sortRouteIdsByCorridor(routeIds, lockedIds, direction = 1) {
+  const locked = new Set(lockedIds);
+  const stops = routeIds
+    .filter((id) => !locked.has(id))
+    .map((id) => landmarks.find((stop) => stop.id === id))
+    .filter(Boolean)
+    .sort((a, b) => {
+      const aScore = a.lat * 1.8 + a.lon * 0.35;
+      const bScore = b.lat * 1.8 + b.lon * 0.35;
+      return direction * (bScore - aScore);
+    })
+    .map((stop) => stop.id);
+  let index = 0;
+  return routeIds.map((id) => (locked.has(id) ? id : stops[index++]));
+}
+
+function sortRouteIdsByPrincipalAxis(routeIds, lockedIds, direction = 1) {
+  const locked = new Set(lockedIds);
+  const stops = routeIds
+    .filter((id) => !locked.has(id))
+    .map((id) => landmarks.find((stop) => stop.id === id))
+    .filter(Boolean);
+  if (stops.length < 3) return sortRouteIdsByCorridor(routeIds, lockedIds, direction);
+  const avgLon = stops.reduce((sum, stop) => sum + stop.lon, 0) / stops.length;
+  const avgLat = stops.reduce((sum, stop) => sum + stop.lat, 0) / stops.length;
+  const lonScale = Math.cos(avgLat * Math.PI / 180);
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  stops.forEach((stop) => {
+    const x = (stop.lon - avgLon) * lonScale;
+    const y = stop.lat - avgLat;
+    sxx += x * x;
+    syy += y * y;
+    sxy += x * y;
+  });
+  const angle = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+  const ordered = stops
+    .sort((a, b) => {
+      const ax = (a.lon - avgLon) * lonScale;
+      const ay = a.lat - avgLat;
+      const bx = (b.lon - avgLon) * lonScale;
+      const by = b.lat - avgLat;
+      return direction * ((bx * Math.cos(angle) + by * Math.sin(angle)) - (ax * Math.cos(angle) + ay * Math.sin(angle)));
+    })
+    .map((stop) => stop.id);
+  let index = 0;
+  return routeIds.map((id) => (locked.has(id) ? id : ordered[index++]));
+}
+
+function smoothUnlockedRouteIds(routeIds, lockedIds) {
+  const locked = new Set(lockedIds);
+  const output = [...routeIds];
+  let start = 0;
+  while (start < output.length) {
+    while (start < output.length && locked.has(output[start])) start += 1;
+    let end = start;
+    while (end < output.length && !locked.has(output[end])) end += 1;
+    const chunk = output.slice(start, end);
+    if (chunk.length > 3) output.splice(start, chunk.length, ...improveRouteWithTwoOpt(chunk));
+    start = end + 1;
+  }
+  return output;
+}
+
 function buildRouteRecommendations(routeIds, lockedIds, language) {
   if (routeIds.length < 2) return [];
   const currentDistance = routeDistanceForIds(routeIds);
   const candidates = [
+    {
+      id: 'current',
+      title: homeText(language, '当前顺序', 'Current order'),
+      detail: homeText(language, '保留你现在手动排列的路线，用真实道路结果一起比较。', 'Keep your current manual order and compare it with routed results.'),
+      ids: routeIds,
+    },
     {
       id: 'shortest',
       title: homeText(language, '少绕路', 'Less driving'),
@@ -544,6 +781,18 @@ function buildRouteRecommendations(routeIds, lockedIds, language) {
       title: homeText(language, '从南向北', 'South to north'),
       detail: homeText(language, '适合从南部出发，逐步向北移动。', 'Useful when starting in the south and moving north.'),
       ids: sortRouteIdsByLatitude(routeIds, lockedIds, -1),
+    },
+    {
+      id: 'clustered',
+      title: homeText(language, '片区连续', 'Regional flow'),
+      detail: homeText(language, '按地理走廊排列相邻片区，再用局部交换减少回头路。', 'Group nearby regions along a geographic corridor, then smooth the order with local swaps.'),
+      ids: smoothUnlockedRouteIds(sortRouteIdsByCorridor(routeIds, lockedIds, 1), lockedIds),
+    },
+    {
+      id: 'city-axis',
+      title: homeText(language, '城市内顺序', 'City sweep'),
+      detail: homeText(language, '适合威尼斯这类密集城市景点，沿城市主轴依次经过，减少来回穿插。', 'Useful for dense city routes such as Venice, sweeping along the city axis to reduce backtracking.'),
+      ids: smoothUnlockedRouteIds(sortRouteIdsByPrincipalAxis(routeIds, lockedIds, 1), lockedIds),
     },
   ];
   const seen = new Set();
@@ -564,6 +813,43 @@ function buildRouteRecommendations(routeIds, lockedIds, language) {
     });
 }
 
+function routeSignatureFor(routeIds) {
+  return routeIds.filter(Boolean).join('|');
+}
+
+function routeProviderLabel(mode, language) {
+  if (mode === 'google-routes') return 'Google Routes';
+  if (mode === 'osrm') return 'OSRM';
+  return homeText(language, '坐标估算', 'Estimated');
+}
+
+function travelModeLabel(mode, language) {
+  if (mode === 'WALK') return homeText(language, '步行', 'Walking');
+  return homeText(language, '驾车', 'Driving');
+}
+
+function routeRecommendationMetrics(recommendation, metricsMap) {
+  const signature = routeSignatureFor(recommendation.ids);
+  const metrics = metricsMap[signature];
+  if (metrics?.routeSignature === signature && Number.isFinite(metrics.distanceKm)) {
+    return {
+      distance: metrics.distanceKm,
+      duration: safeNumber(metrics.durationHours),
+      provider: metrics.mode ?? metrics.provider ?? 'backend',
+      travelMode: metrics.travelMode ?? 'DRIVE',
+      isEstimated: false,
+    };
+  }
+  const distance = routeDistanceForIds(recommendation.ids);
+  return {
+    distance,
+    duration: segmentDurationHours(distance),
+    provider: 'estimated',
+    travelMode: 'DRIVE',
+    isEstimated: true,
+  };
+}
+
 function routeSegmentsFor(routeStops) {
   return routeStops.slice(1).map((stop, index) => {
     const from = routeStops[index];
@@ -571,7 +857,16 @@ function routeSegmentsFor(routeStops) {
     const toIndex = routeMatrixIndex.get(stop.id);
     const distance = liveLandmarksData.routeMatrix?.distancesKm?.[fromIndex]?.[toIndex];
     const duration = liveLandmarksData.routeMatrix?.durationsHours?.[fromIndex]?.[toIndex];
-    if (!Number.isFinite(distance) || !Number.isFinite(duration)) return null;
+    if (!Number.isFinite(distance) || !Number.isFinite(duration)) {
+      const estimatedDistance = segmentDistanceKm(from, stop);
+      return {
+        from,
+        to: stop,
+        distance: estimatedDistance,
+        duration: segmentDurationHours(estimatedDistance),
+        source: 'estimated',
+      };
+    }
     return {
       from,
       to: stop,
@@ -1501,9 +1796,9 @@ function SearchFilters({ language, query, setQuery, region, setRegion, kind, set
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={c.searchPlaceholder} />
       </label>
       <div className="home-filter-row home-filter-row--wide">
-        <SelectField label={c.region} value={region} onChange={setRegion} options={options.regions} anyLabel={c.any} />
-        <SelectField label={c.type} value={kind} onChange={setKind} options={options.kinds} anyLabel={c.any} />
-        <SelectField label={c.season} value={season} onChange={setSeason} options={options.seasons} anyLabel={c.any} />
+        <SelectField label={c.region} value={region} onChange={setRegion} options={options.regions} anyLabel={c.any} language={language} />
+        <SelectField label={c.type} value={kind} onChange={setKind} options={options.kinds} anyLabel={c.any} language={language} />
+        <SelectField label={c.season} value={season} onChange={setSeason} options={options.seasons} anyLabel={c.any} language={language} />
         <label>
           <span>{c.sort}</span>
           <select value={sort} onChange={(event) => setSort(event.target.value)}>
@@ -1518,13 +1813,23 @@ function SearchFilters({ language, query, setQuery, region, setRegion, kind, set
   );
 }
 
-function SelectField({ label, value, onChange, options, anyLabel }) {
+function SelectField({ label, value, onChange, options, anyLabel, language }) {
+  const grouped = options.some((option) => typeof option === 'object' && option.group);
+  const optionNode = (option) => {
+    const optionValue = typeof option === 'object' ? option.value : option;
+    return <option key={optionValue} value={optionValue}>{filterOptionLabel(option, language)}</option>;
+  };
+  const groupedOptions = grouped
+    ? [...new Map(options.map((option) => [option.group, options.filter((item) => item.group === option.group)])).entries()]
+    : [];
   return (
     <label>
       <span>{label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="any">{anyLabel}</option>
-        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+        {grouped
+          ? groupedOptions.map(([group, groupOptions]) => <optgroup key={group} label={group}>{groupOptions.map(optionNode)}</optgroup>)
+          : options.map(optionNode)}
       </select>
     </label>
   );
@@ -1579,7 +1884,7 @@ function DestinationCards({ language, stops, favorites, compare, selectedId, vis
           <article key={stop.id} className={`home-destination-card ${selectedId === stop.id ? 'is-selected' : ''}`}>
             {imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}
             <div>
-              <span>{regionFor(stop)} / {stop.modelKind}</span>
+              <span>{locationLabel(stop, language) || regionText(stop, language)} / {kindText(stop, language)}</span>
               <strong>{nameFor(stop, language)}</strong>
               <p>{summaryFor(stop, language)}</p>
             </div>
@@ -1648,7 +1953,7 @@ function RouteEditor({ language, routeStops, routeQuery, setRouteQuery, routeMat
         <div className="concept-suggestion-list">
           {routeMatches.slice(0, 5).map((stop) => (
             <button key={stop.id} type="button" onClick={() => onAdd(stop.id)}>
-              <strong>{nameFor(stop, language)}</strong><span>{regionFor(stop)} / {stop.modelKind}</span>
+              <strong>{nameFor(stop, language)}</strong><span>{locationLabel(stop, language) || regionText(stop, language)} / {kindText(stop, language)}</span>
             </button>
           ))}
         </div>
@@ -2008,25 +2313,19 @@ function clampDays(value) {
 function visitFor(landmark, language) {
   const live = liveFor(landmark.id);
   const sourceVisit = live?.visit ?? {};
-  const firstTimerKinds = new Set(['arena', 'cathedral', 'dome', 'tower', 'bridge', 'fountain']);
   const visitHours = sourceVisit.durationHours ?? (
     landmark.modelKind === 'museum' ? 3
       : landmark.modelKind === 'coast' || landmark.modelKind === 'lake' || landmark.modelKind === 'mountain' ? 4
         : landmark.modelKind === 'ruins' || landmark.modelKind === 'temple' ? 2.5
           : 2
   );
-  const audiences = sourceVisit.audiences?.[language] ?? sourceVisit.audiences?.en ?? (
-    language === 'zh'
-      ? ['历史文化', '建筑摄影', firstTimerKinds.has(landmark.modelKind) ? '第一次来意大利' : '慢慢逛']
-      : ['history', 'architecture photos', firstTimerKinds.has(landmark.modelKind) ? 'first Italy trip' : 'slow travel']
-  );
   return {
     durationHours: visitHours,
-    bestTime: sourceVisit.bestTime?.[language] ?? sourceVisit.bestTime?.en ?? seasonText(landmark, language),
-    bookingNote: sourceVisit.bookingNote?.[language] ?? sourceVisit.bookingNote?.en ?? homeText(language, '开放时间和预约规则出发前再确认。', 'Check opening hours and reservation rules before you go.'),
-    fit: sourceVisit.fit?.[language] ?? sourceVisit.fit?.en ?? audiences.join(' / '),
-    firstTimer: sourceVisit.firstTimer ?? firstTimerKinds.has(landmark.modelKind),
-    sourceNote: sourceVisit.sourceNote?.[language] ?? sourceVisit.sourceNote?.en ?? homeText(language, '资料来自公开来源，适合做行前草稿。', 'Built from public sources for a planning draft.'),
+    bestTime: sourceVisit.bestTime?.[language] ?? sourceVisit.bestTime?.en ?? '',
+    bookingNote: sourceVisit.bookingNote?.[language] ?? sourceVisit.bookingNote?.en ?? '',
+    fit: sourceVisit.fit?.[language] ?? sourceVisit.fit?.en ?? '',
+    firstTimer: sourceVisit.firstTimer === true,
+    sourceNote: sourceVisit.sourceNote?.[language] ?? sourceVisit.sourceNote?.en ?? '',
   };
 }
 
@@ -2041,44 +2340,25 @@ function sourceLabelsFor(landmark, language) {
 }
 
 function travelPreferenceTags(landmark, language) {
-  const visit = visitFor(landmark, language);
   const tags = new Set();
-  const kindMapZh = {
-    arena: '历史文化',
-    bridge: '建筑摄影',
-    castle: '历史文化',
-    cathedral: '建筑摄影',
-    coast: '轻松散步',
-    dome: '建筑摄影',
-    fountain: '第一次来意大利',
-    lake: '亲子轻松',
-    mountain: '户外风景',
-    palace: '历史文化',
-    ruins: '历史文化',
-    temple: '历史文化',
-    tower: '建筑摄影',
-    village: '慢慢逛',
-  };
-  const kindMapEn = {
-    arena: 'history',
-    bridge: 'architecture photos',
-    castle: 'history',
-    cathedral: 'architecture photos',
-    coast: 'easy walk',
-    dome: 'architecture photos',
-    fountain: 'first Italy trip',
-    lake: 'family friendly',
-    mountain: 'landscape',
-    palace: 'history',
-    ruins: 'history',
-    temple: 'history',
-    tower: 'architecture photos',
-    village: 'slow travel',
-  };
-  tags.add((language === 'zh' ? kindMapZh : kindMapEn)[landmark.modelKind] ?? (language === 'zh' ? '顺路停靠' : 'route stop'));
-  if (visit.firstTimer) tags.add(homeText(language, '第一次来意大利', 'first Italy trip'));
-  if (!landmark.modelPath) tags.add(homeText(language, '预算友好', 'budget friendly'));
-  tags.add(homeText(language, '自驾顺路', 'good by car'));
+  const live = liveFor(landmark.id);
+  const blocked = new Set([
+    kindText(landmark, language),
+    landmark.modelKind,
+    locationValue(landmark, 'city', language),
+    locationValue(landmark, 'province', language),
+    locationValue(landmark, 'region', language),
+    locationValue(landmark, 'country', language),
+    'Italy',
+    '意大利',
+  ].map((tag) => normalizeSearchText(tag)).filter(Boolean));
+  [
+    seasonText(landmark, language),
+    ...(live?.search?.tags?.[language] ?? []),
+    ...(landmark.searchMeta?.tags?.[language] ?? []),
+  ].map((tag) => textValue(tag, language)).filter(Boolean).forEach((tag) => {
+    if (!blocked.has(normalizeSearchText(tag))) tags.add(tag);
+  });
   return [...tags].slice(0, 3);
 }
 
@@ -2088,7 +2368,7 @@ function nearbyStopsFor(stop, routeStops, language) {
     .map((item) => ({ item, distance: segmentDistanceKm(stop, item), inRoute: routeStops.some((routeStop) => routeStop.id === item.id) }))
     .sort((a, b) => Number(b.inRoute) - Number(a.inRoute) || a.distance - b.distance)
     .slice(0, 3)
-    .map(({ item, distance }) => `${nameFor(item, language)} (${Math.round(distance)} km)`);
+    .map(({ item }) => nameFor(item, language));
 }
 
 function paceText(pace, language) {
@@ -2254,7 +2534,7 @@ function itineraryExportText(language, routeStops, days, pace) {
     homeText(language, 'Trip3D 意大利旅行手册', 'Trip3D Italy travel notebook'),
     `${homeText(language, '旅行节奏', 'Pace')}: ${pace} (${plan.dailyLimit}h/day)`,
     `${homeText(language, '建议至少预留', 'Suggested minimum')}: ${plan.minimumDays} ${homeText(language, '天', 'days')}`,
-    `${homeText(language, '全程', 'Whole trip')}: ${plan.totalKm}km / ${plan.travelHours.toFixed(1)}h ${homeText(language, '在路上', 'on the road')} / ${plan.visitHours.toFixed(1)}h ${homeText(language, '慢慢看', 'exploring')}`,
+    `${homeText(language, '全程', 'Whole trip')}: ${formatKm(plan.totalKm)}km / ${formatHours(plan.travelHours)}h ${homeText(language, '在路上', 'on the road')} / ${formatHours(plan.visitHours)}h ${homeText(language, '慢慢看', 'exploring')}`,
     `${homeText(language, '路线', 'Route')}: ${routeStops.map((stop) => nameFor(stop, language)).join(' -> ') || homeText(language, '还没有添加景点', 'No stops yet')}`,
     '',
   ];
@@ -2263,7 +2543,7 @@ function itineraryExportText(language, routeStops, days, pace) {
     lines.push('');
   }
   plan.days.forEach((day) => {
-    lines.push(`${homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} · ${day.totalHours.toFixed(1)}h · ${day.totalKm}km`);
+    lines.push(`${homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} · ${formatHours(day.totalHours)}h · ${formatKm(day.totalKm)}km`);
     if (!day.stops.length) {
       lines.push(homeText(language, '  留作机动日，睡个懒觉也很好。', '  Keep this as a flexible day.'));
     }
@@ -2332,9 +2612,13 @@ function HomeStats({ language }) {
     ? homeText(language, '本次构建', 'This build')
     : generatedDate.toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-GB');
   const sourceCount = Object.keys(liveLandmarksData.sources ?? {}).length;
+  const routingStat = routeMatrixIds.length > 1 ? String(routeMatrixIds.length ** 2) : (language === 'zh' ? '实时' : 'Live');
+  const routingLabel = routeMatrixIds.length > 1
+    ? homeText(language, '道路组合', 'Road combinations')
+    : homeText(language, 'Google/OSRM 路线', 'Google/OSRM routes');
   const stats = language === 'zh'
-    ? [[String(liveIndex.size), '真实景点资料'], [String(sourceCount), '公开数据源'], [String(routeMatrixIds.length ** 2), '道路组合'], [dateLabel, '数据更新时间']]
-    : [[String(liveIndex.size), 'Sourced landmarks'], [String(sourceCount), 'Public data sources'], [String(routeMatrixIds.length ** 2), 'Road combinations'], [dateLabel, 'Data updated']];
+    ? [[String(liveIndex.size), '真实景点资料'], [String(sourceCount), '公开数据源'], [routingStat, routingLabel], [dateLabel, '数据更新时间']]
+    : [[String(liveIndex.size), 'Sourced landmarks'], [String(sourceCount), 'Public data sources'], [routingStat, routingLabel], [dateLabel, 'Data updated']];
   return <section className="cinematic-stats" aria-label={language === 'zh' ? '\u6570\u636e\u6982\u89c8' : 'Overview stats'}>{stats.map(([value, label]) => <article key={label}><strong>{value}</strong><span>{label}</span></article>)}</section>;
 }
 
@@ -2397,6 +2681,12 @@ function routeMapPath(coordinates, close = false, projectPoint = projectRouteMap
   return close && path ? `${path} Z` : path;
 }
 
+function routeMapCityInfo(routeStops) {
+  const cities = [...new Set(routeStops.map((stop) => locationValue(stop, 'city', 'zh') || locationValue(stop, 'city', 'en')).filter(Boolean))];
+  if (routeStops.length >= 3 && cities.length === 1) return { isCity: true, city: cities[0] };
+  return { isCity: false, city: null };
+}
+
 function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoading = false }) {
   const routeSignature = routeStops.map((stop) => stop.id).join('|');
   const previousRouteSignature = useRef(routeSignature);
@@ -2432,16 +2722,31 @@ function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoadi
   });
   const routeStep = Math.max(1, Math.floor(displayGeometry.length / 1200));
   const simplifiedRoute = displayGeometry.filter((_, index) => index % routeStep === 0);
+  const cityInfo = routeMapCityInfo(routeStops);
+  const labelEvery = points.length > 14 ? 2 : 1;
 
   return (
     <div
-      className={`paper-route-map ${showRouteLoading ? 'is-loading' : ''}`}
+      className={`paper-route-map ${showRouteLoading ? 'is-loading' : ''} ${cityInfo.isCity ? 'is-city-route' : ''}`}
       aria-busy={showRouteLoading}
       aria-label={language === 'zh' ? '手绘道路路线地图' : 'Hand-drawn road route map'}
     >
       <svg viewBox="0 0 100 100" role="img" aria-hidden="true">
-        {ITALY_COASTLINES.map((coastline, index) => <path key={index} className="paper-route-map__land" d={routeMapPath(coastline, true, projectPoint)} />)}
-        {ROUTE_NETWORK.map((line, index) => <path key={index} className="paper-route-map__network" d={routeMapPath(line, false, projectPoint)} />)}
+        {cityInfo.isCity ? (
+          <g className="paper-route-map__city">
+            <path d="M8 24 C26 12, 38 28, 55 18 S82 18, 94 9" />
+            <path d="M6 62 C22 48, 36 63, 52 50 S78 46, 94 35" />
+            <path d="M16 92 C31 75, 47 83, 63 66 S82 60, 96 50" />
+            <path d="M20 10 L27 94 M45 6 L38 96 M66 8 L72 95 M88 15 L82 88" />
+            {[18, 34, 50, 66, 82].map((x) => <rect key={`a-${x}`} x={x - 5} y="30" width="10" height="8" rx="1.5" />)}
+            {[24, 42, 60, 78].map((x) => <rect key={`b-${x}`} x={x - 4} y="70" width="8" height="7" rx="1.2" />)}
+          </g>
+        ) : (
+          <>
+            {ITALY_COASTLINES.map((coastline, index) => <path key={index} className="paper-route-map__land" d={routeMapPath(coastline, true, projectPoint)} />)}
+            {ROUTE_NETWORK.map((line, index) => <path key={index} className="paper-route-map__network" d={routeMapPath(line, false, projectPoint)} />)}
+          </>
+        )}
         {simplifiedRoute.length >= 2 && <path className="paper-route-map__path-casing" d={routeMapPath(simplifiedRoute, false, projectPoint)} />}
         {simplifiedRoute.length >= 2 && <path className="paper-route-map__path" d={routeMapPath(simplifiedRoute, false, projectPoint)} />}
         {points.map((point, index) => (
@@ -2451,7 +2756,17 @@ function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoadi
           </g>
         ))}
       </svg>
-      {points.map((point) => <span key={point.stop.id} style={{ '--x': point.x + '%', '--y': point.y + '%' }}>{nameFor(point.stop, language)}</span>)}
+      {cityInfo.isCity && <b className="paper-route-map__city-label">{cityInfo.city}</b>}
+      {points.map((point, index) => (
+        <span
+          key={point.stop.id}
+          className={index % labelEvery === 0 ? '' : 'is-compact'}
+          style={{ '--x': point.x + '%', '--y': point.y + '%' }}
+          title={nameFor(point.stop, language)}
+        >
+          {index % labelEvery === 0 ? nameFor(point.stop, language) : index + 1}
+        </span>
+      ))}
       {showRouteLoading && (
         <div className="paper-route-map__loading" role="status">
           <i aria-hidden="true" />
@@ -2505,9 +2820,9 @@ function DestinationSection(props) {
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={homeText(language, '搜景点、城市、地区，或者一句旅行想法', 'Search a stop, city, region, or travel idea')} />
         </label>
         <div className="home-filter-row home-filter-row--wide">
-          <SelectField label={homeText(language, '地区', 'Region')} value={region} onChange={setRegion} options={options.regions} anyLabel={homeText(language, '不限', 'Any')} />
-          <SelectField label={homeText(language, '类型', 'Type')} value={kind} onChange={setKind} options={options.kinds} anyLabel={homeText(language, '不限', 'Any')} />
-          <SelectField label={homeText(language, '时间', 'Best time')} value={season} onChange={setSeason} options={options.seasons} anyLabel={homeText(language, '不限', 'Any')} />
+          <SelectField label={homeText(language, '地区', 'Region')} value={region} onChange={setRegion} options={options.regions} anyLabel={homeText(language, '不限', 'Any')} language={language} />
+          <SelectField label={homeText(language, '类型', 'Type')} value={kind} onChange={setKind} options={options.kinds} anyLabel={homeText(language, '不限', 'Any')} language={language} />
+          <SelectField label={homeText(language, '时间', 'Best time')} value={season} onChange={setSeason} options={options.seasons} anyLabel={homeText(language, '不限', 'Any')} language={language} />
           <label>
             <span>{homeText(language, '排序', 'Sort')}</span>
             <select value={sort} onChange={(event) => setSort(event.target.value)}>
@@ -2535,7 +2850,7 @@ function DestinationSection(props) {
               {imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}
               <div className="cinematic-destination-card__body">
                 <strong>{nameFor(stop, language)}</strong>
-                <span>{regionText(stop, language)} / {kindText(stop, language)} / {visit.bestTime}</span>
+                <span>{[locationLabel(stop, language) || regionText(stop, language), kindText(stop, language), visit.bestTime].filter(Boolean).join(' / ')}</span>
                 <p>{summaryFor(stop, language) || homeText(language, '这处资料还不完整，适合作为行程里的待确认点。', 'These notes are still thin, so keep this as a check-before-you-go stop.')}</p>
                 <div className="destination-tags">{travelPreferenceTags(stop, language).map((tag) => <small key={tag}>{tag}</small>)}</div>
                 <em>{homeText(language, '来源', 'Sources')}: {sourceLabelsFor(stop, language)}</em>
@@ -2574,15 +2889,15 @@ function PrintableItinerary({ language, routeStops, plan, pace }) {
       {!plan.isFeasible && <p>{homeText(language, '这份安排会有些赶，建议再留一天。', 'This plan is rather full, so consider adding another day.')}</p>}
       {plan.days.map((day) => (
         <article key={day.day}>
-          <h2>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} · {day.totalKm} km · {day.totalHours.toFixed(1)} h</h2>
+          <h2>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} · {formatKm(day.totalKm)} km · {formatHours(day.totalHours)} h</h2>
           {day.stops.length ? day.stops.map((stop) => {
             const visit = visitFor(stop, language);
             return (
               <section key={stop.id}>
                 <h3>{nameFor(stop, language)}</h3>
                 <p>{summaryFor(stop, language)}</p>
-                <p>{homeText(language, '计划停留', 'Planned visit')}: {plannedVisitHours(stop, language, pace)}h · {homeText(language, '适合', 'Good for')}: {visit.fit}</p>
-                <p>{homeText(language, '提示', 'Note')}: {visit.bookingNote}</p>
+                <p>{homeText(language, '行程规划预留', 'Planning allowance')}: {plannedVisitHours(stop, language, pace)}h</p>
+                {visit.bookingNote && <p>{homeText(language, '来源提示', 'Sourced note')}: {visit.bookingNote}</p>}
                 <p>{homeText(language, '来源', 'Sources')}: {sourceLabelsFor(stop, language)}</p>
               </section>
             );
@@ -2599,10 +2914,13 @@ function RoutePlannerSection(props) {
   const { language, routeStops, routeSegments, routeGeometry, isRouteLoading, routeQuery, setRouteQuery, routeMatches, days, setDays, pace, setPace, lockedIds } = props;
   const plan = makeItineraryPlan(routeStops, days, pace, language);
   const exportText = itineraryExportText(language, routeStops, days, pace);
-  const routeRecommendations = useMemo(
-    () => buildRouteRecommendations(props.routeIds, lockedIds, language),
-    [language, lockedIds, props.routeIds],
-  );
+  const routeRecommendations = useMemo(() => [...(props.routeRecommendations ?? [])]
+    .map((recommendation) => ({
+      ...recommendation,
+      metrics: routeRecommendationMetrics(recommendation, props.recommendationMetrics ?? {}),
+    }))
+    .sort((a, b) => a.metrics.duration - b.metrics.duration || a.metrics.distance - b.metrics.distance)
+    .slice(0, 5), [props.recommendationMetrics, props.routeRecommendations]);
   const printPdf = () => window.print();
 
   return (
@@ -2621,7 +2939,7 @@ function RoutePlannerSection(props) {
               <span>{homeText(language, '添加景点', 'Add stop')}</span>
               <input value={routeQuery} onChange={(event) => setRouteQuery(event.target.value)} placeholder={homeText(language, '搜一个景点，放进当前路线', 'Search a stop and add it to this route')} />
             </label>
-            {routeQuery && <div className="concept-suggestion-list">{routeMatches.slice(0, 5).map((stop) => <button key={stop.id} type="button" onClick={() => props.onAddRoute(stop.id)}><strong>{nameFor(stop, language)}</strong><span>{regionFor(stop)} / {stop.modelKind}</span></button>)}</div>}
+            {routeQuery && <div className="concept-suggestion-list">{routeMatches.slice(0, 5).map((stop) => <button key={stop.id} type="button" onClick={() => props.onAddRoute(stop.id)}><strong>{nameFor(stop, language)}</strong><span>{locationLabel(stop, language) || regionText(stop, language)} / {kindText(stop, language)}</span></button>)}</div>}
             <div className="home-planner-list">
               {routeStops.map((stop, index) => (
                 <section key={stop.id}>
@@ -2658,9 +2976,10 @@ function RoutePlannerSection(props) {
                 <article key={recommendation.id}>
                   <div>
                     <strong>{recommendation.title}</strong>
-                    <span>{Math.round(recommendation.distance)} km</span>
+                    <span>{formatKm(recommendation.metrics.distance)} km / {formatHours(recommendation.metrics.duration)} h</span>
                   </div>
                   <p>{recommendation.detail}</p>
+                  <small>{routeProviderLabel(recommendation.metrics.provider, language)} · {travelModeLabel(recommendation.metrics.travelMode, language)}{recommendation.metrics.isEstimated ? ` · ${homeText(language, '选择后会尝试加载真实路线', 'will try live routing after selection')}` : ''}</small>
                   <small>{recommendation.ids.map((id) => nameFor(landmarks.find((stop) => stop.id === id), language)).join(' → ')}</small>
                   <button type="button" onClick={() => props.onSelectRecommendation(recommendation)}>
                     {homeText(language, '选择这条路线', 'Choose this route')}
@@ -2684,8 +3003,8 @@ function RoutePlannerSection(props) {
                 : homeText(language, '这份安排会有些赶', 'This plan is rather full')}</strong>
               <p>{homeText(
                 language,
-                `按现在的节奏，建议至少预留 ${plan.minimumDays} 天：约 ${plan.travelHours.toFixed(1)} 小时在路上，${plan.visitHours.toFixed(1)} 小时游览，另有 ${plan.bufferHours.toFixed(1)} 小时机动。`,
-                `At this pace, allow at least ${plan.minimumDays} days: about ${plan.travelHours.toFixed(1)} hours on the road, ${plan.visitHours.toFixed(1)} hours exploring, plus ${plan.bufferHours.toFixed(1)} buffer hours.`,
+                `按现在的节奏，建议至少预留 ${plan.minimumDays} 天：约 ${formatHours(plan.travelHours)} 小时在路上，${formatHours(plan.visitHours)} 小时游览，另有 ${formatHours(plan.bufferHours)} 小时机动。`,
+                `At this pace, allow at least ${plan.minimumDays} days: about ${formatHours(plan.travelHours)} hours on the road, ${formatHours(plan.visitHours)} hours exploring, plus ${formatHours(plan.bufferHours)} buffer hours.`,
               )}</p>
             </div>
           </section>
@@ -2709,16 +3028,16 @@ function RoutePlannerSection(props) {
           <section className="home-module home-module--schema">
             <div className="home-module__head"><span>{homeText(language, '站点连接', 'Stop connections')}</span><strong>{routeSegments.length}</strong></div>
             <div className="home-schema-list">
-              {routeSegments.map((segment, index) => <article key={segment.from.id + '-' + segment.to.id}><span>{String(index + 1).padStart(2, '0')}</span><strong>{nameFor(segment.from, language) + ' -> ' + nameFor(segment.to, language)}</strong><small>{Math.round(segment.distance)} km / {segment.duration.toFixed(1)} h</small></article>)}
+              {routeSegments.map((segment, index) => <article key={segment.from.id + '-' + segment.to.id}><span>{String(index + 1).padStart(2, '0')}</span><strong>{nameFor(segment.from, language) + ' -> ' + nameFor(segment.to, language)}</strong><small>{formatKm(segment.distance)} km / {formatHours(segment.duration)} h · {routeProviderLabel(segment.source, language)}</small></article>)}
             </div>
           </section>
           <section className="home-module home-module--metrics">
             <div className="home-module__head"><span>{homeText(language, '路线概览', 'Route overview')}</span><strong>{pace}</strong></div>
             <div className="home-metric-grid">
-              <section><strong>{plan.totalKm} km</strong><span>{homeText(language, '全程里程', 'Distance')}</span></section>
-              <section><strong>{plan.travelHours.toFixed(1)} h</strong><span>{homeText(language, '在路上', 'On the road')}</span></section>
-              <section><strong>{plan.visitHours.toFixed(1)} h</strong><span>{homeText(language, '慢慢看', 'Exploring')}</span></section>
-              <section><strong>{plan.bufferHours.toFixed(1)} h</strong><span>{homeText(language, '机动缓冲', 'Buffer time')}</span></section>
+              <section><strong>{formatKm(plan.totalKm)} km</strong><span>{homeText(language, '全程里程', 'Distance')}</span></section>
+              <section><strong>{formatHours(plan.travelHours)} h</strong><span>{homeText(language, '在路上', 'On the road')}</span></section>
+              <section><strong>{formatHours(plan.visitHours)} h</strong><span>{homeText(language, '慢慢看', 'Exploring')}</span></section>
+              <section><strong>{formatHours(plan.bufferHours)} h</strong><span>{homeText(language, '机动缓冲', 'Buffer time')}</span></section>
             </div>
           </section>
           <section className="home-module home-module--day-cards" id="home-day-plan">
@@ -2727,7 +3046,7 @@ function RoutePlannerSection(props) {
               {plan.days.map((day) => (
                 <article key={day.day} className={`cinematic-day-card ${day.overHours > 0 ? 'is-tight' : ''}`}>
                   <span>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)}</span>
-                  <strong>{day.totalHours.toFixed(1)} h / {day.totalKm} km</strong>
+                  <strong>{formatHours(day.totalHours)} h / {formatKm(day.totalKm)} km</strong>
                   <p>{day.stops.length ? day.stops.map((stop) => nameFor(stop, language)).join(' → ') : homeText(language, '留作机动日', 'A flexible day')}</p>
                   {day.stops.length > 0 && (
                     <ul>
@@ -2739,8 +3058,8 @@ function RoutePlannerSection(props) {
                     </ul>
                   )}
                   <small>{day.overHours > 0
-                    ? homeText(language, `会多出约 ${day.overHours.toFixed(1)} 小时，建议挪走一个景点。`, `About ${day.overHours.toFixed(1)} hours over the limit. Move one stop to another day.`)
-                    : homeText(language, `${day.travelHours.toFixed(1)} 小时车程，${day.visitHours.toFixed(1)} 小时游览，${day.bufferHours.toFixed(1)} 小时机动`, `${day.travelHours.toFixed(1)} hours driving, ${day.visitHours.toFixed(1)} hours exploring, ${day.bufferHours.toFixed(1)} hours buffer`)}</small>
+                    ? homeText(language, `会多出约 ${formatHours(day.overHours)} 小时，建议挪走一个景点。`, `About ${formatHours(day.overHours)} hours over the limit. Move one stop to another day.`)
+                    : homeText(language, `${formatHours(day.travelHours)} 小时车程，${formatHours(day.visitHours)} 小时游览，${formatHours(day.bufferHours)} 小时机动`, `${formatHours(day.travelHours)} hours driving, ${formatHours(day.visitHours)} hours exploring, ${formatHours(day.bufferHours)} hours buffer`)}</small>
                 </article>
               ))}
             </div>
@@ -2754,7 +3073,8 @@ function RoutePlannerSection(props) {
 }
 
 function ThreeDGuideSection({ language, selectedStop, routeStops, onOpenDrive }) {
-  return <section id="home-3d" className="cinematic-section cinematic-3d"><div className="cinematic-section__head"><span>{language === 'zh' ? '3D旅行导览' : '3D travel guide'}</span><h2>{language === 'zh' ? '沿真实道路进入意大利路线' : 'Enter the Italy route along real roads'}</h2><p>{language === 'zh' ? '路线规划完成后，直接进入沉浸式驾驶导览。' : 'Once the route is ready, enter the immersive driving guide directly.'}</p></div><div className="cinematic-3d__layout"><div className="cinematic-3d__copy"><strong>{nameFor(selectedStop, language)}</strong><p>{language === 'zh' ? '当前路线包含 ' + routeStops.length + ' 个停靠点，准备好后就沿着选好的路出发。' : 'Your route has ' + routeStops.length + ' stops. When you are ready, set off along the roads you picked.'}</p></div><div className="cinematic-entry-grid cinematic-entry-grid--single"><article><strong>3D Drive</strong><p>{language === 'zh' ? '沿当前道路路线进入沉浸式驾驶导览。' : 'Enter immersive driving guidance along the current road route.'}</p><button type="button" onClick={() => onOpenDrive(selectedStop.id)}>{language === 'zh' ? '进入' : 'Enter'}</button></article></div></div></section>;
+  const entryStop = routeStops[0] ?? null;
+  return <section id="home-3d" className="cinematic-section cinematic-3d"><div className="cinematic-section__head"><span>{language === 'zh' ? '3D旅行导览' : '3D travel guide'}</span><h2>{language === 'zh' ? '沿真实道路进入意大利路线' : 'Enter the Italy route along real roads'}</h2><p>{language === 'zh' ? '路线规划完成后，直接进入沉浸式驾驶导览。' : 'Once the route is ready, enter the immersive driving guide directly.'}</p></div><div className="cinematic-3d__layout"><div className="cinematic-3d__copy"><strong>{entryStop ? nameFor(entryStop, language) : homeText(language, '还没有选择路线', 'No route selected')}</strong><p>{language === 'zh' ? '当前路线包含 ' + routeStops.length + ' 个停靠点，准备好后就沿着选好的路出发。' : 'Your route has ' + routeStops.length + ' stops. When you are ready, set off along the roads you picked.'}</p></div><div className="cinematic-entry-grid cinematic-entry-grid--single"><article><strong>3D Drive</strong><p>{language === 'zh' ? '沿当前道路路线进入沉浸式导览。城市内部路线会优先按步行路径规划。' : 'Enter immersive guidance along the current route. City routes prefer walking paths.'}</p><button type="button" disabled={!entryStop} onClick={() => entryStop && onOpenDrive(entryStop.id)}>{language === 'zh' ? '进入' : 'Enter'}</button></article></div></div></section>;
 }
 
 function FeatureSection({ language, favorites, compare, routeStops, userSession, onOpenService }) {
@@ -2793,7 +3113,7 @@ function TravelServiceDrawer({ language, mode, favorites, compare, routeIds, onC
               return (
                 <article key={stop.id}>
                   {imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" />}
-                  <span>{regionText(stop, language)} / {kindText(stop, language)}</span>
+                  <span>{locationLabel(stop, language) || regionText(stop, language)} / {kindText(stop, language)}</span>
                   <h3>{nameFor(stop, language)}</h3>
                   <dl>
                     <div><dt>{homeText(language, '建议停留', 'Visit')}</dt><dd>{visit.durationHours} h</dd></div>
@@ -2867,6 +3187,15 @@ function DestinationDetailPage({ language, stop, routeStops, favorites, compare,
   const nearbyStops = nearbyStopsFor(stop, routeStops, language);
   const visit = visitFor(stop, language);
   const url = pageUrlFor(stop, language);
+  const visitorInfo = liveFor(stop.id)?.visitorInfo ?? stop.visitorInfo ?? {};
+  const sourcedFacts = [
+    [homeText(language, '开放时间', 'Opening hours'), visitorInfo.openingHours?.[language] ?? visitorInfo.openingHours?.en],
+    [homeText(language, '门票', 'Tickets'), visitorInfo.ticketPrice?.[language] ?? visitorInfo.ticketPrice?.en],
+    [homeText(language, '电话', 'Phone'), visitorInfo.phone],
+    [homeText(language, '邮箱', 'Email'), visitorInfo.email],
+    [homeText(language, '无障碍信息', 'Accessibility'), visitorInfo.wheelchairAccessibility],
+    [homeText(language, '年访客量', 'Annual visitors'), visitorInfo.annualVisitors],
+  ].filter(([, value]) => value !== null && value !== undefined && value !== '');
   return (
     <section className="destination-detail" role="dialog" aria-modal="true" aria-label={homeText(language, '\u76ee\u7684\u5730\u8be6\u60c5', 'Destination details')}>
       <div className="destination-detail__panel">
@@ -2874,7 +3203,7 @@ function DestinationDetailPage({ language, stop, routeStops, favorites, compare,
         <div className="destination-detail__hero">
           <div className="destination-detail__media">{imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" />}</div>
           <div className="destination-detail__copy">
-            <span>{regionText(stop, language)} / {kindText(stop, language)} / {seasonText(stop, language)}</span>
+            <span>{locationLabel(stop, language) || regionText(stop, language)} / {kindText(stop, language)} / {seasonText(stop, language)}</span>
             <h2>{nameFor(stop, language)}</h2>
             <p>{summaryFor(stop, language)}</p>
             <div className="destination-detail__actions">
@@ -2887,20 +3216,17 @@ function DestinationDetailPage({ language, stop, routeStops, favorites, compare,
         </div>
         <div className="destination-detail__gallery">{galleryStops.map((item) => <figure key={item.id}>{imageFor(item, language) && <img src={imageFor(item, language)} alt="" loading="lazy" />}<figcaption>{nameFor(item, language)}</figcaption></figure>)}</div>
         <div className="destination-detail__facts">
-          <article><span>{homeText(language, '\u6240\u5728\u533a\u57df', 'Region')}</span><strong>{regionText(stop, language)}</strong></article>
-          <article><span>{homeText(language, '\u9002\u5408\u65f6\u95f4', 'Best time')}</span><strong>{visit.bestTime}</strong></article>
-          <article><span>{homeText(language, '\u5efa\u8bae\u505c\u7559', 'Suggested visit')}</span><strong>{visit.durationHours} h</strong></article>
-          <article><span>{homeText(language, '\u9002\u5408\u4eba\u7fa4', 'Good for')}</span><strong>{visit.fit}</strong></article>
-          <article><span>{homeText(language, '\u9996\u6b21\u610f\u5927\u5229', 'First Italy trip')}</span><strong>{visit.firstTimer ? homeText(language, '\u5f88\u9002\u5408', 'Strong fit') : homeText(language, '\u53ef\u4f5c\u5907\u9009', 'Good backup')}</strong></article>
+          <article><span>{homeText(language, '\u6240\u5728\u533a\u57df', 'Region')}</span><strong>{locationLabel(stop, language) || regionText(stop, language)}</strong></article>
+          <article><span>{homeText(language, '行程规划预留', 'Planning allowance')}</span><strong>{visit.durationHours} h</strong></article>
+          {sourcedFacts.map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}
           <article><span>{homeText(language, '\u5750\u6807', 'Coordinates')}</span><strong>{stop.lat.toFixed(2)}, {stop.lon.toFixed(2)}</strong></article>
         </div>
         <div className="destination-detail__reviews">
           <div className="cinematic-section__head"><span>{homeText(language, '\u884c\u524d\u4fbf\u7b7e', 'Planning note')}</span><h2>{homeText(language, '\u51fa\u53d1\u524d\u5148\u770b\u8fd9\u51e0\u9879', 'Check these before you go')}</h2></div>
           <div className="destination-detail__planning">
-            <article><span>{homeText(language, '\u9884\u7ea6\u63d0\u9192', 'Reservation note')}</span><p>{visit.bookingNote}</p></article>
+            {visitorInfo.officialWebsite && <article><span>{homeText(language, '官方网站', 'Official website')}</span><p><a href={visitorInfo.officialWebsite} target="_blank" rel="noreferrer">{visitorInfo.officialWebsite}</a></p></article>}
             <article><span>{homeText(language, '\u9644\u8fd1\u987a\u8def', 'Nearby on route')}</span><p>{nearbyStops.join(' / ')}</p></article>
             <article><span>{homeText(language, '\u8d44\u6599\u6765\u6e90', 'Sources')}</span><p>{sourceLabelsFor(stop, language)}{url ? ` / ${url}` : ''}</p></article>
-            <article><span>{homeText(language, '\u4e0d\u786e\u5b9a\u9879', 'Still confirm')}</span><p>{homeText(language, '\u5f00\u653e\u65f6\u95f4\u3001\u95e8\u7968\u548c\u73b0\u573a\u4ea4\u901a\u4f1a\u53d8\uff0c\u51fa\u53d1\u524d\u518d\u6838\u5bf9\u4e00\u6b21\u3002', 'Opening hours, tickets, and local transfers can change, so check once more before departure.')}</p></article>
           </div>
         </div>
       </div>
@@ -3091,14 +3417,15 @@ export function HomeShowcase({ onOpenDrive }) {
   const [serviceDrawer, setServiceDrawer] = useState(null);
   const [optimizeMessage, setOptimizeMessage] = useState('');
   const [routeSaveStatus, setRouteSaveStatus] = useState('');
+  const [recommendationMetrics, setRecommendationMetrics] = useState({});
   const [onboardingOpen, setOnboardingOpen] = useState(() => hasEnteredHome && window.localStorage.getItem(ONBOARDING_SEEN_KEY) !== '1');
   const routeMetricsQuery = useRouteMetrics(routeIds);
 
   const options = useMemo(() => ({
-    regions: [...new Set(landmarks.map(regionFor))].sort(),
+    regions: locationFilterOptions(language),
     kinds: [...new Set(landmarks.map((stop) => stop.modelKind))].sort(),
     seasons: [...new Set(landmarks.map(seasonFor))].sort(),
-  }), []);
+  }), [language]);
   const preferenceOptions = useMemo(() => {
     const tags = new Set();
     landmarks.forEach((stop) => travelPreferenceTags(stop, language).forEach((tag) => tags.add(tag)));
@@ -3106,22 +3433,24 @@ export function HomeShowcase({ onOpenDrive }) {
   }, [language]);
 
   const filteredStops = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const base = landmarks.filter((stop) => {
-      const text = `${stop.name} ${nameFor(stop, language)} ${summaryFor(stop, language)} ${regionFor(stop)} ${stop.modelKind} ${seasonFor(stop)}`.toLowerCase();
+    const base = landmarks.flatMap((stop) => {
+      const searchScore = landmarkSearchScore(stop, query, language);
       const tags = travelPreferenceTags(stop, language);
-      return (!q || text.includes(q))
-        && (region === 'any' || regionFor(stop) === region)
+      return ((!query.trim() || searchScore > 0)
+        && locationMatchesFilter(stop, region, language)
         && (kind === 'any' || stop.modelKind === kind)
         && (season === 'any' || seasonFor(stop) === season)
-        && (preference === 'any' || tags.includes(preference));
+        && (preference === 'any' || tags.includes(preference)))
+        ? [{ stop, searchScore }]
+        : [];
     });
-    return [...base].sort((a, b) => {
-      if (sort === 'name') return nameFor(a, language).localeCompare(nameFor(b, language));
-      if (sort === 'north') return b.lat - a.lat;
-      if (sort === 'model') return Number(Boolean(b.modelPath)) - Number(Boolean(a.modelPath));
-      return landmarks.findIndex((stop) => stop.id === a.id) - landmarks.findIndex((stop) => stop.id === b.id);
-    });
+    return base.sort((a, b) => {
+      if (query.trim() && b.searchScore !== a.searchScore) return b.searchScore - a.searchScore;
+      if (sort === 'name') return nameFor(a.stop, language).localeCompare(nameFor(b.stop, language));
+      if (sort === 'north') return b.stop.lat - a.stop.lat;
+      if (sort === 'model') return Number(Boolean(b.stop.modelPath)) - Number(Boolean(a.stop.modelPath));
+      return landmarks.findIndex((stop) => stop.id === a.stop.id) - landmarks.findIndex((stop) => stop.id === b.stop.id);
+    }).map(({ stop }) => stop);
   }, [kind, language, preference, query, region, season, sort]);
 
   useEffect(() => {
@@ -3258,13 +3587,42 @@ export function HomeShowcase({ onOpenDrive }) {
 
   const routeStops = useMemo(() => routeIds.map((id) => landmarks.find((stop) => stop.id === id)).filter(Boolean), [routeIds]);
   const routeSegments = useMemo(() => routeSegmentsFor(routeStops), [routeStops]);
-  const selectedStop = landmarks.find((stop) => stop.id === selectedId) ?? routeStops[0] ?? landmarks[0];
+  const routeRecommendations = useMemo(
+    () => buildRouteRecommendations(routeIds, lockedIds, language),
+    [language, lockedIds, routeIds],
+  );
+  const selectedStop = routeStops.find((stop) => stop.id === selectedId) ?? routeStops[0] ?? landmarks.find((stop) => stop.id === selectedId) ?? landmarks[0];
   const detailStop = landmarks.find((stop) => stop.id === detailStopId);
   const routeMatches = useMemo(() => {
-    const q = routeQuery.trim().toLowerCase();
-    if (!q) return [];
-    return landmarks.filter((stop) => `${stop.name} ${nameFor(stop, language)} ${regionFor(stop)} ${stop.modelKind}`.toLowerCase().includes(q));
+    if (!routeQuery.trim()) return [];
+    return landmarks
+      .map((stop) => ({ stop, score: landmarkSearchScore(stop, routeQuery, language) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(({ stop }) => stop);
   }, [language, routeQuery]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const candidates = routeRecommendations.filter((recommendation) => recommendation.ids.length >= 2);
+    if (!candidates.length) {
+      setRecommendationMetrics({});
+      return undefined;
+    }
+    candidates.forEach((recommendation) => {
+      const signature = routeSignatureFor(recommendation.ids);
+      if (recommendationMetrics[signature]) return;
+      fetchRouteMetrics(recommendation.ids)
+        .then((metrics) => {
+          if (cancelled || !metrics?.routeSignature) return;
+          setRecommendationMetrics((current) => ({ ...current, [metrics.routeSignature]: metrics }));
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [recommendationMetrics, routeRecommendations]);
 
   const toggleSet = (setter, id) => {
     setter((current) => {
@@ -3327,6 +3685,14 @@ export function HomeShowcase({ onOpenDrive }) {
       `Selected “${recommendation.title}”. You can still move or lock stops.`,
     ));
     setRouteSaveStatus('');
+    fetchRouteMetrics(recommendation.ids)
+      .then((metrics) => {
+        if (metrics?.geometryCoordinates?.length && metrics.routeSignature === routeSignatureFor(recommendation.ids)) {
+          setActiveRouteGeometry({ coordinates: metrics.geometryCoordinates, distanceKm: metrics.distanceKm });
+          setRecommendationMetrics((current) => ({ ...current, [metrics.routeSignature]: metrics }));
+        }
+      })
+      .catch(() => {});
   };
   const resetRoute = () => {
     setRouteIds(initialRouteIds);
@@ -3473,6 +3839,8 @@ export function HomeShowcase({ onOpenDrive }) {
     routeIds,
     routeStops,
     routeSegments,
+    routeRecommendations,
+    recommendationMetrics,
     routeGeometry: routeMetricsQuery.data?.routeSignature === routeIds.join('|')
       ? routeMetricsQuery.data.geometryCoordinates ?? []
       : [],

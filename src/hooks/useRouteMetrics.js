@@ -13,36 +13,78 @@ const DRIVABLE_ACCESS_POINTS = {
 };
 const landmarkCoordinates = new Map(landmarks.map((landmark) => [
   landmark.id,
-  { lon: landmark.lon, lat: landmark.lat },
+  { lon: landmark.lon, lat: landmark.lat, city: landmark.location?.city?.en ?? null },
 ]));
 
-function osrmUrl(coords) {
+function routeTravelMode(coords) {
+  if (coords.length < 2) return 'DRIVE';
+  const cities = new Set(coords.map((coord) => coord.city).filter(Boolean));
+  const lons = coords.map((coord) => coord.lon);
+  const lats = coords.map((coord) => coord.lat);
+  const lonSpan = Math.max(...lons) - Math.min(...lons);
+  const latSpan = Math.max(...lats) - Math.min(...lats);
+  if (cities.size === 1 && (lonSpan < 0.18 && latSpan < 0.18)) return 'WALK';
+  if (Math.max(lonSpan, latSpan) < 0.08) return 'WALK';
+  return 'DRIVE';
+}
+
+function osrmUrl(coords, travelMode) {
   const encoded = coords.map((c) => `${c.lon},${c.lat}`).join(';');
-  return `https://router.project-osrm.org/route/v1/driving/${encoded}?overview=full&geometries=geojson&annotations=false&steps=false`;
+  const profile = travelMode === 'WALK' ? 'foot' : 'driving';
+  return `https://router.project-osrm.org/route/v1/${profile}/${encoded}?overview=full&geometries=geojson&annotations=false&steps=false`;
+}
+
+function estimatedMetrics(coords, routeSignature, travelMode) {
+  const distanceKm = coords.slice(1).reduce((total, coord, index) => {
+    const from = coords[index];
+    const earthRadiusKm = 6371;
+    const lat1 = from.lat * Math.PI / 180;
+    const lat2 = coord.lat * Math.PI / 180;
+    const deltaLat = (coord.lat - from.lat) * Math.PI / 180;
+    const deltaLon = (coord.lon - from.lon) * Math.PI / 180;
+    const haversine = Math.sin(deltaLat / 2) ** 2
+      + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
+    return total + earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine)) * 1.18;
+  }, 0);
+  const speed = travelMode === 'WALK' ? 4.5 : 58;
+  return {
+    mode: 'estimated',
+    travelMode,
+    routeSignature,
+    distanceKm: Number(distanceKm.toFixed(1)),
+    durationHours: Number((distanceKm / speed).toFixed(2)),
+    geometryCoordinates: coords.map((coord) => [coord.lon, coord.lat]),
+  };
 }
 
 export async function fetchRouteMetrics(routeIds) {
   const routeSignature = routeIds.filter(Boolean).join('|');
   const coords = routeIds
-    .map((id) => DRIVABLE_ACCESS_POINTS[id] ?? landmarkCoordinates.get(id) ?? travelLandmarkMeta[id])
+    .map((id) => {
+      const coordinate = landmarkCoordinates.get(id) ?? travelLandmarkMeta[id];
+      if (!coordinate) return DRIVABLE_ACCESS_POINTS[id] ?? null;
+      return coordinate.city ? coordinate : (DRIVABLE_ACCESS_POINTS[id] ?? coordinate);
+    })
     .filter(Boolean)
-    .map((m) => ({ lon: m.lon, lat: m.lat }));
+    .map((m) => ({ lon: m.lon, lat: m.lat, city: m.city ?? null }));
+  const travelMode = routeTravelMode(coords);
 
   if (coords.length < 2) {
-    return { mode: 'osrm', routeSignature, distanceKm: 0, durationHours: 0 };
+    return { mode: 'estimated', travelMode, routeSignature, distanceKm: 0, durationHours: 0 };
   }
 
   try {
     const backendResponse = await fetch(`${API_BASE_URL}/api/routes/plan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ coordinates: coords }),
+      body: JSON.stringify({ coordinates: coords, travelMode }),
     });
     if (backendResponse.ok) {
       const route = await backendResponse.json();
       if (route?.geometryCoordinates?.length) {
         return {
           mode: route.provider ?? 'backend',
+          travelMode: route.travelMode ?? travelMode,
           routeSignature,
           distanceKm: route.distanceKm,
           durationHours: route.durationHours,
@@ -54,14 +96,15 @@ export async function fetchRouteMetrics(routeIds) {
     // Local development can run without the backend; use the public OSM router below.
   }
 
-  const response = await fetch(osrmUrl(coords), { headers: { accept: 'application/json' } });
-  if (!response.ok) throw new Error('Failed to load OSRM metrics');
-  const json = await response.json();
-  const route = json.routes?.[0];
-  if (!route) throw new Error('No OSRM route');
+  const response = await fetch(osrmUrl(coords, travelMode), { headers: { accept: 'application/json' } }).catch(() => null);
+  if (!response?.ok) return estimatedMetrics(coords, routeSignature, travelMode);
+  const json = await response.json().catch(() => null);
+  const route = json?.routes?.[0];
+  if (!route) return estimatedMetrics(coords, routeSignature, travelMode);
 
   return {
     mode: 'osrm',
+    travelMode,
     routeSignature,
     distanceKm: Number((route.distance / 1000).toFixed(1)),
     durationHours: Number((route.duration / 3600).toFixed(2)),

@@ -102,6 +102,7 @@ class RouteCoordinate(BaseModel):
 
 class RoutePlanPayload(BaseModel):
     coordinates: list[RouteCoordinate] = Field(min_length=2, max_length=25)
+    travelMode: str = Field(default='DRIVE', pattern='^(DRIVE|WALK)$')
 
 
 def _now_iso():
@@ -139,11 +140,21 @@ def _decode_google_polyline(encoded):
     return coordinates
 
 
-def _plan_google_route(coordinates, api_key):
+def _plan_google_route(coordinates, api_key, travel_mode='DRIVE'):
     waypoints = [
         {'location': {'latLng': {'latitude': point.lat, 'longitude': point.lon}}}
         for point in coordinates
     ]
+    payload = {
+        'origin': waypoints[0],
+        'destination': waypoints[-1],
+        'intermediates': waypoints[1:-1],
+        'travelMode': travel_mode,
+        'polylineQuality': 'HIGH_QUALITY',
+        'polylineEncoding': 'ENCODED_POLYLINE',
+    }
+    if travel_mode == 'DRIVE':
+        payload['routingPreference'] = 'TRAFFIC_AWARE'
     response = _request_json(
         'https://routes.googleapis.com/directions/v2:computeRoutes',
         method='POST',
@@ -152,15 +163,7 @@ def _plan_google_route(coordinates, api_key):
             'X-Goog-Api-Key': api_key,
             'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline',
         },
-        payload={
-            'origin': waypoints[0],
-            'destination': waypoints[-1],
-            'intermediates': waypoints[1:-1],
-            'travelMode': 'DRIVE',
-            'routingPreference': 'TRAFFIC_AWARE',
-            'polylineQuality': 'HIGH_QUALITY',
-            'polylineEncoding': 'ENCODED_POLYLINE',
-        },
+        payload=payload,
     )
     route = (response.get('routes') or [None])[0]
     if not route:
@@ -168,26 +171,29 @@ def _plan_google_route(coordinates, api_key):
     duration_seconds = float(str(route.get('duration', '0s')).removesuffix('s') or 0)
     return {
         'provider': 'google-routes',
+        'travelMode': travel_mode,
         'distanceKm': round(float(route.get('distanceMeters', 0)) / 1000, 1),
         'durationHours': round(duration_seconds / 3600, 2),
         'geometryCoordinates': _decode_google_polyline(route['polyline']['encodedPolyline']),
     }
 
 
-def _plan_osrm_route(coordinates):
+def _plan_osrm_route(coordinates, travel_mode='DRIVE'):
     encoded = ';'.join(f'{point.lon},{point.lat}' for point in coordinates)
+    profile = 'foot' if travel_mode == 'WALK' else 'driving'
     query = urllib.parse.urlencode({
         'overview': 'full',
         'geometries': 'geojson',
         'annotations': 'false',
         'steps': 'false',
     })
-    response = _request_json(f'https://router.project-osrm.org/route/v1/driving/{encoded}?{query}')
+    response = _request_json(f'https://router.project-osrm.org/route/v1/{profile}/{encoded}?{query}')
     route = (response.get('routes') or [None])[0]
     if not route:
         raise RuntimeError('OSRM returned no route')
     return {
         'provider': 'osrm',
+        'travelMode': travel_mode,
         'distanceKm': round(float(route.get('distance', 0)) / 1000, 1),
         'durationHours': round(float(route.get('duration', 0)) / 3600, 2),
         'geometryCoordinates': route.get('geometry', {}).get('coordinates', []),
@@ -750,13 +756,14 @@ def get_current_route():
 @app.post('/api/routes/plan')
 def plan_route(payload: RoutePlanPayload):
     google_api_key = os.getenv('GOOGLE_MAPS_API_KEY', '').strip()
+    travel_mode = payload.travelMode
     if google_api_key:
         try:
-            return _plan_google_route(payload.coordinates, google_api_key)
+            return _plan_google_route(payload.coordinates, google_api_key, travel_mode)
         except (KeyError, RuntimeError, ValueError, urllib.error.URLError):
             pass
     try:
-        return _plan_osrm_route(payload.coordinates)
+        return _plan_osrm_route(payload.coordinates, travel_mode)
     except (RuntimeError, ValueError, urllib.error.URLError) as error:
         raise HTTPException(status_code=502, detail=f'Route provider failed: {error}') from error
 
