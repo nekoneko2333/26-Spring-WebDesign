@@ -2,7 +2,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { landmarks as baseLandmarks, lngLatToWorld } from '../../data/landmarks.js';
+import { landmarks } from '../../data/landmarks.js';
 import { italyOutlineGeoJson } from '../../data/italyOutline.js';
 import { useAppStore } from '../../state/useAppStore.js';
 import { fetchRouteMetrics, useRouteMetrics } from '../../hooks/useRouteMetrics.js';
@@ -43,34 +43,6 @@ const storyModelPaths = {
 };
 
 const liveIndex = new Map((liveLandmarksData.items ?? []).map((item) => [item.id, item]));
-const baseLandmarkIndex = new Map(baseLandmarks.map((item) => [item.id, item]));
-const landmarks = (liveLandmarksData.items ?? []).map((item) => {
-  const existing = baseLandmarkIndex.get(item.id);
-  const lon = item.coordinates.lon;
-  const lat = item.coordinates.lat;
-  if (existing) {
-    return {
-      ...existing,
-      lon,
-      lat,
-      position: lngLatToWorld(lon, lat),
-      modelKind: item.category ?? existing.modelKind,
-    };
-  }
-  return {
-    id: item.id,
-    name: item.name.en,
-    description: item.wikipedia?.en?.extract ?? '',
-    modelPath: null,
-    lon,
-    lat,
-    position: lngLatToWorld(lon, lat),
-    rotation: [0, 0, 0],
-    scale: 5.8,
-    triggerRadius: 13,
-    modelKind: item.category ?? 'monument',
-  };
-});
 const routeMatrixIds = liveLandmarksData.routeMatrix?.ids ?? [];
 const routeMatrixIndex = new Map(routeMatrixIds.map((id, index) => [id, index]));
 const initialRouteIds = ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
