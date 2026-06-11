@@ -7,6 +7,8 @@ export const useAppStore = create((set, get) => ({
   selectedLandmarkId: null,
   vehicleSpeed: 0,
   vehicleSteer: 0,
+  routePlaybackSpeed: 6,
+  vehicleJumpTarget: null,
   routeContext: null,
   routeProgress: 0,
   routeDay: 1,
@@ -34,6 +36,19 @@ export const useAppStore = create((set, get) => ({
   setLanguage: (language) => set({ language }),
   setCesiumStatus: (patch) => set((state) => ({
     cesiumStatus: { ...state.cesiumStatus, ...patch },
+  })),
+  setRoutePlaybackSpeed: (routePlaybackSpeed) => set({ routePlaybackSpeed: Math.min(Math.max(Number(routePlaybackSpeed) || 1, 1), 12) }),
+  jumpVehicleToLandmark: (landmarkId) => set((state) => ({
+    vehicleJumpTarget: { landmarkId, token: (state.vehicleJumpTarget?.token ?? 0) + 1 },
+    autoDrive: false,
+    arrivalNotice: null,
+    selectedLandmarkId: null,
+    focusPanelOpen: false,
+    modelViewerOpen: false,
+    guidedTourState: 'IDLE',
+    guidedTourLandmarkId: null,
+    guidedTourMessage: '',
+    cameraMode: 'follow',
   })),
   setCameraMode: (cameraMode) => set((state) => (
     state.cameraMode === cameraMode ? state : { cameraMode }

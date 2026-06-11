@@ -869,6 +869,22 @@ body.ui-awake .hud-mode {
   }
 }
 
+
+.tour-info-panel__speed-control {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 12px;
+  color: var(--c-ink-dim);
+  font: 800 10px/1 var(--font-ui-zh);
+  letter-spacing: 0.12em;
+}
+
+.tour-info-panel__speed-control input {
+  width: 100%;
+  accent-color: #c9a96e;
+  cursor: pointer;
+}
+
 .tour-info-panel__subhead {
   margin: 2px 0 8px;
   color: var(--c-ink-dim);
@@ -1067,7 +1083,7 @@ body.ui-awake .hud-mode {
 .timeline-popover { bottom: 152px; }
 .tour-summary-card { top: 118px; }
 
-.timeline-popover > button {
+.timeline-popover > button:not(.timeline-popover__jump) {
   position: absolute;
   top: 10px;
   right: 12px;
@@ -1097,6 +1113,18 @@ body.ui-awake .hud-mode {
   display: block;
   color: var(--c-ink-mid);
   font: 600 12px/1.55 var(--font-ui-zh);
+}
+
+.timeline-popover__jump {
+  width: 100%;
+  min-height: 34px;
+  margin-top: 12px;
+  border: 1px solid rgba(201, 169, 110, 0.42);
+  border-radius: 999px;
+  background: rgba(255, 250, 240, 0.72);
+  color: var(--c-ink);
+  font: 800 11px/1 var(--font-ui-zh);
+  cursor: pointer;
 }
 
 .timeline-popover div,
