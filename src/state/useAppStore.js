@@ -83,6 +83,8 @@ export const useAppStore = create((set, get) => ({
   })),
   setActiveRouteIds: (activeRouteIds) => set((state) => ({
     activeRouteIds,
+    activeRouteGeometryCoordinates: [],
+    activeRouteDistanceKm: null,
     tourResetToken: state.tourResetToken + 1,
     autoDrive: false,
     routeProgress: 0,

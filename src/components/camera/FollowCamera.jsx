@@ -99,6 +99,11 @@ export function FollowCamera({ targetRef }) {
     <OrbitControls
       ref={controlsRef}
       enabled={cameraMode === 'free'}
+      mouseButtons={{
+        LEFT: THREE.MOUSE.PAN,
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: THREE.MOUSE.ROTATE,
+      }}
       enableDamping
       dampingFactor={0.08}
       minDistance={worldUnitsFromMeters(5)}

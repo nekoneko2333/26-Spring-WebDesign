@@ -94,6 +94,11 @@ const paceDailyHours = {
   Standard: 8,
   Fast: 10,
 };
+const paceProfiles = {
+  Relaxed: { visitMultiplier: 1.3, dailyBufferHours: 1 },
+  Standard: { visitMultiplier: 1, dailyBufferHours: 0.5 },
+  Fast: { visitMultiplier: 0.75, dailyBufferHours: 0.25 },
+};
 
 const storyScenes = [
   {
@@ -425,6 +430,43 @@ function segmentDistanceKm(a, b) {
   return Number.isFinite(distance) ? distance : Number.POSITIVE_INFINITY;
 }
 
+function routeDistanceForOrderedIds(routeIds) {
+  return routeIds.slice(1).reduce((total, id, index) => {
+    const from = landmarks.find((stop) => stop.id === routeIds[index]);
+    const to = landmarks.find((stop) => stop.id === id);
+    const distance = segmentDistanceKm(from, to);
+    return total + (Number.isFinite(distance) ? distance : 0);
+  }, 0);
+}
+
+function improveRouteWithTwoOpt(routeIds) {
+  if (routeIds.length < 4) return routeIds;
+  let best = [...routeIds];
+  let bestDistance = routeDistanceForOrderedIds(best);
+  let improved = true;
+
+  while (improved) {
+    improved = false;
+    for (let start = 1; start < best.length - 2; start += 1) {
+      for (let end = start + 1; end < best.length - 1; end += 1) {
+        const candidate = [
+          ...best.slice(0, start),
+          ...best.slice(start, end + 1).reverse(),
+          ...best.slice(end + 1),
+        ];
+        const candidateDistance = routeDistanceForOrderedIds(candidate);
+        if (candidateDistance + 0.1 < bestDistance) {
+          best = candidate;
+          bestDistance = candidateDistance;
+          improved = true;
+        }
+      }
+    }
+  }
+
+  return best;
+}
+
 function optimizeRouteIds(routeIds, lockedIds) {
   const locked = new Set(lockedIds);
   const output = [...routeIds];
@@ -460,12 +502,66 @@ function optimizeRouteIds(routeIds, lockedIds) {
         remaining.delete(next);
         cursor = next;
       }
-      output.splice(start, chunk.length, ...ordered);
+      output.splice(start, chunk.length, ...improveRouteWithTwoOpt(ordered));
     }
     start = end + 1;
   }
 
   return output;
+}
+
+function sortRouteIdsByLatitude(routeIds, lockedIds, direction) {
+  const locked = new Set(lockedIds);
+  const unlockedIds = routeIds
+    .filter((id) => !locked.has(id))
+    .sort((a, b) => {
+      const aStop = landmarks.find((stop) => stop.id === a);
+      const bStop = landmarks.find((stop) => stop.id === b);
+      return direction * ((bStop?.lat ?? 0) - (aStop?.lat ?? 0));
+    });
+  let unlockedIndex = 0;
+  return routeIds.map((id) => (locked.has(id) ? id : unlockedIds[unlockedIndex++]));
+}
+
+function buildRouteRecommendations(routeIds, lockedIds, language) {
+  if (routeIds.length < 2) return [];
+  const currentDistance = routeDistanceForIds(routeIds);
+  const candidates = [
+    {
+      id: 'shortest',
+      title: homeText(language, '少绕路', 'Less driving'),
+      detail: homeText(language, '按道路距离逐站选择更近的下一个景点。', 'Choose the nearest next stop using road distances.'),
+      ids: optimizeRouteIds(routeIds, lockedIds),
+    },
+    {
+      id: 'north-south',
+      title: homeText(language, '从北向南', 'North to south'),
+      detail: homeText(language, '减少跨区域往返，适合一路向南的行程。', 'Reduce regional backtracking on a southbound trip.'),
+      ids: sortRouteIdsByLatitude(routeIds, lockedIds, 1),
+    },
+    {
+      id: 'south-north',
+      title: homeText(language, '从南向北', 'South to north'),
+      detail: homeText(language, '适合从南部出发，逐步向北移动。', 'Useful when starting in the south and moving north.'),
+      ids: sortRouteIdsByLatitude(routeIds, lockedIds, -1),
+    },
+  ];
+  const seen = new Set();
+  return candidates
+    .filter((candidate) => {
+      const signature = candidate.ids.join('|');
+      if (seen.has(signature)) return false;
+      seen.add(signature);
+      return true;
+    })
+    .map((candidate) => {
+      const distance = routeDistanceForIds(candidate.ids);
+      return {
+        ...candidate,
+        distance,
+        savedKm: Number.isFinite(currentDistance - distance) ? Math.max(0, currentDistance - distance) : 0,
+      };
+    });
 }
 
 function routeSegmentsFor(routeStops) {
@@ -1997,21 +2093,81 @@ function nearbyStopsFor(stop, routeStops, language) {
 
 function paceText(pace, language) {
   const zh = {
-    Relaxed: '每天留出 6 小时，适合慢慢拍照，也给临时改主意留点空间。',
-    Standard: '每天安排 8 小时，车程和游览之间比较从容。',
-    Fast: '每天最多安排 10 小时，适合想多看几个地方的旅程。',
+    Relaxed: '每天目标约 6 小时；每站停留增加约 30%，另留 1 小时机动，邻近景点会优先安排在同一天。',
+    Standard: '每天目标约 8 小时；按建议停留时间并留 0.5 小时机动，在时间允许时尽量多安排邻近景点。',
+    Fast: '每天目标约 10 小时；每站停留压缩约 25%，另留 0.25 小时机动，减少空余时间。',
   };
   const en = {
-    Relaxed: 'Leave some blank space for photos and small detours.',
-    Standard: 'A balanced day with one clear focus in each half.',
-    Fast: 'A full day for seeing more stops without adding hotels.',
+    Relaxed: 'Target about 6 hours, with 30% longer visits and a 1-hour buffer; nearby stops stay together when possible.',
+    Standard: 'Target about 8 hours with suggested visit times and a 0.5-hour buffer, packing nearby stops when time allows.',
+    Fast: 'Target about 10 hours, with 25% shorter visits and a 0.25-hour buffer to reduce unused time.',
   };
   return language === 'zh' ? zh[pace] : en[pace];
+}
+
+function plannedVisitHours(landmark, language, pace) {
+  const baseHours = visitFor(landmark, language).durationHours;
+  const multiplier = paceProfiles[pace]?.visitMultiplier ?? 1;
+  return Math.max(0.5, Math.round(baseHours * multiplier * 4) / 4);
+}
+
+function optimalDayGroups(uniqueStops, maxDays, pace, language) {
+  const dailyTarget = paceDailyHours[pace] ?? paceDailyHours.Standard;
+  const paceProfile = paceProfiles[pace] ?? paceProfiles.Standard;
+  const incomingSegments = uniqueStops.map((stop, index) => (
+    index > 0 ? routeSegmentsFor([uniqueStops[index - 1], stop])[0] ?? null : null
+  ));
+  const groupStats = (start, end) => {
+    const stops = uniqueStops.slice(start, end);
+    const segments = incomingSegments.slice(start, end).filter(Boolean);
+    const visitHours = stops.reduce((sum, stop) => sum + plannedVisitHours(stop, language, pace), 0);
+    const travelHours = segments.reduce((sum, segment) => sum + segment.duration, 0);
+    const totalKm = segments.reduce((sum, segment) => sum + segment.distance, 0);
+    const totalHours = visitHours + travelHours + paceProfile.dailyBufferHours;
+    return { start, end, stops, segments, visitHours, travelHours, totalKm, totalHours };
+  };
+  const scoreGroup = (group) => {
+    const overHours = Math.max(0, group.totalHours - dailyTarget);
+    const underHours = Math.max(0, dailyTarget - group.totalHours);
+    const overflowPenalty = overHours ** 2 * 80;
+    const unusedTimePenalty = underHours ** 2;
+    const sparseDayPenalty = group.stops.length === 1 ? 0.75 : 0;
+    const boundarySegment = group.start > 0 ? incomingSegments[group.start] : null;
+    const longBoundaryBonus = boundarySegment ? Math.min(boundarySegment.duration, 4) * 0.8 : 0;
+    return overflowPenalty + unusedTimePenalty + sparseDayPenalty + 0.35 - longBoundaryBonus;
+  };
+
+  const stopCount = uniqueStops.length;
+  const groupLimit = Math.min(Math.max(1, maxDays), stopCount);
+  const dp = Array.from({ length: groupLimit + 1 }, () => Array(stopCount + 1).fill(null));
+  dp[0][0] = { score: 0, groups: [] };
+
+  for (let groupCount = 1; groupCount <= groupLimit; groupCount += 1) {
+    for (let end = groupCount; end <= stopCount; end += 1) {
+      for (let start = groupCount - 1; start < end; start += 1) {
+        const previous = dp[groupCount - 1][start];
+        if (!previous) continue;
+        const group = groupStats(start, end);
+        const score = previous.score + scoreGroup(group);
+        if (!dp[groupCount][end] || score < dp[groupCount][end].score) {
+          dp[groupCount][end] = { score, groups: [...previous.groups, group] };
+        }
+      }
+    }
+  }
+
+  let best = null;
+  for (let groupCount = 1; groupCount <= groupLimit; groupCount += 1) {
+    const candidate = dp[groupCount][stopCount];
+    if (candidate && (!best || candidate.score < best.score)) best = candidate;
+  }
+  return best?.groups ?? [groupStats(0, stopCount)];
 }
 
 function buildItineraryDays(routeStops, dayCount, pace, language) {
   const safeDays = clampDays(dayCount);
   const dailyLimit = paceDailyHours[pace] ?? paceDailyHours.Standard;
+  const paceProfile = paceProfiles[pace] ?? paceProfiles.Standard;
   const uniqueStops = [...new Map(routeStops.map((stop) => [stop.id, stop])).values()];
   const buckets = Array.from({ length: safeDays }, (_, index) => ({
     day: index + 1,
@@ -2020,54 +2176,44 @@ function buildItineraryDays(routeStops, dayCount, pace, language) {
     totalKm: 0,
     travelHours: 0,
     visitHours: 0,
+    bufferHours: 0,
     dailyLimit,
   }));
   if (!uniqueStops.length) return buckets;
 
-  let dayIndex = 0;
-  uniqueStops.forEach((stop, stopIndex) => {
-    const previousStop = stopIndex > 0 ? uniqueStops[stopIndex - 1] : null;
-    const incomingSegment = previousStop ? routeSegmentsFor([previousStop, stop])[0] ?? null : null;
-    const visitHours = visitFor(stop, language).durationHours;
-    const addedHours = visitHours + (incomingSegment?.duration ?? 0);
-    const remainingStops = uniqueStops.length - stopIndex;
-    const remainingDays = safeDays - dayIndex;
-    const current = buckets[dayIndex];
-    const shouldMove = current.stops.length > 0
-      && dayIndex < safeDays - 1
-      && current.visitHours + current.travelHours + addedHours > dailyLimit
-      && remainingStops >= remainingDays;
-    if (shouldMove) dayIndex += 1;
-
-    const target = buckets[dayIndex];
-    target.stops.push(stop);
-    target.visitHours += visitHours;
-    if (incomingSegment) {
-      target.segments.push(incomingSegment);
-      target.travelHours += incomingSegment.duration;
-      target.totalKm += incomingSegment.distance;
-    }
+  const groups = optimalDayGroups(uniqueStops, safeDays, pace, language);
+  groups.forEach((group, index) => {
+    Object.assign(buckets[index], {
+      stops: group.stops,
+      segments: group.segments,
+      totalKm: group.totalKm,
+      travelHours: group.travelHours,
+      visitHours: group.visitHours,
+    });
   });
 
   return buckets.map((day) => ({
     ...day,
+    bufferHours: day.stops.length ? paceProfile.dailyBufferHours : 0,
     totalKm: Math.round(day.totalKm),
-    totalHours: day.visitHours + day.travelHours,
-    overHours: Math.max(0, day.visitHours + day.travelHours - dailyLimit),
+    totalHours: day.visitHours + day.travelHours + (day.stops.length ? paceProfile.dailyBufferHours : 0),
+    overHours: Math.max(0, day.visitHours + day.travelHours + (day.stops.length ? paceProfile.dailyBufferHours : 0) - dailyLimit),
     paceNote: paceText(pace, language),
   }));
 }
 
 function minimumDaysFor(routeStops, pace, language) {
   const dailyLimit = paceDailyHours[pace] ?? paceDailyHours.Standard;
+  const paceProfile = paceProfiles[pace] ?? paceProfiles.Standard;
   const uniqueStops = [...new Map(routeStops.map((stop) => [stop.id, stop])).values()];
   if (!uniqueStops.length) return 1;
   let days = 1;
   let hours = 0;
   uniqueStops.forEach((stop, index) => {
     const incoming = index > 0 ? routeSegmentsFor([uniqueStops[index - 1], stop])[0] : null;
-    const added = visitFor(stop, language).durationHours + (incoming?.duration ?? 0);
-    if (hours > 0 && hours + added > dailyLimit) {
+    const added = plannedVisitHours(stop, language, pace) + (incoming?.duration ?? 0);
+    const exceedsHours = hours > 0 && hours + added + paceProfile.dailyBufferHours > dailyLimit;
+    if (exceedsHours) {
       days += 1;
       hours = added;
     } else {
@@ -2082,7 +2228,8 @@ function makeItineraryPlan(routeStops, days, pace = 'Standard', language = 'en')
   const itineraryDays = buildItineraryDays(routeStops, days, pace, language);
   const segments = routeSegmentsFor(routeStops);
   const travelHours = segments.reduce((sum, segment) => sum + segment.duration, 0);
-  const visitHours = routeStops.reduce((sum, stop) => sum + visitFor(stop, language).durationHours, 0);
+  const visitHours = routeStops.reduce((sum, stop) => sum + plannedVisitHours(stop, language, pace), 0);
+  const bufferHours = itineraryDays.reduce((sum, day) => sum + day.bufferHours, 0);
   const minimumDays = minimumDaysFor(routeStops, pace, language);
   return {
     days: itineraryDays,
@@ -2090,7 +2237,8 @@ function makeItineraryPlan(routeStops, days, pace = 'Standard', language = 'en')
     minimumDays,
     travelHours,
     visitHours,
-    totalHours: travelHours + visitHours,
+    bufferHours,
+    totalHours: travelHours + visitHours + bufferHours,
     totalKm: Math.round(segments.reduce((sum, segment) => sum + segment.distance, 0)),
     isFeasible: itineraryDays.every((day) => day.overHours <= 0.05) && clampDays(days) >= minimumDays,
   };
@@ -2121,7 +2269,7 @@ function itineraryExportText(language, routeStops, days, pace) {
     }
     day.stops.forEach((stop, index) => {
       const visit = visitFor(stop, language);
-      lines.push(`  ${index + 1}. ${nameFor(stop, language)} · ${visit.bestTime} · ${visit.durationHours}h`);
+      lines.push(`  ${index + 1}. ${nameFor(stop, language)} · ${visit.bestTime} · ${plannedVisitHours(stop, language, pace)}h`);
       lines.push(`     ${visit.bookingNote}`);
     });
     lines.push('');
@@ -2212,9 +2360,38 @@ function projectRouteMapPoint(lon, lat) {
   };
 }
 
-function routeMapPath(coordinates, close = false) {
+function createRouteMapProjector(coordinates) {
+  const validCoordinates = coordinates.filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat));
+  if (!validCoordinates.length) return projectRouteMapPoint;
+  const lons = validCoordinates.map(([lon]) => lon);
+  const lats = validCoordinates.map(([, lat]) => lat);
+  let lonMin = Math.min(...lons);
+  let lonMax = Math.max(...lons);
+  let latMin = Math.min(...lats);
+  let latMax = Math.max(...lats);
+  const centerLat = (latMin + latMax) / 2;
+  const longitudeScale = Math.cos(centerLat * Math.PI / 180);
+  let width = Math.max((lonMax - lonMin) * longitudeScale, 0.012);
+  let height = Math.max(latMax - latMin, 0.012);
+  const targetSpan = Math.max(width, height) * 1.28;
+  const centerLon = (lonMin + lonMax) / 2;
+  const centerLatitude = (latMin + latMax) / 2;
+  width = targetSpan;
+  height = targetSpan;
+  lonMin = centerLon - width / longitudeScale / 2;
+  lonMax = centerLon + width / longitudeScale / 2;
+  latMin = centerLatitude - height / 2;
+  latMax = centerLatitude + height / 2;
+
+  return (lon, lat) => ({
+    x: 4 + ((lon - lonMin) / (lonMax - lonMin)) * 92,
+    y: 4 + (1 - ((lat - latMin) / (latMax - latMin))) * 92,
+  });
+}
+
+function routeMapPath(coordinates, close = false, projectPoint = projectRouteMapPoint) {
   const path = coordinates.map(([lon, lat], index) => {
-    const point = projectRouteMapPoint(lon, lat);
+    const point = projectPoint(lon, lat);
     return `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
   }).join(' ');
   return close && path ? `${path} Z` : path;
@@ -2234,11 +2411,17 @@ function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoadi
   }, [routeSignature]);
 
   const showRouteLoading = isRouteLoading || isTransitioning;
-  const points = routeStops.map((stop) => {
+  const stopCoordinates = routeStops.map((stop) => {
     const live = liveFor(stop.id);
-    const lon = live?.coordinates?.lon ?? stop.lon;
-    const lat = live?.coordinates?.lat ?? stop.lat;
-    const projected = projectRouteMapPoint(lon, lat);
+    return [live?.coordinates?.lon ?? stop.lon, live?.coordinates?.lat ?? stop.lat];
+  });
+  const displayGeometry = !showRouteLoading && routeGeometry.length >= 2
+    ? routeGeometry
+    : [];
+  const projectPoint = createRouteMapProjector(displayGeometry.length ? [...displayGeometry, ...stopCoordinates] : stopCoordinates);
+  const points = routeStops.map((stop, index) => {
+    const [lon, lat] = stopCoordinates[index];
+    const projected = projectPoint(lon, lat);
     return {
       stop,
       lon,
@@ -2247,9 +2430,6 @@ function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoadi
       y: projected.y,
     };
   });
-  const displayGeometry = !showRouteLoading && routeGeometry.length >= 2
-    ? routeGeometry
-    : [];
   const routeStep = Math.max(1, Math.floor(displayGeometry.length / 1200));
   const simplifiedRoute = displayGeometry.filter((_, index) => index % routeStep === 0);
 
@@ -2260,10 +2440,10 @@ function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoadi
       aria-label={language === 'zh' ? '手绘道路路线地图' : 'Hand-drawn road route map'}
     >
       <svg viewBox="0 0 100 100" role="img" aria-hidden="true">
-        {ITALY_COASTLINES.map((coastline, index) => <path key={index} className="paper-route-map__land" d={routeMapPath(coastline, true)} />)}
-        {ROUTE_NETWORK.map((line, index) => <path key={index} className="paper-route-map__network" d={routeMapPath(line)} />)}
-        {simplifiedRoute.length >= 2 && <path className="paper-route-map__path-casing" d={routeMapPath(simplifiedRoute)} />}
-        {simplifiedRoute.length >= 2 && <path className="paper-route-map__path" d={routeMapPath(simplifiedRoute)} />}
+        {ITALY_COASTLINES.map((coastline, index) => <path key={index} className="paper-route-map__land" d={routeMapPath(coastline, true, projectPoint)} />)}
+        {ROUTE_NETWORK.map((line, index) => <path key={index} className="paper-route-map__network" d={routeMapPath(line, false, projectPoint)} />)}
+        {simplifiedRoute.length >= 2 && <path className="paper-route-map__path-casing" d={routeMapPath(simplifiedRoute, false, projectPoint)} />}
+        {simplifiedRoute.length >= 2 && <path className="paper-route-map__path" d={routeMapPath(simplifiedRoute, false, projectPoint)} />}
         {points.map((point, index) => (
           <g key={point.stop.id} className="paper-route-map__stop">
             <circle cx={point.x} cy={point.y} r="3.2" />
@@ -2370,7 +2550,7 @@ function DestinationSection(props) {
                   aria-pressed={routeIds.includes(stop.id)}
                   onClick={() => props.onAddRoute(stop.id)}
                 >
-                  {routeIds.includes(stop.id) ? homeText(language, '已加入路线', 'In your route') : homeText(language, '加入路线', 'Add to route')}
+                  {routeIds.includes(stop.id) ? homeText(language, '取消加入', 'Remove from route') : homeText(language, '加入路线', 'Add to route')}
                 </button>
                 <button type="button" onClick={() => onOpenDetail(stop.id)}>{homeText(language, '查看详情', 'Details')}</button>
                 {url && <a href={url} target="_blank" rel="noreferrer">{homeText(language, '资料页', 'Source page')}</a>}
@@ -2401,7 +2581,7 @@ function PrintableItinerary({ language, routeStops, plan, pace }) {
               <section key={stop.id}>
                 <h3>{nameFor(stop, language)}</h3>
                 <p>{summaryFor(stop, language)}</p>
-                <p>{homeText(language, '建议停留', 'Suggested visit')}: {visit.durationHours}h · {homeText(language, '适合', 'Good for')}: {visit.fit}</p>
+                <p>{homeText(language, '计划停留', 'Planned visit')}: {plannedVisitHours(stop, language, pace)}h · {homeText(language, '适合', 'Good for')}: {visit.fit}</p>
                 <p>{homeText(language, '提示', 'Note')}: {visit.bookingNote}</p>
                 <p>{homeText(language, '来源', 'Sources')}: {sourceLabelsFor(stop, language)}</p>
               </section>
@@ -2419,6 +2599,10 @@ function RoutePlannerSection(props) {
   const { language, routeStops, routeSegments, routeGeometry, isRouteLoading, routeQuery, setRouteQuery, routeMatches, days, setDays, pace, setPace, lockedIds } = props;
   const plan = makeItineraryPlan(routeStops, days, pace, language);
   const exportText = itineraryExportText(language, routeStops, days, pace);
+  const routeRecommendations = useMemo(
+    () => buildRouteRecommendations(props.routeIds, lockedIds, language),
+    [language, lockedIds, props.routeIds],
+  );
   const printPdf = () => window.print();
 
   return (
@@ -2453,8 +2637,38 @@ function RoutePlannerSection(props) {
             <div className="concept-actions concept-actions--compact">
               <button className="concept-btn" type="button" onClick={props.onOptimize}>{homeText(language, '优化顺序', 'Optimize')}</button>
               <button className="concept-btn" type="button" onClick={props.onResetRoute}>{homeText(language, '回到默认路线', 'Reset route')}</button>
+              <button className="concept-btn" type="button" onClick={props.onSaveRoute}>
+                {props.userSession ? homeText(language, '保存当前路线', 'Save route') : homeText(language, '登录后保存', 'Sign in to save')}
+              </button>
             </div>
             {props.optimizeMessage && <p className="planner-note" role="status">{props.optimizeMessage}</p>}
+            {props.routeSaveStatus && <p className="planner-note" role="status">{props.routeSaveStatus}</p>}
+          </section>
+
+          <section className="home-module home-module--route-recommendations">
+            <div className="home-module__head">
+              <span>{homeText(language, '推荐路线', 'Recommended routes')}</span>
+              <strong>{routeRecommendations.length}</strong>
+            </div>
+            <p className="route-recommendations__intro">
+              {homeText(language, '基于当前景点和锁定位置生成，选择后仍可继续手动调整。', 'Generated from the current stops and locked positions. You can still edit after choosing.')}
+            </p>
+            <div className="route-recommendations">
+              {routeRecommendations.map((recommendation) => (
+                <article key={recommendation.id}>
+                  <div>
+                    <strong>{recommendation.title}</strong>
+                    <span>{Math.round(recommendation.distance)} km</span>
+                  </div>
+                  <p>{recommendation.detail}</p>
+                  <small>{recommendation.ids.map((id) => nameFor(landmarks.find((stop) => stop.id === id), language)).join(' → ')}</small>
+                  <button type="button" onClick={() => props.onSelectRecommendation(recommendation)}>
+                    {homeText(language, '选择这条路线', 'Choose this route')}
+                    {recommendation.savedKm >= 1 ? ` · ${homeText(language, `少约 ${Math.round(recommendation.savedKm)} km`, `save about ${Math.round(recommendation.savedKm)} km`)}` : ''}
+                  </button>
+                </article>
+              ))}
+            </div>
           </section>
 
           <section className="home-module home-module--itinerary-controls">
@@ -2470,8 +2684,8 @@ function RoutePlannerSection(props) {
                 : homeText(language, '这份安排会有些赶', 'This plan is rather full')}</strong>
               <p>{homeText(
                 language,
-                `按现在的节奏，建议至少预留 ${plan.minimumDays} 天。全程约 ${plan.travelHours.toFixed(1)} 小时在路上，${plan.visitHours.toFixed(1)} 小时慢慢看。`,
-                `At this pace, allow at least ${plan.minimumDays} days: about ${plan.travelHours.toFixed(1)} hours on the road and ${plan.visitHours.toFixed(1)} hours exploring.`,
+                `按现在的节奏，建议至少预留 ${plan.minimumDays} 天：约 ${plan.travelHours.toFixed(1)} 小时在路上，${plan.visitHours.toFixed(1)} 小时游览，另有 ${plan.bufferHours.toFixed(1)} 小时机动。`,
+                `At this pace, allow at least ${plan.minimumDays} days: about ${plan.travelHours.toFixed(1)} hours on the road, ${plan.visitHours.toFixed(1)} hours exploring, plus ${plan.bufferHours.toFixed(1)} buffer hours.`,
               )}</p>
             </div>
           </section>
@@ -2504,7 +2718,7 @@ function RoutePlannerSection(props) {
               <section><strong>{plan.totalKm} km</strong><span>{homeText(language, '全程里程', 'Distance')}</span></section>
               <section><strong>{plan.travelHours.toFixed(1)} h</strong><span>{homeText(language, '在路上', 'On the road')}</span></section>
               <section><strong>{plan.visitHours.toFixed(1)} h</strong><span>{homeText(language, '慢慢看', 'Exploring')}</span></section>
-              <section><strong>{plan.minimumDays}</strong><span>{homeText(language, '建议最少天数', 'Minimum days')}</span></section>
+              <section><strong>{plan.bufferHours.toFixed(1)} h</strong><span>{homeText(language, '机动缓冲', 'Buffer time')}</span></section>
             </div>
           </section>
           <section className="home-module home-module--day-cards" id="home-day-plan">
@@ -2515,9 +2729,18 @@ function RoutePlannerSection(props) {
                   <span>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)}</span>
                   <strong>{day.totalHours.toFixed(1)} h / {day.totalKm} km</strong>
                   <p>{day.stops.length ? day.stops.map((stop) => nameFor(stop, language)).join(' → ') : homeText(language, '留作机动日', 'A flexible day')}</p>
+                  {day.stops.length > 0 && (
+                    <ul>
+                      {day.stops.map((stop) => (
+                        <li key={stop.id}>
+                          {nameFor(stop, language)} · {plannedVisitHours(stop, language, pace)}h
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   <small>{day.overHours > 0
                     ? homeText(language, `会多出约 ${day.overHours.toFixed(1)} 小时，建议挪走一个景点。`, `About ${day.overHours.toFixed(1)} hours over the limit. Move one stop to another day.`)
-                    : homeText(language, `${day.travelHours.toFixed(1)} 小时车程，${day.visitHours.toFixed(1)} 小时游览`, `${day.travelHours.toFixed(1)} hours driving, ${day.visitHours.toFixed(1)} hours exploring`)}</small>
+                    : homeText(language, `${day.travelHours.toFixed(1)} 小时车程，${day.visitHours.toFixed(1)} 小时游览，${day.bufferHours.toFixed(1)} 小时机动`, `${day.travelHours.toFixed(1)} hours driving, ${day.visitHours.toFixed(1)} hours exploring, ${day.bufferHours.toFixed(1)} hours buffer`)}</small>
                 </article>
               ))}
             </div>
@@ -2579,7 +2802,7 @@ function TravelServiceDrawer({ language, mode, favorites, compare, routeIds, onC
                   </dl>
                   <div>
                     <button type="button" onClick={() => onOpenDetail(stop.id)}>{homeText(language, '看看详情', 'Details')}</button>
-                    <button className={inRoute ? 'is-route-added' : ''} type="button" aria-pressed={inRoute} onClick={() => onAddRoute(stop.id)}>{inRoute ? homeText(language, '已加入路线', 'In your route') : homeText(language, '加入路线', 'Add to route')}</button>
+                    <button className={inRoute ? 'is-route-added' : ''} type="button" aria-pressed={inRoute} onClick={() => onAddRoute(stop.id)}>{inRoute ? homeText(language, '取消加入', 'Remove from route') : homeText(language, '加入路线', 'Add to route')}</button>
                     <button type="button" onClick={() => (isCompare ? onCompare(stop.id) : onFavorite(stop.id))}>{homeText(language, isCompare ? '移出对比' : '取消收藏', isCompare ? 'Remove' : 'Unsave')}</button>
                   </div>
                 </article>
@@ -2657,7 +2880,7 @@ function DestinationDetailPage({ language, stop, routeStops, favorites, compare,
             <div className="destination-detail__actions">
               <button className={favorites.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => onFavorite(stop.id)}>{homeText(language, '\u6536\u85cf', 'Favorite')}</button>
               <button className={compare.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => onCompare(stop.id)}>{homeText(language, '\u5bf9\u6bd4', 'Compare')}</button>
-              <button className={routeStops.some((item) => item.id === stop.id) ? 'is-route-added' : ''} type="button" aria-pressed={routeStops.some((item) => item.id === stop.id)} onClick={() => onAddRoute(stop.id)}>{routeStops.some((item) => item.id === stop.id) ? homeText(language, '已加入路线', 'In your route') : homeText(language, '\u52a0\u5165\u8def\u7ebf', 'Add route')}</button>
+              <button className={routeStops.some((item) => item.id === stop.id) ? 'is-route-added' : ''} type="button" aria-pressed={routeStops.some((item) => item.id === stop.id)} onClick={() => onAddRoute(stop.id)}>{routeStops.some((item) => item.id === stop.id) ? homeText(language, '取消加入', 'Remove from route') : homeText(language, '\u52a0\u5165\u8def\u7ebf', 'Add route')}</button>
               {url && <a className="concept-btn" href={url} target="_blank" rel="noreferrer">{homeText(language, '\u80cc\u666f\u8d44\u6599', 'Background')}</a>}
             </div>
           </div>
@@ -2690,14 +2913,14 @@ function OnboardingGuide({ language, onClose }) {
     language === 'zh'
       ? [
         { selector: '[data-guide="search"] .home-module--search', title: '先找一个想去的地方', detail: '输入城市、景点，或者用下面的旅行偏好缩小范围。' },
-        { selector: '[data-guide="add-route"]', title: '把景点放进路线', detail: '点“加入路线”，同一个景点不会被重复添加。' },
+        { selector: '[data-guide="add-route"]', title: '把景点放进路线', detail: '点“加入路线”添加景点，再点一次即可取消加入。' },
         { selector: '[data-guide="planner"] .home-module--itinerary-controls', title: '调整天数和节奏', detail: '轻松、标准和紧凑节奏分别按每天 6、8、10 小时来安排。' },
         { selector: '[data-guide="export"]', title: '带走你的行程', detail: '可以下载 TXT，也可以打印并保存为 PDF。' },
         { selector: '#home-3d', title: '最后再看 3D', detail: '路线确定后再进入 3D；这里只介绍入口，不改导览本身。' },
       ]
       : [
         { selector: '[data-guide="search"] .home-module--search', title: 'Start with a place', detail: 'Search a city or landmark, or narrow the list with a travel preference.' },
-        { selector: '[data-guide="add-route"]', title: 'Add it to the route', detail: 'Use Add to route. The same stop will not be added twice.' },
+        { selector: '[data-guide="add-route"]', title: 'Add it to the route', detail: 'Use Add to route, then click again to remove the stop.' },
         { selector: '[data-guide="planner"] .home-module--itinerary-controls', title: 'Set days and pace', detail: 'Relaxed, Standard, and Fast allow 6, 8, or 10 hours for each day.' },
         { selector: '[data-guide="export"]', title: 'Take the plan with you', detail: 'Download TXT or print the page and save it as a PDF.' },
         { selector: '#home-3d', title: 'Open 3D when the route is ready', detail: 'This guide only points to the entry and leaves the 3D experience unchanged.' },
@@ -2839,8 +3062,9 @@ export function HomeShowcase({ onOpenDrive }) {
   const [preference, setPreference] = useState('any');
   const [routeQuery, setRouteQuery] = useState('');
   const [routeIds, setRouteIds] = useState(() => {
+    const hasStoredRoute = window.localStorage.getItem(ROUTE_IDS_KEY) !== null;
     const storedRoute = uniqueValidRouteIds(loadStoredArray(ROUTE_IDS_KEY, initialRouteIds));
-    return storedRoute.length ? storedRoute : initialRouteIds;
+    return hasStoredRoute ? storedRoute : initialRouteIds;
   });
   const [lockedIds, setLockedIds] = useState(() => new Set());
   const [favorites, setFavorites] = useState(() => loadStoredSet(FAVORITES_KEY));
@@ -2866,6 +3090,7 @@ export function HomeShowcase({ onOpenDrive }) {
   const [detailStopId, setDetailStopId] = useState(null);
   const [serviceDrawer, setServiceDrawer] = useState(null);
   const [optimizeMessage, setOptimizeMessage] = useState('');
+  const [routeSaveStatus, setRouteSaveStatus] = useState('');
   const [onboardingOpen, setOnboardingOpen] = useState(() => hasEnteredHome && window.localStorage.getItem(ONBOARDING_SEEN_KEY) !== '1');
   const routeMetricsQuery = useRouteMetrics(routeIds);
 
@@ -2911,7 +3136,7 @@ export function HomeShowcase({ onOpenDrive }) {
   useEffect(() => {
     const cleanRouteIds = uniqueValidRouteIds(routeIds);
     window.localStorage.setItem(ROUTE_IDS_KEY, JSON.stringify(cleanRouteIds));
-    if (cleanRouteIds.length !== routeIds.length) setRouteIds(cleanRouteIds.length ? cleanRouteIds : initialRouteIds);
+    if (cleanRouteIds.length !== routeIds.length) setRouteIds(cleanRouteIds);
   }, [routeIds]);
 
   useEffect(() => {
@@ -2932,12 +3157,13 @@ export function HomeShowcase({ onOpenDrive }) {
 
   useEffect(() => {
     const metrics = routeMetricsQuery.data;
-    if (!metrics?.geometryCoordinates?.length) return;
+    const routeSignature = routeIds.join('|');
+    if (!metrics?.geometryCoordinates?.length || metrics.routeSignature !== routeSignature) return;
     setActiveRouteGeometry({
       coordinates: metrics.geometryCoordinates,
       distanceKm: metrics.distanceKm,
     });
-  }, [routeMetricsQuery.data, setActiveRouteGeometry]);
+  }, [routeIds, routeMetricsQuery.data, setActiveRouteGeometry]);
 
   useLayoutEffect(() => {
     if (!hasEnteredHome) return;
@@ -2965,7 +3191,7 @@ export function HomeShowcase({ onOpenDrive }) {
   const applyAccountPlan = useCallback((plan) => {
     if (!plan) return;
     const cleanRouteIds = uniqueValidRouteIds(plan.route_ids ?? []);
-    if (cleanRouteIds.length) setRouteIds(cleanRouteIds);
+    setRouteIds(cleanRouteIds);
     setLockedIds(new Set(uniqueValidRouteIds(plan.locked_ids ?? [])));
     setFavorites(new Set(uniqueValidRouteIds(plan.favorites ?? [])));
     setCompare(new Set(uniqueValidRouteIds(plan.compare ?? [])));
@@ -3049,9 +3275,19 @@ export function HomeShowcase({ onOpenDrive }) {
     });
   };
 
-  const addRoute = (id) => setRouteIds((current) => current.includes(id) ? current : [...current, id]);
+  const addRoute = (id) => {
+    setRouteIds((current) => current.includes(id)
+      ? current.filter((item) => item !== id)
+      : [...current, id]);
+    setLockedIds((current) => {
+      if (!current.has(id)) return current;
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+  };
   const removeRoute = (id) => {
-    setRouteIds((current) => current.length <= 1 ? current : current.filter((item) => item !== id));
+    setRouteIds((current) => current.filter((item) => item !== id));
     setLockedIds((current) => {
       const next = new Set(current);
       next.delete(id);
@@ -3082,6 +3318,16 @@ export function HomeShowcase({ onOpenDrive }) {
       return optimized;
     });
   };
+  const selectRouteRecommendation = (recommendation) => {
+    setRouteIds(recommendation.ids);
+    setActiveRouteGeometry();
+    setOptimizeMessage(homeText(
+      language,
+      `已选择“${recommendation.title}”，还可以继续移动或锁定景点。`,
+      `Selected “${recommendation.title}”. You can still move or lock stops.`,
+    ));
+    setRouteSaveStatus('');
+  };
   const resetRoute = () => {
     setRouteIds(initialRouteIds);
     setLockedIds(new Set());
@@ -3105,11 +3351,14 @@ export function HomeShowcase({ onOpenDrive }) {
   };
   const openDriveWithCurrentRoute = async (landmarkId = null) => {
     setActiveRouteIds(routeIds);
-    let metrics = routeMetricsQuery.data;
+    const routeSignature = routeIds.join('|');
+    let metrics = routeMetricsQuery.data?.routeSignature === routeSignature
+      ? routeMetricsQuery.data
+      : null;
     if (!metrics?.geometryCoordinates?.length) {
       metrics = await fetchRouteMetrics(routeIds).catch(() => null);
     }
-    if (metrics?.geometryCoordinates?.length) {
+    if (metrics?.geometryCoordinates?.length && metrics.routeSignature === routeSignature) {
       setActiveRouteGeometry({ coordinates: metrics.geometryCoordinates, distanceKm: metrics.distanceKm });
     }
     onOpenDrive(landmarkId);
@@ -3171,6 +3420,37 @@ export function HomeShowcase({ onOpenDrive }) {
     const payload = await response.json();
     setAccountHistory(payload.items ?? []);
   };
+  const saveCurrentRoute = async () => {
+    if (!authToken || !userSession) {
+      setRouteSaveStatus(homeText(language, '请先登录账号，登录后即可保存当前路线。', 'Sign in to save the current route.'));
+      setAuthDialogOpen(true);
+      return;
+    }
+    setRouteSaveStatus(homeText(language, '正在保存路线…', 'Saving route…'));
+    const response = await fetch(`${API_BASE_URL}/api/account/plan`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        route_ids: uniqueValidRouteIds(routeIds),
+        locked_ids: uniqueValidRouteIds([...lockedIds]),
+        favorites: uniqueValidRouteIds([...favorites]),
+        compare: uniqueValidRouteIds([...compare]),
+        days,
+        pace,
+        language,
+      }),
+    }).catch(() => null);
+    if (!response?.ok) {
+      setRouteSaveStatus(homeText(language, '路线保存失败，请确认后端服务已启动后重试。', 'Route save failed. Check that the backend is running and try again.'));
+      return;
+    }
+    setAccountPlanReady(true);
+    setRouteSaveStatus(homeText(language, `路线已保存到 ${userSession.name} 的账号。`, `Route saved to ${userSession.name}'s account.`));
+    addAccountHistory('route saved', routeStops.map((stop) => nameFor(stop, language)).join(' -> '));
+  };
 
   const commonPageProps = {
     language,
@@ -3193,7 +3473,9 @@ export function HomeShowcase({ onOpenDrive }) {
     routeIds,
     routeStops,
     routeSegments,
-    routeGeometry: routeMetricsQuery.data?.geometryCoordinates ?? [],
+    routeGeometry: routeMetricsQuery.data?.routeSignature === routeIds.join('|')
+      ? routeMetricsQuery.data.geometryCoordinates ?? []
+      : [],
     isRouteLoading: routeMetricsQuery.isFetching,
     routeQuery,
     setRouteQuery,
@@ -3210,6 +3492,7 @@ export function HomeShowcase({ onOpenDrive }) {
     pace,
     setPace,
     optimizeMessage,
+    routeSaveStatus,
     setSelectedId,
     onFavorite: (id) => {
       toggleSet(setFavorites, id);
@@ -3224,6 +3507,8 @@ export function HomeShowcase({ onOpenDrive }) {
     onMove: moveRoute,
     onToggleLock: (id) => toggleSet(setLockedIds, id),
     onOptimize: optimizeRoute,
+    onSelectRecommendation: selectRouteRecommendation,
+    onSaveRoute: saveCurrentRoute,
     onResetRoute: resetRoute,
     onPreviewRoute: previewRoute,
     onStartRoute: startRoute,

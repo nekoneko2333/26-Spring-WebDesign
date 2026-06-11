@@ -469,11 +469,6 @@
   line-height: 1.55;
 }
 
-body.poi-briefing-visible .hud-hints {
-  opacity: 0;
-  pointer-events: none;
-}
-
 @media (max-width: 780px) {
   .poi-side {
     top: auto;

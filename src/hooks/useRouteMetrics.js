@@ -22,13 +22,14 @@ function osrmUrl(coords) {
 }
 
 export async function fetchRouteMetrics(routeIds) {
+  const routeSignature = routeIds.filter(Boolean).join('|');
   const coords = routeIds
     .map((id) => DRIVABLE_ACCESS_POINTS[id] ?? landmarkCoordinates.get(id) ?? travelLandmarkMeta[id])
     .filter(Boolean)
     .map((m) => ({ lon: m.lon, lat: m.lat }));
 
   if (coords.length < 2) {
-    return { mode: 'osrm', distanceKm: 0, durationHours: 0 };
+    return { mode: 'osrm', routeSignature, distanceKm: 0, durationHours: 0 };
   }
 
   try {
@@ -42,6 +43,7 @@ export async function fetchRouteMetrics(routeIds) {
       if (route?.geometryCoordinates?.length) {
         return {
           mode: route.provider ?? 'backend',
+          routeSignature,
           distanceKm: route.distanceKm,
           durationHours: route.durationHours,
           geometryCoordinates: route.geometryCoordinates,
@@ -60,6 +62,7 @@ export async function fetchRouteMetrics(routeIds) {
 
   return {
     mode: 'osrm',
+    routeSignature,
     distanceKm: Number((route.distance / 1000).toFixed(1)),
     durationHours: Number((route.duration / 3600).toFixed(2)),
     geometryCoordinates: route.geometry?.coordinates ?? [],

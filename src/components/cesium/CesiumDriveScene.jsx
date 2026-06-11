@@ -3,6 +3,7 @@ import {
   Cartesian3,
   Cartographic,
   buildModuleUrl,
+  CameraEventType,
   Color,
   createOsmBuildingsAsync,
   createWorldImageryAsync,
@@ -225,7 +226,9 @@ export function CesiumDriveScene({ isStarted }) {
     paused: false,
   });
   const [sceneError, setSceneError] = useState('');
+  const [freeHeadingDegrees, setFreeHeadingDegrees] = useState(0);
   const cesiumReady = useAppStore((state) => state.cesiumStatus.ready);
+  const cameraMode = useAppStore((state) => state.cameraMode);
   const routeKey = `${route.signature}-${useAppStore((state) => state.tourResetToken)}`;
   const setCesiumStatus = useAppStore((state) => state.setCesiumStatus);
   const displayPoints = useMemo(() => buildDisplayPoints(route), [route]);
@@ -273,6 +276,13 @@ export function CesiumDriveScene({ isStarted }) {
     viewer.scene.fog.density = 0.00018;
     viewer.scene.screenSpaceCameraController.enableCollisionDetection = true;
     viewer.scene.screenSpaceCameraController.minimumZoomDistance = 12;
+    viewer.scene.screenSpaceCameraController.rotateEventTypes = CameraEventType.LEFT_DRAG;
+    viewer.scene.screenSpaceCameraController.lookEventTypes = [];
+    viewer.scene.screenSpaceCameraController.tiltEventTypes = CameraEventType.RIGHT_DRAG;
+    viewer.scene.screenSpaceCameraController.zoomEventTypes = [
+      CameraEventType.WHEEL,
+      CameraEventType.PINCH,
+    ];
     viewer.imageryLayers.removeAll();
 
     const removeTileListener = viewer.scene.globe.tileLoadProgressEvent.addEventListener((count) => {
@@ -548,6 +558,10 @@ export function CesiumDriveScene({ isStarted }) {
 
           if (now - lastUiSync >= UI_SYNC_INTERVAL_MS) {
             lastUiSync = now;
+            const nextHeading = CesiumMath.toDegrees(viewer.camera.heading);
+            setFreeHeadingDegrees((current) => (
+              Math.abs(current - nextHeading) < 0.5 ? current : nextHeading
+            ));
             const combinedQueue = currentTileQueue + buildingQueue;
             setStreamingState((current) => (
               current.queue === combinedQueue
@@ -675,7 +689,24 @@ export function CesiumDriveScene({ isStarted }) {
 
   return (
     <div className="cesium-drive-scene">
-      <div ref={containerRef} className="cesium-drive-scene__canvas" />
+      <div
+        ref={containerRef}
+        className="cesium-drive-scene__canvas"
+        onContextMenu={(event) => event.preventDefault()}
+      />
+      <aside className="free-view-compass" aria-label="地图方向">
+        <div
+          className="free-view-compass__dial"
+          style={{ transform: `rotate(${-freeHeadingDegrees}deg)` }}
+        >
+          <strong className="free-view-compass__north">北</strong>
+          <span className="free-view-compass__east">东</span>
+          <span className="free-view-compass__south">南</span>
+          <span className="free-view-compass__west">西</span>
+        </div>
+        <i aria-hidden="true" />
+        <p>{cameraMode === 'free' ? '左键平移 · 右键旋转' : '地图方向'}</p>
+      </aside>
       {(showInitialLoading || showStreamingPause) && (
         <div className={`cesium-drive-scene__loading ${showStreamingPause ? 'is-streaming' : ''}`}>
           <strong>{showStreamingPause ? '正在加载前方地图' : '正在加载意大利地形'}</strong>
