@@ -200,11 +200,17 @@ const driveRouteCopy = {
 };
 
 function getLandmarkName(landmark, language) {
-  return travelLandmarkMeta[landmark?.id]?.name?.[language] ?? landmark?.name ?? '';
+  return travelLandmarkMeta[landmark?.id]?.name?.[language]
+    ?? landmark?.localizedNames?.[language]
+    ?? landmark?.name
+    ?? '';
 }
 
 function getLandmarkDescription(landmark, language) {
-  return travelLandmarkMeta[landmark?.id]?.blurb?.[language] ?? landmark?.description ?? '';
+  return travelLandmarkMeta[landmark?.id]?.blurb?.[language]
+    ?? landmark?.localizedDescriptions?.[language]
+    ?? landmark?.description
+    ?? '';
 }
 
 function getShortText(text, maxLength = 58) {

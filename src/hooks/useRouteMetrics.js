@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { landmarks } from '../data/landmarks.js';
 import { travelLandmarkMeta } from '../data/travelGuide.js';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
@@ -10,6 +11,10 @@ const DRIVABLE_ACCESS_POINTS = {
   colosseum: { lon: 12.4923, lat: 41.8892 },
   pompeii: { lon: 14.4987, lat: 40.7497 },
 };
+const landmarkCoordinates = new Map(landmarks.map((landmark) => [
+  landmark.id,
+  { lon: landmark.lon, lat: landmark.lat },
+]));
 
 function osrmUrl(coords) {
   const encoded = coords.map((c) => `${c.lon},${c.lat}`).join(';');
@@ -18,7 +23,7 @@ function osrmUrl(coords) {
 
 export async function fetchRouteMetrics(routeIds) {
   const coords = routeIds
-    .map((id) => DRIVABLE_ACCESS_POINTS[id] ?? travelLandmarkMeta[id])
+    .map((id) => DRIVABLE_ACCESS_POINTS[id] ?? landmarkCoordinates.get(id) ?? travelLandmarkMeta[id])
     .filter(Boolean)
     .map((m) => ({ lon: m.lon, lat: m.lat }));
 

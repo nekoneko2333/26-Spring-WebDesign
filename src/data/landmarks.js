@@ -1,3 +1,5 @@
+import liveLandmarksData from '../../public/data/live-landmarks.json';
+
 export const MAP_BOUNDS = {
   lonMin: 6.6,
   lonMax: 18.5,
@@ -63,7 +65,7 @@ function makeLandmark({
   };
 }
 
-export const landmarks = [
+const baseLandmarks = [
   {
     id: 'colosseum',
     name: 'Colosseum',
@@ -358,6 +360,51 @@ export const landmarks = [
     modelKind: 'ruins',
     scale: 5.8,
   }),
+];
+
+const baseLandmarkIndex = new Map(baseLandmarks.map((landmark) => [landmark.id, landmark]));
+const liveLandmarkIds = new Set((liveLandmarksData.items ?? []).map((item) => item.id));
+
+export const landmarks = [
+  ...(liveLandmarksData.items ?? []).map((item) => {
+    const existing = baseLandmarkIndex.get(item.id);
+    const lon = item.coordinates.lon;
+    const lat = item.coordinates.lat;
+
+    if (existing) {
+      return {
+        ...existing,
+        name: item.name?.en ?? existing.name,
+        description: item.wikipedia?.en?.extract ?? existing.description,
+        localizedNames: item.name ?? null,
+        localizedDescriptions: {
+          en: item.wikipedia?.en?.extract ?? existing.description,
+          zh: item.wikipedia?.zh?.extract ?? item.wikipedia?.en?.extract ?? existing.description,
+        },
+        lon,
+        lat,
+        position: lngLatToWorld(lon, lat),
+        modelKind: item.category ?? existing.modelKind,
+      };
+    }
+
+    return {
+      ...makeLandmark({
+        id: item.id,
+        name: item.name?.en ?? item.id,
+        description: item.wikipedia?.en?.extract ?? '',
+        lon,
+        lat,
+        modelKind: item.category ?? 'monument',
+      }),
+      localizedNames: item.name ?? null,
+      localizedDescriptions: {
+        en: item.wikipedia?.en?.extract ?? '',
+        zh: item.wikipedia?.zh?.extract ?? item.wikipedia?.en?.extract ?? '',
+      },
+    };
+  }),
+  ...baseLandmarks.filter((landmark) => !liveLandmarkIds.has(landmark.id)),
 ];
 
 export const WORLD_SIZE_UNITS = MAP_BOUNDS.worldSize;

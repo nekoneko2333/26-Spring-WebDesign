@@ -94,7 +94,9 @@ function LandmarkModel({ landmark }) {
   const routeProgress = useAppStore((state) => state.routeProgress);
   useTerrainData();
   const baseY = worldPosToHeight(landmark.position[0], landmark.position[2]);
-  const displayName = travelLandmarkMeta[landmark.id]?.name?.[language] ?? landmark.name;
+  const displayName = travelLandmarkMeta[landmark.id]?.name?.[language]
+    ?? landmark.localizedNames?.[language]
+    ?? landmark.name;
   const displayRouteIds = activeRouteIds.length ? activeRouteIds : ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
   const routeIndex = displayRouteIds.indexOf(landmark.id);
   const routeCount = displayRouteIds.length || 1;
