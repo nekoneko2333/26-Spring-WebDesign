@@ -3,6 +3,7 @@ import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { landmarks as baseLandmarks, lngLatToWorld } from '../../data/landmarks.js';
+import { italyOutlineGeoJson } from '../../data/italyOutline.js';
 import { useAppStore } from '../../state/useAppStore.js';
 import { fetchRouteMetrics, useRouteMetrics } from '../../hooks/useRouteMetrics.js';
 import liveLandmarksData from '../../../public/data/live-landmarks.json';
@@ -116,10 +117,10 @@ const DAYS_KEY = 'trip3d_days';
 const PACE_KEY = 'trip3d_pace';
 const LANGUAGE_KEY = 'trip3d_language';
 
-const paceStopsPerDay = {
-  Relaxed: 2,
-  Standard: 3,
-  Fast: 4,
+const paceDailyHours = {
+  Relaxed: 6,
+  Standard: 8,
+  Fast: 10,
 };
 
 const storyScenes = [
@@ -437,6 +438,11 @@ function seasonText(landmark, language) {
 
 function distanceKm(routeStops) {
   return Math.round(routeSegmentsFor(routeStops).reduce((sum, segment) => sum + segment.distance, 0));
+}
+
+function routeDistanceForIds(routeIds) {
+  const stops = routeIds.map((id) => landmarks.find((stop) => stop.id === id)).filter(Boolean);
+  return routeSegmentsFor(stops).reduce((sum, segment) => sum + segment.distance, 0);
 }
 
 function segmentDistanceKm(a, b) {
@@ -1963,7 +1969,6 @@ function sourceLabelsFor(landmark, language) {
   if (live?.wikidata?.source) labels.push('Wikidata');
   if (live?.wikidata?.officialWebsite) labels.push(homeText(language, '官方网站', 'Official site'));
   if (live?.weather?.source) labels.push('Open-Meteo');
-  if (live?.routeHints?.some((hint) => hint.source === 'osrm')) labels.push('OSRM');
   return labels.length ? labels.join(' / ') : homeText(language, '本地资料', 'Local notes');
 }
 
@@ -2020,9 +2025,9 @@ function nearbyStopsFor(stop, routeStops, language) {
 
 function paceText(pace, language) {
   const zh = {
-    Relaxed: '今天留点空白，适合慢慢拍照和临时改主意。',
-    Standard: '节奏刚好，上午和下午各有重点。',
-    Fast: '安排比较满，适合想多看几个点的路线。',
+    Relaxed: '每天留出 6 小时，适合慢慢拍照，也给临时改主意留点空间。',
+    Standard: '每天安排 8 小时，车程和游览之间比较从容。',
+    Fast: '每天最多安排 10 小时，适合想多看几个地方的旅程。',
   };
   const en = {
     Relaxed: 'Leave some blank space for photos and small detours.',
@@ -2032,45 +2037,115 @@ function paceText(pace, language) {
   return language === 'zh' ? zh[pace] : en[pace];
 }
 
-function makeItinerary(routeStops, days, pace = 'Standard', language = 'en') {
-  const safeDays = clampDays(days);
+function buildItineraryDays(routeStops, dayCount, pace, language) {
+  const safeDays = clampDays(dayCount);
+  const dailyLimit = paceDailyHours[pace] ?? paceDailyHours.Standard;
   const uniqueStops = [...new Map(routeStops.map((stop) => [stop.id, stop])).values()];
-  if (!uniqueStops.length) return [];
-  const stopsPerDay = paceStopsPerDay[pace] ?? paceStopsPerDay.Standard;
-  const buckets = Array.from({ length: safeDays }, (_, index) => ({ day: index + 1, stops: [] }));
-  uniqueStops.forEach((stop, index) => {
-    const dayIndex = Math.min(safeDays - 1, Math.floor(index / stopsPerDay));
-    buckets[dayIndex].stops.push(stop);
+  const buckets = Array.from({ length: safeDays }, (_, index) => ({
+    day: index + 1,
+    stops: [],
+    segments: [],
+    totalKm: 0,
+    travelHours: 0,
+    visitHours: 0,
+    dailyLimit,
+  }));
+  if (!uniqueStops.length) return buckets;
+
+  let dayIndex = 0;
+  uniqueStops.forEach((stop, stopIndex) => {
+    const previousStop = stopIndex > 0 ? uniqueStops[stopIndex - 1] : null;
+    const incomingSegment = previousStop ? routeSegmentsFor([previousStop, stop])[0] ?? null : null;
+    const visitHours = visitFor(stop, language).durationHours;
+    const addedHours = visitHours + (incomingSegment?.duration ?? 0);
+    const remainingStops = uniqueStops.length - stopIndex;
+    const remainingDays = safeDays - dayIndex;
+    const current = buckets[dayIndex];
+    const shouldMove = current.stops.length > 0
+      && dayIndex < safeDays - 1
+      && current.visitHours + current.travelHours + addedHours > dailyLimit
+      && remainingStops >= remainingDays;
+    if (shouldMove) dayIndex += 1;
+
+    const target = buckets[dayIndex];
+    target.stops.push(stop);
+    target.visitHours += visitHours;
+    if (incomingSegment) {
+      target.segments.push(incomingSegment);
+      target.travelHours += incomingSegment.duration;
+      target.totalKm += incomingSegment.distance;
+    }
   });
 
-  return buckets.map((day) => {
-    const segments = routeSegmentsFor(day.stops);
-    const totalKm = Math.round(segments.reduce((sum, segment) => sum + segment.distance, 0));
-    const travelHours = segments.reduce((sum, segment) => sum + segment.duration, 0);
-    const visitHours = day.stops.reduce((sum, stop) => sum + visitFor(stop, language).durationHours, 0);
-    return {
-      ...day,
-      segments,
-      totalKm,
-      travelHours,
-      visitHours,
-      paceNote: paceText(pace, language),
-    };
+  return buckets.map((day) => ({
+    ...day,
+    totalKm: Math.round(day.totalKm),
+    totalHours: day.visitHours + day.travelHours,
+    overHours: Math.max(0, day.visitHours + day.travelHours - dailyLimit),
+    paceNote: paceText(pace, language),
+  }));
+}
+
+function minimumDaysFor(routeStops, pace, language) {
+  const dailyLimit = paceDailyHours[pace] ?? paceDailyHours.Standard;
+  const uniqueStops = [...new Map(routeStops.map((stop) => [stop.id, stop])).values()];
+  if (!uniqueStops.length) return 1;
+  let days = 1;
+  let hours = 0;
+  uniqueStops.forEach((stop, index) => {
+    const incoming = index > 0 ? routeSegmentsFor([uniqueStops[index - 1], stop])[0] : null;
+    const added = visitFor(stop, language).durationHours + (incoming?.duration ?? 0);
+    if (hours > 0 && hours + added > dailyLimit) {
+      days += 1;
+      hours = added;
+    } else {
+      hours += added;
+    }
   });
+  return days;
+}
+
+function makeItineraryPlan(routeStops, days, pace = 'Standard', language = 'en') {
+  const dailyLimit = paceDailyHours[pace] ?? paceDailyHours.Standard;
+  const itineraryDays = buildItineraryDays(routeStops, days, pace, language);
+  const segments = routeSegmentsFor(routeStops);
+  const travelHours = segments.reduce((sum, segment) => sum + segment.duration, 0);
+  const visitHours = routeStops.reduce((sum, stop) => sum + visitFor(stop, language).durationHours, 0);
+  const minimumDays = minimumDaysFor(routeStops, pace, language);
+  return {
+    days: itineraryDays,
+    dailyLimit,
+    minimumDays,
+    travelHours,
+    visitHours,
+    totalHours: travelHours + visitHours,
+    totalKm: Math.round(segments.reduce((sum, segment) => sum + segment.distance, 0)),
+    isFeasible: itineraryDays.every((day) => day.overHours <= 0.05) && clampDays(days) >= minimumDays,
+  };
+}
+
+function makeItinerary(routeStops, days, pace = 'Standard', language = 'en') {
+  return makeItineraryPlan(routeStops, days, pace, language).days;
 }
 
 function itineraryExportText(language, routeStops, days, pace) {
-  const itinerary = makeItinerary(routeStops, days, pace, language);
+  const plan = makeItineraryPlan(routeStops, days, pace, language);
   const lines = [
-    homeText(language, 'Trip3D 意大利行程草稿', 'Trip3D Italy planning draft'),
-    `${homeText(language, '节奏', 'Pace')}: ${pace}`,
+    homeText(language, 'Trip3D 意大利旅行手册', 'Trip3D Italy travel notebook'),
+    `${homeText(language, '旅行节奏', 'Pace')}: ${pace} (${plan.dailyLimit}h/day)`,
+    `${homeText(language, '建议至少预留', 'Suggested minimum')}: ${plan.minimumDays} ${homeText(language, '天', 'days')}`,
+    `${homeText(language, '全程', 'Whole trip')}: ${plan.totalKm}km / ${plan.travelHours.toFixed(1)}h ${homeText(language, '在路上', 'on the road')} / ${plan.visitHours.toFixed(1)}h ${homeText(language, '慢慢看', 'exploring')}`,
     `${homeText(language, '路线', 'Route')}: ${routeStops.map((stop) => nameFor(stop, language)).join(' -> ') || homeText(language, '还没有添加景点', 'No stops yet')}`,
     '',
   ];
-  itinerary.forEach((day) => {
-    lines.push(`${homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} · ${Math.round(day.visitHours + day.travelHours)}h · ${day.totalKm}km`);
+  if (!plan.isFeasible) {
+    lines.push(homeText(language, '小提醒：现在的安排会有些赶，建议再留一天。', 'A small note: this plan is rather full, so consider adding another day.'));
+    lines.push('');
+  }
+  plan.days.forEach((day) => {
+    lines.push(`${homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} · ${day.totalHours.toFixed(1)}h · ${day.totalKm}km`);
     if (!day.stops.length) {
-      lines.push(homeText(language, '  留作机动日。', '  Keep this as a buffer day.'));
+      lines.push(homeText(language, '  留作机动日，睡个懒觉也很好。', '  Keep this as a flexible day.'));
     }
     day.stops.forEach((stop, index) => {
       const visit = visitFor(stop, language);
@@ -2079,7 +2154,7 @@ function itineraryExportText(language, routeStops, days, pace) {
     });
     lines.push('');
   });
-  lines.push(homeText(language, '来源：Wikipedia / Wikidata / Open-Meteo / OSRM；出发前请再次确认开放和预约信息。', 'Sources: Wikipedia / Wikidata / Open-Meteo / OSRM. Recheck opening and reservation details before departure.'));
+  lines.push(homeText(language, '开放时间、预约和现场交通可能变化，出发前记得再看一眼。', 'Opening hours, reservations, and local transfers can change, so check again before departure.'));
   return lines.join('\n');
 }
 
@@ -2143,8 +2218,8 @@ function HomeStats({ language }) {
   return <section className="cinematic-stats" aria-label={language === 'zh' ? '\u6570\u636e\u6982\u89c8' : 'Overview stats'}>{stats.map(([value, label]) => <article key={label}><strong>{value}</strong><span>{label}</span></article>)}</section>;
 }
 
-const ROUTE_MAP_BOUNDS = { lonMin: 6.2, lonMax: 18.8, latMin: 36.4, latMax: 46.8 };
-const ITALY_MAINLAND = [[7.5,44.1],[7.7,45.1],[8.6,45.7],[10.2,46.2],[12.2,46],[13.6,45.7],[13.9,44.8],[13.2,43.9],[13,43.1],[13.8,42.6],[14.5,42],[15,41.2],[16.2,41.9],[18.2,40.7],[18.5,39.9],[17.5,40.1],[16.8,39.5],[17.2,38.9],[16.6,38.7],[16,39.2],[15.6,40],[14.8,40.6],[14.1,40.9],[13.4,41.3],[12.6,41.7],[12,42.5],[11.3,43.4],[10.3,43.9],[9.3,44.2],[8.5,44.4],[7.8,44.5]];
+const ROUTE_MAP_BOUNDS = { lonMin: 6.4, lonMax: 19.0, latMin: 35.4, latMax: 47.2 };
+const ITALY_COASTLINES = italyOutlineGeoJson.geometry.coordinates.map((polygon) => polygon[0]);
 const ROUTE_NETWORK = [
   [[9.19,45.46],[10.99,45.44],[11.88,45.41],[12.23,45.49]],
   [[10.99,45.44],[11.34,44.49],[11.25,43.77],[12.48,41.91],[14.33,41.07],[14.49,40.75]],
@@ -2152,10 +2227,15 @@ const ROUTE_NETWORK = [
 ];
 
 function projectRouteMapPoint(lon, lat) {
-  const padding = 2;
+  const padding = 4;
   const drawingArea = 100 - padding * 2;
+  const centerLat = (ROUTE_MAP_BOUNDS.latMin + ROUTE_MAP_BOUNDS.latMax) / 2;
+  const longitudeScale = Math.cos(centerLat * Math.PI / 180);
+  const minX = ROUTE_MAP_BOUNDS.lonMin * longitudeScale;
+  const maxX = ROUTE_MAP_BOUNDS.lonMax * longitudeScale;
+  const x = lon * longitudeScale;
   return {
-    x: padding + ((lon - ROUTE_MAP_BOUNDS.lonMin) / (ROUTE_MAP_BOUNDS.lonMax - ROUTE_MAP_BOUNDS.lonMin)) * drawingArea,
+    x: padding + ((x - minX) / (maxX - minX)) * drawingArea,
     y: padding + (1 - ((lat - ROUTE_MAP_BOUNDS.latMin) / (ROUTE_MAP_BOUNDS.latMax - ROUTE_MAP_BOUNDS.latMin))) * drawingArea,
   };
 }
@@ -2208,7 +2288,7 @@ function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoadi
       aria-label={language === 'zh' ? '手绘道路路线地图' : 'Hand-drawn road route map'}
     >
       <svg viewBox="0 0 100 100" role="img" aria-hidden="true">
-        <path className="paper-route-map__land" d={routeMapPath(ITALY_MAINLAND, true)} />
+        {ITALY_COASTLINES.map((coastline, index) => <path key={index} className="paper-route-map__land" d={routeMapPath(coastline, true)} />)}
         {ROUTE_NETWORK.map((line, index) => <path key={index} className="paper-route-map__network" d={routeMapPath(line)} />)}
         {simplifiedRoute.length >= 2 && <path className="paper-route-map__path-casing" d={routeMapPath(simplifiedRoute)} />}
         {simplifiedRoute.length >= 2 && <path className="paper-route-map__path" d={routeMapPath(simplifiedRoute)} />}
@@ -2223,7 +2303,7 @@ function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoadi
       {showRouteLoading && (
         <div className="paper-route-map__loading" role="status">
           <i aria-hidden="true" />
-          <strong>{language === 'zh' ? '加载中' : 'Loading'}</strong>
+          <strong>{language === 'zh' ? '正在把沿途道路画进手册' : 'Drawing the roads into your notebook'}</strong>
         </div>
       )}
     </div>
@@ -2250,6 +2330,7 @@ function DestinationSection(props) {
     filteredStops,
     favorites,
     compare,
+    routeIds,
     selectedId,
     visibleCount,
     onShowMore,
@@ -2310,7 +2391,15 @@ function DestinationSection(props) {
               <div className="home-card-actions">
                 <button className={favorites.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => props.onFavorite(stop.id)}>{homeText(language, '收藏', 'Save')}</button>
                 <button className={compare.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => props.onCompare(stop.id)}>{homeText(language, '对比', 'Compare')}</button>
-                <button data-guide="add-route" type="button" onClick={() => props.onAddRoute(stop.id)}>{homeText(language, '加入路线', 'Add to route')}</button>
+                <button
+                  data-guide="add-route"
+                  className={routeIds.includes(stop.id) ? 'is-route-added' : ''}
+                  type="button"
+                  aria-pressed={routeIds.includes(stop.id)}
+                  onClick={() => props.onAddRoute(stop.id)}
+                >
+                  {routeIds.includes(stop.id) ? homeText(language, '已加入路线', 'In your route') : homeText(language, '加入路线', 'Add to route')}
+                </button>
                 <button type="button" onClick={() => onOpenDetail(stop.id)}>{homeText(language, '查看详情', 'Details')}</button>
                 {url && <a href={url} target="_blank" rel="noreferrer">{homeText(language, '资料页', 'Source page')}</a>}
               </div>
@@ -2323,15 +2412,17 @@ function DestinationSection(props) {
   );
 }
 
-function PrintableItinerary({ language, routeStops, itinerary, pace }) {
+function PrintableItinerary({ language, routeStops, plan, pace }) {
   return (
     <section className="print-itinerary" aria-label={homeText(language, '可打印行程', 'Printable itinerary')}>
       <h1>{homeText(language, 'Trip3D 意大利行程草稿', 'Trip3D Italy planning draft')}</h1>
       <p>{homeText(language, '路线', 'Route')}: {routeStops.map((stop) => nameFor(stop, language)).join(' -> ') || homeText(language, '还没有添加景点', 'No stops yet')}</p>
       <p>{homeText(language, '节奏', 'Pace')}: {pace}</p>
-      {itinerary.map((day) => (
+      <p>{homeText(language, '建议至少预留', 'Suggested minimum')}: {plan.minimumDays} {homeText(language, '天', 'days')}</p>
+      {!plan.isFeasible && <p>{homeText(language, '这份安排会有些赶，建议再留一天。', 'This plan is rather full, so consider adding another day.')}</p>}
+      {plan.days.map((day) => (
         <article key={day.day}>
-          <h2>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} · {day.totalKm} km · {(day.visitHours + day.travelHours).toFixed(1)} h</h2>
+          <h2>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} · {day.totalKm} km · {day.totalHours.toFixed(1)} h</h2>
           {day.stops.length ? day.stops.map((stop) => {
             const visit = visitFor(stop, language);
             return (
@@ -2354,7 +2445,7 @@ function PrintableItinerary({ language, routeStops, itinerary, pace }) {
 
 function RoutePlannerSection(props) {
   const { language, routeStops, routeSegments, routeGeometry, isRouteLoading, routeQuery, setRouteQuery, routeMatches, days, setDays, pace, setPace, lockedIds } = props;
-  const itinerary = makeItinerary(routeStops, days, pace, language);
+  const plan = makeItineraryPlan(routeStops, days, pace, language);
   const exportText = itineraryExportText(language, routeStops, days, pace);
   const printPdf = () => window.print();
 
@@ -2391,6 +2482,7 @@ function RoutePlannerSection(props) {
               <button className="concept-btn" type="button" onClick={props.onOptimize}>{homeText(language, '优化顺序', 'Optimize')}</button>
               <button className="concept-btn" type="button" onClick={props.onResetRoute}>{homeText(language, '回到默认路线', 'Reset route')}</button>
             </div>
+            {props.optimizeMessage && <p className="planner-note" role="status">{props.optimizeMessage}</p>}
           </section>
 
           <section className="home-module home-module--itinerary-controls">
@@ -2400,6 +2492,16 @@ function RoutePlannerSection(props) {
               <label><span>{homeText(language, '节奏', 'Pace')}</span><select value={pace} onChange={(event) => setPace(event.target.value)}><option>Relaxed</option><option>Standard</option><option>Fast</option></select></label>
             </div>
             <p className="planner-note">{paceText(pace, language)}</p>
+            <div className={`itinerary-readiness ${plan.isFeasible ? 'is-ready' : 'is-tight'}`}>
+              <strong>{plan.isFeasible
+                ? homeText(language, '这份安排走得下来', 'This plan has room to breathe')
+                : homeText(language, '这份安排会有些赶', 'This plan is rather full')}</strong>
+              <p>{homeText(
+                language,
+                `按现在的节奏，建议至少预留 ${plan.minimumDays} 天。全程约 ${plan.travelHours.toFixed(1)} 小时在路上，${plan.visitHours.toFixed(1)} 小时慢慢看。`,
+                `At this pace, allow at least ${plan.minimumDays} days: about ${plan.travelHours.toFixed(1)} hours on the road and ${plan.visitHours.toFixed(1)} hours exploring.`,
+              )}</p>
+            </div>
           </section>
 
           <section className="home-module home-module--export" data-guide="export">
@@ -2414,8 +2516,9 @@ function RoutePlannerSection(props) {
 
         <div className="cinematic-route-planner__visual">
           <section className="home-module home-module--map">
-            <div className="home-module__head"><span>{homeText(language, '路线预览', 'Route preview')}</span><strong>{routeStops.length}</strong></div>
+            <div className="home-module__head"><span>{homeText(language, '路线预览', 'Route preview')}</span><strong>{isRouteLoading ? homeText(language, '正在画路线', 'Drawing route') : routeGeometry.length >= 2 ? homeText(language, '已按道路整理', 'Road route ready') : homeText(language, '大致方向', 'Rough direction')}</strong></div>
             <RouteSketchMap language={language} routeStops={routeStops} routeGeometry={routeGeometry} isRouteLoading={isRouteLoading} />
+            {!isRouteLoading && routeGeometry.length < 2 && <p className="planner-note">{homeText(language, '道路信息暂时没回来，先显示景点之间的大致方向，稍后可以再试。', 'Road details are taking a little longer, so the map is showing the general direction for now.')}</p>}
           </section>
           <section className="home-module home-module--schema">
             <div className="home-module__head"><span>{homeText(language, '站点连接', 'Stop connections')}</span><strong>{routeSegments.length}</strong></div>
@@ -2426,27 +2529,95 @@ function RoutePlannerSection(props) {
           <section className="home-module home-module--metrics">
             <div className="home-module__head"><span>{homeText(language, '路线概览', 'Route overview')}</span><strong>{pace}</strong></div>
             <div className="home-metric-grid">
-              <section><strong>{distanceKm(routeStops)} km</strong><span>{homeText(language, '估算里程', 'Distance')}</span></section>
-              <section><strong>{days}</strong><span>{homeText(language, '天数', 'Days')}</span></section>
-              <section><strong>{routeStops.length}</strong><span>{homeText(language, '停靠点', 'Stops')}</span></section>
-              <section><strong>{sourceLabelsFor(routeStops[0] ?? landmarks[0], language)}</strong><span>{homeText(language, '公开来源', 'Public sources')}</span></section>
+              <section><strong>{plan.totalKm} km</strong><span>{homeText(language, '全程里程', 'Distance')}</span></section>
+              <section><strong>{plan.travelHours.toFixed(1)} h</strong><span>{homeText(language, '在路上', 'On the road')}</span></section>
+              <section><strong>{plan.visitHours.toFixed(1)} h</strong><span>{homeText(language, '慢慢看', 'Exploring')}</span></section>
+              <section><strong>{plan.minimumDays}</strong><span>{homeText(language, '建议最少天数', 'Minimum days')}</span></section>
+            </div>
+          </section>
+          <section className="home-module home-module--day-cards" id="home-day-plan">
+            <div className="home-module__head"><span>{homeText(language, '每天怎么走', 'Day by day')}</span><strong>{plan.dailyLimit}h / {homeText(language, '天', 'day')}</strong></div>
+            <div className="cinematic-day-grid">
+              {plan.days.map((day) => (
+                <article key={day.day} className={`cinematic-day-card ${day.overHours > 0 ? 'is-tight' : ''}`}>
+                  <span>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)}</span>
+                  <strong>{day.totalHours.toFixed(1)} h / {day.totalKm} km</strong>
+                  <p>{day.stops.length ? day.stops.map((stop) => nameFor(stop, language)).join(' → ') : homeText(language, '留作机动日', 'A flexible day')}</p>
+                  <small>{day.overHours > 0
+                    ? homeText(language, `会多出约 ${day.overHours.toFixed(1)} 小时，建议挪走一个景点。`, `About ${day.overHours.toFixed(1)} hours over the limit. Move one stop to another day.`)
+                    : homeText(language, `${day.travelHours.toFixed(1)} 小时车程，${day.visitHours.toFixed(1)} 小时游览`, `${day.travelHours.toFixed(1)} hours driving, ${day.visitHours.toFixed(1)} hours exploring`)}</small>
+                </article>
+              ))}
             </div>
           </section>
         </div>
       </div>
 
-      <PrintableItinerary language={language} routeStops={routeStops} itinerary={itinerary} pace={pace} />
+      <PrintableItinerary language={language} routeStops={routeStops} plan={plan} pace={pace} />
     </section>
   );
 }
 
 function ThreeDGuideSection({ language, selectedStop, routeStops, onOpenDrive }) {
-  return <section id="home-3d" className="cinematic-section cinematic-3d"><div className="cinematic-section__head"><span>{language === 'zh' ? '3D旅行导览' : '3D travel guide'}</span><h2>{language === 'zh' ? '沿真实道路进入意大利路线' : 'Enter the Italy route along real roads'}</h2><p>{language === 'zh' ? '路线规划完成后，直接进入沉浸式驾驶导览。' : 'Once the route is ready, enter the immersive driving guide directly.'}</p></div><div className="cinematic-3d__layout"><div className="cinematic-3d__copy"><strong>{nameFor(selectedStop, language)}</strong><p>{language === 'zh' ? '当前路线包含 ' + routeStops.length + ' 个停靠点，3D 导览会使用道路级路线折线。' : 'The current route has ' + routeStops.length + ' stops and uses road-level routed geometry.'}</p></div><div className="cinematic-entry-grid cinematic-entry-grid--single"><article><strong>3D Drive</strong><p>{language === 'zh' ? '沿当前道路路线进入沉浸式驾驶导览。' : 'Enter immersive driving guidance along the current road route.'}</p><button type="button" onClick={() => onOpenDrive(selectedStop.id)}>{language === 'zh' ? '进入' : 'Enter'}</button></article></div></div></section>;
+  return <section id="home-3d" className="cinematic-section cinematic-3d"><div className="cinematic-section__head"><span>{language === 'zh' ? '3D旅行导览' : '3D travel guide'}</span><h2>{language === 'zh' ? '沿真实道路进入意大利路线' : 'Enter the Italy route along real roads'}</h2><p>{language === 'zh' ? '路线规划完成后，直接进入沉浸式驾驶导览。' : 'Once the route is ready, enter the immersive driving guide directly.'}</p></div><div className="cinematic-3d__layout"><div className="cinematic-3d__copy"><strong>{nameFor(selectedStop, language)}</strong><p>{language === 'zh' ? '当前路线包含 ' + routeStops.length + ' 个停靠点，准备好后就沿着选好的路出发。' : 'Your route has ' + routeStops.length + ' stops. When you are ready, set off along the roads you picked.'}</p></div><div className="cinematic-entry-grid cinematic-entry-grid--single"><article><strong>3D Drive</strong><p>{language === 'zh' ? '沿当前道路路线进入沉浸式驾驶导览。' : 'Enter immersive driving guidance along the current road route.'}</p><button type="button" onClick={() => onOpenDrive(selectedStop.id)}>{language === 'zh' ? '进入' : 'Enter'}</button></article></div></div></section>;
 }
 
-function FeatureSection({ language, favorites, compare, routeStops, userSession }) {
-  const features = language === 'zh' ? [['01', '\u6536\u85cf\u76ee\u7684\u5730', favorites.size + ' \u4e2a\u5df2\u6536\u85cf', '\u4fdd\u7559\u559c\u6b22\u7684\u57ce\u5e02\u4e0e\u5730\u6807'], ['02', '\u666f\u70b9\u5bf9\u6bd4', compare.size + ' \u4e2a\u5bf9\u6bd4\u9879', '\u6bd4\u8f83\u4e0d\u540c\u505c\u9760\u70b9\u7684\u53d6\u820d'], ['03', '\u8def\u7ebf\u81ea\u52a8\u4f18\u5316', '\u6309\u8ddd\u79bb\u8c03\u6574\u672a\u9501\u5b9a\u7ad9\u70b9', '\u8ba9\u884c\u7a0b\u66f4\u987a\u8def'], ['04', '\u6309\u5929\u751f\u6210\u884c\u7a0b', '\u628a\u8def\u7ebf\u62c6\u6210\u6bcf\u5929\u8ba1\u5212', '\u6e05\u695a\u5b89\u6392\u6bcf\u5929\u8282\u594f'], ['05', '\u65c5\u884c\u8d44\u6599\u67e5\u8be2', '\u67e5\u770b\u666f\u70b9\u80cc\u666f\u8d44\u6599', '\u51fa\u53d1\u524d\u4e86\u89e3\u6545\u4e8b'], ['06', '\u672c\u5730\u8d26\u6237\u72b6\u6001', userSession ? userSession.name : '\u6e38\u5ba2\u6a21\u5f0f', '\u4fdd\u5b58\u4f60\u7684\u65c5\u884c\u72b6\u6001']] : [['01', 'Saved destinations', favorites.size + ' saved', 'Keep favorite cities and landmarks'], ['02', 'Compare stops', compare.size + ' compared', 'Compare possible stops'], ['03', 'Route optimization', 'Reorder unlocked stops by distance', 'Keep the route smoother'], ['04', 'Day itinerary', 'Split the route into day plans', 'Plan each day clearly'], ['05', 'Travel notes', 'Read landmark background', 'Know the story before arrival'], ['06', 'Local account', userSession ? userSession.name : 'Guest mode', 'Keep your travel state']];
-  return <section id="home-services" className="cinematic-section cinematic-features"><div className="cinematic-section__head"><span>{language === 'zh' ? '\u529f\u80fd\u670d\u52a1' : 'Travel tools'}</span><h2>{language === 'zh' ? '\u89c4\u5212\u65c5\u7a0b\u65f6\u5e38\u7528\u7684\u5165\u53e3' : 'Useful entries while planning'}</h2></div><div className="cinematic-feature-grid">{features.map(([index, title, detail, action]) => <article key={title}><span>{index}</span><strong>{title}</strong><p>{detail}</p><small>{action}</small></article>)}</div></section>;
+function FeatureSection({ language, favorites, compare, routeStops, userSession, onOpenService }) {
+  const features = language === 'zh' ? [['01', '收藏目的地', favorites.size + ' 个已收藏', '把喜欢的地方留在手边'], ['02', '景点对比', compare.size + ' 个对比项', '摊开看看，再决定停在哪里'], ['03', '顺路整理', '让未锁定的景点走得更顺', '少绕一点路，多留一点时间'], ['04', '按天安排行程', '看看每天在路上多久', '把快慢节奏安排清楚'], ['05', '旅行资料', '读一读目的地的故事', '出发前心里更有底'], ['06', '我的旅行手册', userSession ? userSession.name : '游客模式', '保存这次旅行的选择']] : [['01', 'Saved destinations', favorites.size + ' saved', 'Keep favorite places close by'], ['02', 'Compare stops', compare.size + ' compared', 'Put ideas side by side before choosing'], ['03', 'Smoother route', 'Keep unlocked stops more direct', 'Spend less time doubling back'], ['04', 'Day itinerary', 'See how each day feels', 'Balance driving and exploring'], ['05', 'Travel notes', 'Read the story behind each place', 'Leave with a little more context'], ['06', 'My travel notebook', userSession ? userSession.name : 'Guest mode', 'Keep your trip choices together']];
+  const ids = ['favorites', 'compare', 'optimize', 'days', 'notes', 'account'];
+  return <section id="home-services" className="cinematic-section cinematic-features"><div className="cinematic-section__head"><span>{language === 'zh' ? '\u529f\u80fd\u670d\u52a1' : 'Travel tools'}</span><h2>{language === 'zh' ? '\u89c4\u5212\u65c5\u7a0b\u65f6\u5e38\u7528\u7684\u5165\u53e3' : 'Useful entries while planning'}</h2></div><div className="cinematic-feature-grid">{features.map(([index, title, detail, action], itemIndex) => <button className="cinematic-feature-card" key={title} type="button" onClick={() => onOpenService(ids[itemIndex])}><span>{index}</span><strong>{title}</strong><p>{detail}</p><small>{action}</small></button>)}</div></section>;
+}
+
+function TravelServiceDrawer({ language, mode, favorites, compare, routeIds, onClose, onFavorite, onCompare, onAddRoute, onOpenDetail }) {
+  if (!mode) return null;
+  const ids = mode === 'favorites' ? [...favorites] : [...compare];
+  const stops = ids.map((id) => landmarks.find((stop) => stop.id === id)).filter(Boolean);
+  const isCompare = mode === 'compare';
+  return (
+    <section className="travel-service-drawer" role="dialog" aria-modal="true" aria-label={homeText(language, isCompare ? '景点对比' : '收藏目的地', isCompare ? 'Compare stops' : 'Saved destinations')}>
+      <div className="travel-service-drawer__panel">
+        <header>
+          <div>
+            <span>{homeText(language, '旅行夹页', 'Travel notebook insert')}</span>
+            <h2>{homeText(language, isCompare ? '把想去的地方摊开看看' : '这些地方已经被你圈起来了', isCompare ? 'Put your possible stops side by side' : 'The places you have circled')}</h2>
+            <p>{homeText(language, isCompare ? '看看停留时间、适合时段和预约提醒，再决定把谁放进路线。' : '从收藏里继续看详情，或者直接把它放进路线。', isCompare ? 'Compare timing, visit length, and planning notes before choosing.' : 'Open a saved place or add it straight to your route.')}</p>
+          </div>
+          <button type="button" onClick={onClose}>{homeText(language, '合上夹页', 'Close')}</button>
+        </header>
+        {!stops.length ? (
+          <div className="travel-service-empty">
+            <strong>{homeText(language, isCompare ? '还没有放进对比栏的景点' : '还没有收藏目的地', isCompare ? 'Nothing to compare yet' : 'No saved destinations yet')}</strong>
+            <p>{homeText(language, '先去挑几个想停留的地方，这里会替你收好。', 'Pick a few places that catch your eye and they will wait here.')}</p>
+            <button type="button" onClick={() => { onClose(); scrollToHomeSection('home-destinations'); }}>{homeText(language, '去挑目的地', 'Browse destinations')}</button>
+          </div>
+        ) : (
+          <div className={`travel-service-grid ${isCompare ? 'is-compare' : ''}`}>
+            {stops.map((stop) => {
+              const visit = visitFor(stop, language);
+              const inRoute = routeIds.includes(stop.id);
+              return (
+                <article key={stop.id}>
+                  {imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" />}
+                  <span>{regionText(stop, language)} / {kindText(stop, language)}</span>
+                  <h3>{nameFor(stop, language)}</h3>
+                  <dl>
+                    <div><dt>{homeText(language, '建议停留', 'Visit')}</dt><dd>{visit.durationHours} h</dd></div>
+                    <div><dt>{homeText(language, '适合时段', 'Best time')}</dt><dd>{visit.bestTime}</dd></div>
+                    <div><dt>{homeText(language, '出发前记得', 'Before you go')}</dt><dd>{visit.bookingNote}</dd></div>
+                  </dl>
+                  <div>
+                    <button type="button" onClick={() => onOpenDetail(stop.id)}>{homeText(language, '看看详情', 'Details')}</button>
+                    <button className={inRoute ? 'is-route-added' : ''} type="button" aria-pressed={inRoute} onClick={() => onAddRoute(stop.id)}>{inRoute ? homeText(language, '已加入路线', 'In your route') : homeText(language, '加入路线', 'Add to route')}</button>
+                    <button type="button" onClick={() => (isCompare ? onCompare(stop.id) : onFavorite(stop.id))}>{homeText(language, isCompare ? '移出对比' : '取消收藏', isCompare ? 'Remove' : 'Unsave')}</button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function ReviewSection({ language, stops, visibleCount = 6, onShowMore }) {
@@ -2514,7 +2685,7 @@ function DestinationDetailPage({ language, stop, routeStops, favorites, compare,
             <div className="destination-detail__actions">
               <button className={favorites.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => onFavorite(stop.id)}>{homeText(language, '\u6536\u85cf', 'Favorite')}</button>
               <button className={compare.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => onCompare(stop.id)}>{homeText(language, '\u5bf9\u6bd4', 'Compare')}</button>
-              <button type="button" onClick={() => onAddRoute(stop.id)}>{homeText(language, '\u52a0\u5165\u8def\u7ebf', 'Add route')}</button>
+              <button className={routeStops.some((item) => item.id === stop.id) ? 'is-route-added' : ''} type="button" aria-pressed={routeStops.some((item) => item.id === stop.id)} onClick={() => onAddRoute(stop.id)}>{routeStops.some((item) => item.id === stop.id) ? homeText(language, '已加入路线', 'In your route') : homeText(language, '\u52a0\u5165\u8def\u7ebf', 'Add route')}</button>
               {url && <a className="concept-btn" href={url} target="_blank" rel="noreferrer">{homeText(language, '\u80cc\u666f\u8d44\u6599', 'Background')}</a>}
             </div>
           </div>
@@ -2548,14 +2719,14 @@ function OnboardingGuide({ language, onClose }) {
       ? [
         { selector: '[data-guide="search"] .home-module--search', title: '先找一个想去的地方', detail: '输入城市、景点，或者用下面的旅行偏好缩小范围。' },
         { selector: '[data-guide="add-route"]', title: '把景点放进路线', detail: '点“加入路线”，同一个景点不会被重复添加。' },
-        { selector: '[data-guide="planner"] .home-module--itinerary-controls', title: '调整天数和节奏', detail: 'Relaxed、Standard、Fast 会改变每天安排的景点数量。' },
+        { selector: '[data-guide="planner"] .home-module--itinerary-controls', title: '调整天数和节奏', detail: '轻松、标准和紧凑节奏分别按每天 6、8、10 小时来安排。' },
         { selector: '[data-guide="export"]', title: '带走你的行程', detail: '可以下载 TXT，也可以打印并保存为 PDF。' },
         { selector: '#home-3d', title: '最后再看 3D', detail: '路线确定后再进入 3D；这里只介绍入口，不改导览本身。' },
       ]
       : [
         { selector: '[data-guide="search"] .home-module--search', title: 'Start with a place', detail: 'Search a city or landmark, or narrow the list with a travel preference.' },
         { selector: '[data-guide="add-route"]', title: 'Add it to the route', detail: 'Use Add to route. The same stop will not be added twice.' },
-        { selector: '[data-guide="planner"] .home-module--itinerary-controls', title: 'Set days and pace', detail: 'Relaxed, Standard, and Fast change how many stops fit into a day.' },
+        { selector: '[data-guide="planner"] .home-module--itinerary-controls', title: 'Set days and pace', detail: 'Relaxed, Standard, and Fast allow 6, 8, or 10 hours for each day.' },
         { selector: '[data-guide="export"]', title: 'Take the plan with you', detail: 'Download TXT or print the page and save it as a PDF.' },
         { selector: '#home-3d', title: 'Open 3D when the route is ready', detail: 'This guide only points to the entry and leaves the 3D experience unchanged.' },
       ]
@@ -2668,7 +2839,7 @@ function CinematicHomePage(props) {
         <DestinationSection {...props} />
         <RoutePlannerSection {...props} />
         <ThreeDGuideSection language={language} selectedStop={selectedStop} routeStops={routeStops} onOpenDrive={onOpenDrive} />
-        <FeatureSection language={language} favorites={props.favorites} compare={props.compare} routeStops={routeStops} userSession={userSession} />
+        <FeatureSection language={language} favorites={props.favorites} compare={props.compare} routeStops={routeStops} userSession={userSession} onOpenService={props.onOpenService} />
         <ReviewSection language={language} stops={filteredStops} visibleCount={props.reviewVisibleCount} onShowMore={props.onShowMoreReviews} />
         <TravelNotesSection language={language} stops={filteredStops} />
         <AccountSummarySection language={language} favorites={props.favorites} routeStops={routeStops} lockedIds={props.lockedIds} userSession={userSession} onSignIn={onSignIn} />
@@ -2706,7 +2877,7 @@ export function HomeShowcase({ onOpenDrive }) {
   const [days, setDays] = useState(() => clampDays(window.localStorage.getItem(DAYS_KEY)));
   const [pace, setPace] = useState(() => {
     const stored = window.localStorage.getItem(PACE_KEY);
-    return paceStopsPerDay[stored] ? stored : 'Standard';
+    return paceDailyHours[stored] ? stored : 'Standard';
   });
   const [userSession, setUserSession] = useState(null);
   const [authToken, setAuthToken] = useState(() => window.localStorage.getItem(AUTH_TOKEN_KEY) ?? '');
@@ -2721,6 +2892,8 @@ export function HomeShowcase({ onOpenDrive }) {
   const [visibleCount, setVisibleCount] = useState(12);
   const [reviewVisibleCount, setReviewVisibleCount] = useState(6);
   const [detailStopId, setDetailStopId] = useState(null);
+  const [serviceDrawer, setServiceDrawer] = useState(null);
+  const [optimizeMessage, setOptimizeMessage] = useState('');
   const [onboardingOpen, setOnboardingOpen] = useState(() => hasEnteredHome && window.localStorage.getItem(ONBOARDING_SEEN_KEY) !== '1');
   const routeMetricsQuery = useRouteMetrics(routeIds);
 
@@ -2825,7 +2998,7 @@ export function HomeShowcase({ onOpenDrive }) {
     setFavorites(new Set(uniqueValidRouteIds(plan.favorites ?? [])));
     setCompare(new Set(uniqueValidRouteIds(plan.compare ?? [])));
     setDays(clampDays(plan.days));
-    if (paceStopsPerDay[plan.pace]) setPace(plan.pace);
+    if (paceDailyHours[plan.pace]) setPace(plan.pace);
     if (plan.language === 'zh' || plan.language === 'en') setLanguage(plan.language);
   }, []);
 
@@ -2924,7 +3097,18 @@ export function HomeShowcase({ onOpenDrive }) {
     });
   };
   const optimizeRoute = () => {
-    setRouteIds((current) => optimizeRouteIds(current, lockedIds));
+    setRouteIds((current) => {
+      const optimized = optimizeRouteIds(current, lockedIds);
+      const before = routeDistanceForIds(current);
+      const after = routeDistanceForIds(optimized);
+      const saved = before - after;
+      if (!Number.isFinite(saved) || saved <= 0.5) {
+        setOptimizeMessage(homeText(language, '现在的顺序已经很顺路，不需要再调整。', 'This order is already quite direct, so nothing was changed.'));
+        return current;
+      }
+      setOptimizeMessage(homeText(language, `顺序已经整理好，预计少走约 ${Math.round(saved)} 公里。`, `The stops are in a smoother order, saving about ${Math.round(saved)} km.`));
+      return optimized;
+    });
   };
   const resetRoute = () => {
     setRouteIds(initialRouteIds);
@@ -2982,7 +3166,7 @@ export function HomeShowcase({ onOpenDrive }) {
       if (!response.ok) throw new Error(payload.detail ?? 'Auth failed');
       saveAuthPayload(payload);
     } catch (error) {
-      setAuthError(error.message);
+      setAuthError(homeText(language, '这次没有登录成功，请检查邮箱和密码后再试一次。', 'Sign-in did not work this time. Check your email and password and try again.'));
     } finally {
       setAuthLoading(false);
     }
@@ -3053,6 +3237,7 @@ export function HomeShowcase({ onOpenDrive }) {
     setDays,
     pace,
     setPace,
+    optimizeMessage,
     setSelectedId,
     onFavorite: (id) => {
       toggleSet(setFavorites, id);
@@ -3074,6 +3259,26 @@ export function HomeShowcase({ onOpenDrive }) {
     reviewVisibleCount,
     onShowMoreReviews: () => setReviewVisibleCount((count) => Math.min(count + 6, filteredStops.length)),
     onOpenDetail: (id) => setDetailStopId(id),
+    onOpenService: (service) => {
+      if (service === 'favorites' || service === 'compare') {
+        setServiceDrawer(service);
+        return;
+      }
+      if (service === 'optimize') {
+        optimizeRoute();
+        scrollToHomeSection('home-planner');
+        return;
+      }
+      if (service === 'days') {
+        scrollToHomeSection('home-day-plan');
+        return;
+      }
+      if (service === 'notes') {
+        scrollToHomeSection('home-reviews');
+        return;
+      }
+      setAuthDialogOpen(true);
+    },
     onSignIn: () => setAuthDialogOpen(true),
     onSignOut: handleSignOut,
     onHelp: () => setOnboardingOpen(true),
@@ -3103,6 +3308,23 @@ export function HomeShowcase({ onOpenDrive }) {
           onCompare={commonPageProps.onCompare}
           onAddRoute={commonPageProps.onAddRoute}
           onClose={() => setDetailStopId(null)}
+        />
+      )}
+      {serviceDrawer && (
+        <TravelServiceDrawer
+          language={language}
+          mode={serviceDrawer}
+          favorites={favorites}
+          compare={compare}
+          routeIds={routeIds}
+          onClose={() => setServiceDrawer(null)}
+          onFavorite={commonPageProps.onFavorite}
+          onCompare={commonPageProps.onCompare}
+          onAddRoute={commonPageProps.onAddRoute}
+          onOpenDetail={(id) => {
+            setServiceDrawer(null);
+            setDetailStopId(id);
+          }}
         />
       )}
       {authDialogOpen && (

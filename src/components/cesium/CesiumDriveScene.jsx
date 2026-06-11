@@ -12,6 +12,7 @@ import {
   HeadingPitchRange,
   HeightReference,
   Ion,
+  JulianDate,
   LabelStyle,
   Matrix4,
   Math as CesiumMath,
@@ -46,6 +47,7 @@ const BOOST_TIME_SCALE = 24;
 const BUILDING_CACHE_BYTES = 128 * 1024 * 1024;
 const BUILDING_OVERFLOW_BYTES = 48 * 1024 * 1024;
 const ITALY_RECTANGLE = Rectangle.fromDegrees(6.2, 36.1, 19, 47.6);
+const DAYLIGHT_TIME = JulianDate.fromIso8601('2026-06-21T10:30:00Z');
 const tempGeodesic = new EllipsoidGeodesic();
 
 function routePositions(points) {
@@ -254,10 +256,12 @@ export function CesiumDriveScene({ isStarted }) {
       fullscreenButton: false,
       infoBox: false,
       selectionIndicator: false,
-      shouldAnimate: true,
+      shouldAnimate: false,
       useBrowserRecommendedResolution: true,
     });
     viewerRef.current = viewer;
+    viewer.clock.currentTime = JulianDate.clone(DAYLIGHT_TIME);
+    viewer.clock.shouldAnimate = false;
     viewer.resolutionScale = window.innerWidth < 900 ? 0.78 : 0.9;
     viewer.scene.globe.depthTestAgainstTerrain = true;
     viewer.scene.globe.enableLighting = true;
@@ -294,7 +298,10 @@ export function CesiumDriveScene({ isStarted }) {
         ]);
         if (disposed) return;
         viewer.terrainProvider = terrainProvider;
-        viewer.imageryLayers.addImageryProvider(imageryProvider);
+        const imageryLayer = viewer.imageryLayers.addImageryProvider(imageryProvider);
+        imageryLayer.brightness = 1.08;
+        imageryLayer.contrast = 1.02;
+        imageryLayer.gamma = 1.04;
         setCesiumStatus({ terrain: 'ready', imagery: 'ready' });
 
         const first = route.sample(START_PROGRESS);

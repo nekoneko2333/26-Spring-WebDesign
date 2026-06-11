@@ -164,6 +164,31 @@ export function VehicleController({ bodyRef, drivingEnabled, driveEntry }) {
       });
     }
 
+    if (vehicleJumpTarget?.token && handledJumpTokenRef.current !== vehicleJumpTarget.token) {
+      handledJumpTokenRef.current = vehicleJumpTarget.token;
+      const jumpProgress = getLandmarkProgress(vehicleJumpTarget.landmarkId, routeCurve);
+      progressRef.current = jumpProgress;
+      previousProgressRef.current = jumpProgress;
+      speedRef.current = 0;
+      targetSpeedRef.current = 0;
+      steerRef.current = 0;
+      guidedTourStateRef.current = GUIDED_TOUR_STATES.IDLE;
+      focusedLandmarkIdRef.current = null;
+      focusTimerRef.current = 0;
+      poseYawRef.current = Number.NaN;
+      applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, posePitchRef, poseRollRef, delta);
+      const jumpedNearbyLandmarkId = getNearbyLandmarkId(currentPoint.x, currentPoint.z);
+      nearbyLandmarkIdRef.current = jumpedNearbyLandmarkId;
+      setNearbyLandmarkId(jumpedNearbyLandmarkId);
+      setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.IDLE));
+      setVehicleState({
+        vehicleSpeed: 0,
+        vehicleSteer: 0,
+        routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve),
+        ...getRouteTimeline(progressRef.current),
+      });
+    }
+
     if (!drivingEnabled) {
       progressRef.current = START_PROGRESS;
       speedRef.current = 0;
