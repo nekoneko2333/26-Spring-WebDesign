@@ -7,7 +7,7 @@ export const useAppStore = create((set, get) => ({
   selectedLandmarkId: null,
   vehicleSpeed: 0,
   vehicleSteer: 0,
-  routePlaybackSpeed: 6,
+  routePlaybackSpeed: 8,
   vehicleJumpTarget: null,
   routeContext: null,
   routeProgress: 0,
@@ -37,11 +37,15 @@ export const useAppStore = create((set, get) => ({
   setCesiumStatus: (patch) => set((state) => ({
     cesiumStatus: { ...state.cesiumStatus, ...patch },
   })),
-  setRoutePlaybackSpeed: (routePlaybackSpeed) => set({ routePlaybackSpeed: Math.min(Math.max(Number(routePlaybackSpeed) || 1, 1), 12) }),
+  setRoutePlaybackSpeed: (routePlaybackSpeed) => {
+    const allowedSpeeds = [1, 4, 8, 20];
+    const nextSpeed = Number(routePlaybackSpeed);
+    set({ routePlaybackSpeed: allowedSpeeds.includes(nextSpeed) ? nextSpeed : 8 });
+  },
   jumpVehicleToLandmark: (landmarkId) => set((state) => ({
     vehicleJumpTarget: { landmarkId, token: (state.vehicleJumpTarget?.token ?? 0) + 1 },
     autoDrive: false,
-    arrivalNotice: null,
+    arrivalNotice: { landmarkId, source: 'jump' },
     selectedLandmarkId: null,
     focusPanelOpen: false,
     modelViewerOpen: false,

@@ -136,7 +136,32 @@ export function VehicleController({ bodyRef, drivingEnabled, driveEntry }) {
       nearbyLandmarkIdRef.current = initialNearbyLandmarkId;
       setNearbyLandmarkId(initialNearbyLandmarkId);
       setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.IDLE));
-      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve), ...getRouteTimeline(progressRef.current) });
+      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: { ...getRouteContext(progressRef.current, activeRoute, routeCurve), currentStopId: getCurrentStopId(progressRef.current, stationTriggers) }, ...getRouteTimeline(progressRef.current) });
+    }
+
+    if (vehicleJumpTarget?.token && handledJumpTokenRef.current !== vehicleJumpTarget.token) {
+      handledJumpTokenRef.current = vehicleJumpTarget.token;
+      const jumpProgress = getLandmarkProgress(vehicleJumpTarget.landmarkId, routeCurve);
+      progressRef.current = jumpProgress;
+      previousProgressRef.current = jumpProgress;
+      speedRef.current = 0;
+      targetSpeedRef.current = 0;
+      steerRef.current = 0;
+      guidedTourStateRef.current = GUIDED_TOUR_STATES.IDLE;
+      focusedLandmarkIdRef.current = null;
+      focusTimerRef.current = 0;
+      poseYawRef.current = Number.NaN;
+      applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, posePitchRef, poseRollRef, delta);
+      const jumpedNearbyLandmarkId = getNearbyLandmarkId(currentPoint.x, currentPoint.z);
+      nearbyLandmarkIdRef.current = jumpedNearbyLandmarkId;
+      setNearbyLandmarkId(jumpedNearbyLandmarkId);
+      setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.IDLE));
+      setVehicleState({
+        vehicleSpeed: 0,
+        vehicleSteer: 0,
+        routeContext: { ...getRouteContext(progressRef.current, activeRoute, routeCurve), currentStopId: vehicleJumpTarget.landmarkId },
+        ...getRouteTimeline(progressRef.current),
+      });
     }
 
     if (vehicleJumpTarget?.token && handledJumpTokenRef.current !== vehicleJumpTarget.token) {
@@ -183,7 +208,7 @@ export function VehicleController({ bodyRef, drivingEnabled, driveEntry }) {
       }
       clearGuidedTourFocus();
       setGuidedTourState(getGuidedTourPayload(GUIDED_TOUR_STATES.IDLE));
-      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve), ...getRouteTimeline(progressRef.current) });
+      setVehicleState({ vehicleSpeed: 0, vehicleSteer: 0, routeContext: { ...getRouteContext(progressRef.current, activeRoute, routeCurve), currentStopId: getCurrentStopId(progressRef.current, stationTriggers) }, ...getRouteTimeline(progressRef.current) });
       applyCurvePose(vehicle, routeCurve, progressRef.current, 0, poseYawRef, posePitchRef, poseRollRef, delta);
       return;
     }
@@ -320,7 +345,7 @@ export function VehicleController({ bodyRef, drivingEnabled, driveEntry }) {
       setVehicleState({
         vehicleSpeed: Math.abs(speedRef.current) * VEHICLE_TUNING.displaySpeedMultiplier,
         vehicleSteer: steerRef.current,
-        routeContext: getRouteContext(progressRef.current, activeRoute, routeCurve),
+        routeContext: { ...getRouteContext(progressRef.current, activeRoute, routeCurve), currentStopId: getCurrentStopId(progressRef.current, stationTriggers) },
         routeProgress: progressRef.current,
         ...getRouteTimeline(progressRef.current),
       });
@@ -332,6 +357,14 @@ export function VehicleController({ bodyRef, drivingEnabled, driveEntry }) {
   return null;
 }
 
+
+
+function getCurrentStopId(progress, stationTriggers) {
+  const currentStation = [...stationTriggers]
+    .reverse()
+    .find((station) => progress >= station.progress - 0.01);
+  return currentStation?.id ?? stationTriggers[0]?.id ?? null;
+}
 
 function getRouteArrivalByProgress({ arrivalNotice, arrivedLandmarkIds, currentProgress, previousProgress, stationTriggers }) {
   const ARRIVAL_PROGRESS_WINDOW = 0.012;

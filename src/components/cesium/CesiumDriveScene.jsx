@@ -20,6 +20,8 @@ import {
   Quaternion,
   Rectangle,
   sampleTerrainMostDetailed,
+  ScreenSpaceEventHandler,
+  ScreenSpaceEventType,
   Transforms,
   HeadingPitchRoll,
   Viewer,
@@ -240,6 +242,7 @@ export function CesiumDriveScene({ isStarted }) {
 
     let disposed = false;
     let tickRemove = null;
+    let clickHandler = null;
     let buildings = null;
     let currentTileQueue = 0;
     const viewer = new Viewer(containerRef.current, {
@@ -396,6 +399,8 @@ export function CesiumDriveScene({ isStarted }) {
         let mapModeApplied = false;
         let focusModeId = null;
         let previousCameraMode = 'follow';
+        let handledJumpToken = 0;
+        let jumpCameraHoldUntil = 0;
         let pressure = getStreamingPressure(0, false);
 
         const positionsForProgressRange = (startProgress, endProgress) => {
@@ -464,6 +469,31 @@ export function CesiumDriveScene({ isStarted }) {
           });
         };
 
+
+        const currentStopIdForProgress = (routeProgress) => {
+          const currentStop = [...indexedLandmarks]
+            .reverse()
+            .find((stop) => routeProgress >= stop.progress - 0.002);
+          return currentStop?.id ?? indexedLandmarks[0]?.id ?? route.routeIds[0] ?? null;
+        };
+
+        const flyToLandmark = (landmark, duration = 0.9) => {
+          viewer.camera.lookAtTransform(Matrix4.IDENTITY);
+          viewer.camera.flyTo({
+            destination: Cartesian3.fromDegrees(landmark.lon, landmark.lat, 1800),
+            duration,
+          });
+        };
+
+        clickHandler = new ScreenSpaceEventHandler(viewer.scene.canvas);
+        clickHandler.setInputAction((movement) => {
+          const picked = viewer.scene.pick(movement.position);
+          const entityId = picked?.id?.id;
+          if (typeof entityId !== 'string' || !entityId.startsWith('landmark-')) return;
+          const landmarkId = entityId.slice('landmark-'.length);
+          useAppStore.getState().jumpVehicleToLandmark(landmarkId);
+        }, ScreenSpaceEventType.LEFT_CLICK);
+
         applyLandmarks(useAppStore.getState().cameraMode);
         setCesiumStatus({ ready: true });
 
@@ -474,6 +504,36 @@ export function CesiumDriveScene({ isStarted }) {
           lastTime = now;
           const state = useAppStore.getState();
           const routeLocked = state.focusPanelOpen || state.modelViewerOpen;
+          if (state.vehicleJumpTarget?.token && handledJumpToken !== state.vehicleJumpTarget.token) {
+            const jumpStop = indexedLandmarks.find((stop) => stop.id === state.vehicleJumpTarget.landmarkId);
+            if (jumpStop) {
+              handledJumpToken = state.vehicleJumpTarget.token;
+              progress = jumpStop.progress;
+              previousProgress = progress;
+              furthestProgress = Math.max(furthestProgress, progress);
+              speedKmh = 0;
+              targetSpeedKmh = 0;
+              effectiveTimeScale = 0;
+              mapModeApplied = false;
+              focusModeId = null;
+              jumpCameraHoldUntil = now + 1300;
+              flyToLandmark(jumpStop.landmark, 0.85);
+              state.setNearbyLandmarkId(jumpStop.id);
+              state.setVehicleState({
+                vehicleSpeed: 0,
+                vehicleSteer: 0,
+                routeProgress: progress,
+                routeDay: Math.min(3, Math.floor(progress * 3) + 1),
+                routeHour: 7 + (progress * 36 % 12),
+                routeContext: {
+                  point: { id: `cesium-${jumpStop.id}`, roadType: '真实道路' },
+                  segment: { id: 'cesium-route', type: 'scenic', speedLimit: 110, trafficState: 'normal' },
+                  profile: { label: 'Cesium 实景路线', surfaceLabel: '地形贴合道路', color: '#59666b' },
+                  currentStopId: jumpStop.id,
+                },
+              });
+            }
+          }
           const input = controls.current;
           const hasManualInput = input.forward || input.backward;
           if (routeLocked || (hasManualInput && state.autoDrive)) state.setAutoDrive(false);
@@ -501,7 +561,7 @@ export function CesiumDriveScene({ isStarted }) {
             : 0;
           pressure = getStreamingPressure(currentTileQueue + buildingQueue, pressure.paused);
           const requestedTimeScale = input.boost ? BOOST_TIME_SCALE : NORMAL_TIME_SCALE;
-          const targetTimeScale = requestedTimeScale * pressure.factor;
+          const targetTimeScale = requestedTimeScale * state.routePlaybackSpeed * pressure.factor;
           effectiveTimeScale += (targetTimeScale - effectiveTimeScale) * (1 - Math.exp(-delta * 0.8));
           if (pressure.paused && effectiveTimeScale < 0.15) effectiveTimeScale = 0;
 
@@ -567,10 +627,7 @@ export function CesiumDriveScene({ isStarted }) {
                 : settled ? 20 : 30;
             }
 
-            const currentIndex = Math.max(
-              0,
-              Math.min(route.routeIds.length - 1, Math.floor(progress * route.routeIds.length)),
-            );
+            const currentStopId = currentStopIdForProgress(progress);
             let nearbyLandmark = null;
             let nearbyDistance = Number.POSITIVE_INFINITY;
             for (const { landmark } of indexedLandmarks) {
@@ -591,7 +648,7 @@ export function CesiumDriveScene({ isStarted }) {
                 point: { id: `cesium-${point.index}`, roadType: '真实道路' },
                 segment: { id: 'cesium-route', type: 'scenic', speedLimit: 110, trafficState: 'normal' },
                 profile: { label: 'Cesium 实景路线', surfaceLabel: '地形贴合道路', color: '#59666b' },
-                currentStopId: route.routeIds[currentIndex],
+                currentStopId,
               },
             });
           }
@@ -602,6 +659,8 @@ export function CesiumDriveScene({ isStarted }) {
             }
             previousCameraMode = state.cameraMode;
           }
+
+          if (now < jumpCameraHoldUntil) return;
 
           if (state.cameraMode === 'map') {
             if (!mapModeApplied) {
@@ -662,6 +721,7 @@ export function CesiumDriveScene({ isStarted }) {
     return () => {
       disposed = true;
       if (tickRemove) tickRemove();
+      if (clickHandler && !clickHandler.isDestroyed()) clickHandler.destroy();
       removeTileListener();
       removeRenderErrorListener();
       if (buildings && !buildings.isDestroyed()) buildings.trimLoadedTiles();

@@ -879,9 +879,14 @@ body.ui-awake .hud-mode {
   letter-spacing: 0.12em;
 }
 
-.tour-info-panel__speed-control input {
+.tour-info-panel__speed-control select {
   width: 100%;
-  accent-color: #c9a96e;
+  min-height: 31px;
+  border: 1px solid rgba(8, 24, 39, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.54);
+  color: var(--c-ink);
+  font: 800 11px/1 var(--font-ui-zh);
   cursor: pointer;
 }
 
