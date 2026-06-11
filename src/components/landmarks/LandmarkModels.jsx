@@ -86,7 +86,7 @@ class LandmarkModelBoundary extends Component {
 }
 
 function LandmarkModel({ landmark }) {
-  const selectLandmark = useAppStore((state) => state.selectLandmark);
+  const jumpVehicleToLandmark = useAppStore((state) => state.jumpVehicleToLandmark);
   const language = useAppStore((state) => state.language);
   const nearbyLandmarkId = useAppStore((state) => state.nearbyLandmarkId);
   const guidedTourLandmarkId = useAppStore((state) => state.guidedTourLandmarkId);
@@ -105,8 +105,13 @@ function LandmarkModel({ landmark }) {
   const isActiveStop = landmark.id === nearbyLandmarkId || landmark.id === guidedTourLandmarkId;
   const isHighlighted = isActiveStop || isRouteFocus;
 
+  const handleJumpToLandmark = (event) => {
+    event.stopPropagation();
+    jumpVehicleToLandmark(landmark.id);
+  };
+
   return (
-    <group position={[landmark.position[0], baseY, landmark.position[2]]} rotation={landmark.rotation} onClick={() => selectLandmark(landmark.id)}>
+    <group position={[landmark.position[0], baseY, landmark.position[2]]} rotation={landmark.rotation} onClick={handleJumpToLandmark}>
       <mesh position={[0, 0.008, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <cylinderGeometry args={[0.3, 0.36, 0.016, 12]} />
         <meshStandardMaterial color={isActiveStop ? '#d6c49a' : '#b8aa8a'} roughness={0.86} transparent opacity={isActiveStop ? 0.52 : 0.28} />
@@ -121,7 +126,7 @@ function LandmarkModel({ landmark }) {
         </LandmarkModelBoundary>
       ) : <MonumentLandmarkMarker landmark={landmark} highlighted={isHighlighted} />}
       <pointLight position={[0, 0.75, 0]} color="#f0d490" distance={3.2} intensity={isHighlighted ? 0.32 : 0.08} />
-      <mesh position={[0, 0.4, 0]} visible={false} onClick={() => selectLandmark(landmark.id)}>
+      <mesh position={[0, 0.4, 0]} visible={false} onClick={handleJumpToLandmark}>
         <cylinderGeometry args={[0.45, 0.45, 0.9, 16]} />
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
