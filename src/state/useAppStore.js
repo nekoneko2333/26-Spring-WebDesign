@@ -15,6 +15,7 @@ export const useAppStore = create((set, get) => ({
   routeHour: 7,
   activeRouteIds: [],
   activeRouteGeometryCoordinates: [],
+  activeRouteSegments: [],
   activeRouteDistanceKm: null,
   guidedTourState: 'IDLE',
   guidedTourLandmarkId: null,
@@ -103,6 +104,7 @@ export const useAppStore = create((set, get) => ({
   setActiveRouteIds: (activeRouteIds) => set((state) => ({
     activeRouteIds,
     activeRouteGeometryCoordinates: [],
+    activeRouteSegments: [],
     activeRouteDistanceKm: null,
     tourResetToken: state.tourResetToken + 1,
     autoDrive: false,
@@ -120,8 +122,9 @@ export const useAppStore = create((set, get) => ({
     arrivedLandmarkIds: [],
     cameraMode: 'follow',
   })),
-  setActiveRouteGeometry: ({ coordinates = [], distanceKm = null } = {}) => set((state) => ({
+  setActiveRouteGeometry: ({ coordinates = [], distanceKm = null, segments = [] } = {}) => set((state) => ({
     activeRouteGeometryCoordinates: coordinates,
+    activeRouteSegments: segments,
     activeRouteDistanceKm: distanceKm,
     tourResetToken: state.tourResetToken + 1,
     autoDrive: false,

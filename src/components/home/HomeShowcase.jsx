@@ -90,7 +90,15 @@ function formatHours(value, digits = 1) {
 }
 
 function formatKm(value) {
-  return Math.round(safeNumber(value));
+  const km = safeNumber(value);
+  if (km > 0 && km < 1) return `${Math.max(1, Math.round(km * 1000))} m`;
+  return `${Math.round(km)} km`;
+}
+
+function formatDuration(value) {
+  const hours = safeNumber(value);
+  if (hours > 0 && hours < 0.05) return `${Math.max(1, Math.round(hours * 60))} min`;
+  return `${formatHours(hours)} h`;
 }
 
 function textValue(value, language = 'en') {
@@ -594,6 +602,11 @@ function segmentDistanceKm(a, b) {
   const toIndex = routeMatrixIndex.get(b.id);
   const distance = liveLandmarksData.routeMatrix?.distancesKm?.[fromIndex]?.[toIndex];
   if (Number.isFinite(distance)) return distance;
+  return geographicDistanceKm(a, b) * 1.22;
+}
+
+function geographicDistanceKm(a, b) {
+  if (!a || !b) return 0;
   const earthRadiusKm = 6371;
   const lat1 = a.lat * Math.PI / 180;
   const lat2 = b.lat * Math.PI / 180;
@@ -601,27 +614,29 @@ function segmentDistanceKm(a, b) {
   const deltaLon = (b.lon - a.lon) * Math.PI / 180;
   const haversine = Math.sin(deltaLat / 2) ** 2
     + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine)) * 1.22;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
 
-function segmentDurationHours(distance, source = 'estimated') {
+function segmentDurationHours(distance, source = 'estimated', travelMode = 'DRIVE') {
   if (!Number.isFinite(distance) || distance <= 0) return 0;
-  return distance / (source === 'osrm' ? 62 : 58);
+  if (travelMode === 'WALK') return distance / 4.5;
+  if (distance <= 8) return distance / 24;
+  return distance / (source === 'osrm' ? 58 : 58);
 }
 
-function routeDistanceForOrderedIds(routeIds) {
+function routeDistanceForOrderedIds(routeIds, distanceForStops = segmentDistanceKm) {
   return routeIds.slice(1).reduce((total, id, index) => {
     const from = landmarks.find((stop) => stop.id === routeIds[index]);
     const to = landmarks.find((stop) => stop.id === id);
-    const distance = segmentDistanceKm(from, to);
+    const distance = distanceForStops(from, to);
     return total + (Number.isFinite(distance) ? distance : 0);
   }, 0);
 }
 
-function improveRouteWithTwoOpt(routeIds, { preserveEnds = true } = {}) {
+function improveRouteWithTwoOpt(routeIds, { preserveEnds = true, distanceForStops = segmentDistanceKm } = {}) {
   if (routeIds.length < 4) return routeIds;
   let best = [...routeIds];
-  let bestDistance = routeDistanceForOrderedIds(best);
+  let bestDistance = routeDistanceForOrderedIds(best, distanceForStops);
   let improved = true;
 
   while (improved) {
@@ -635,7 +650,7 @@ function improveRouteWithTwoOpt(routeIds, { preserveEnds = true } = {}) {
           ...best.slice(start, end + 1).reverse(),
           ...best.slice(end + 1),
         ];
-        const candidateDistance = routeDistanceForOrderedIds(candidate);
+        const candidateDistance = routeDistanceForOrderedIds(candidate, distanceForStops);
         if (candidateDistance + 0.1 < bestDistance) {
           best = candidate;
           bestDistance = candidateDistance;
@@ -668,7 +683,7 @@ function nearestRouteFromStart(chunk, startId) {
     let bestDistance = Number.POSITIVE_INFINITY;
     for (const id of remaining) {
       const to = landmarks.find((stop) => stop.id === id);
-      const distance = segmentDistanceKm(from, to);
+      const distance = geographicDistanceKm(from, to);
       if (distance < bestDistance) {
         best = id;
         bestDistance = distance;
@@ -685,8 +700,13 @@ function nearestRouteFromStart(chunk, startId) {
 function optimizeSingleCityChunk(chunk) {
   if (chunk.length < 3) return chunk;
   return chunk
-    .map((id) => improveRouteWithTwoOpt(nearestRouteFromStart(chunk, id), { preserveEnds: false }))
-    .sort((a, b) => routeDistanceForOrderedIds(a) - routeDistanceForOrderedIds(b))[0] ?? chunk;
+    .map((id) => improveRouteWithTwoOpt(nearestRouteFromStart(chunk, id), {
+      preserveEnds: false,
+      distanceForStops: geographicDistanceKm,
+    }))
+    .sort((a, b) => (
+      routeDistanceForOrderedIds(a, geographicDistanceKm) - routeDistanceForOrderedIds(b, geographicDistanceKm)
+    ))[0] ?? chunk;
 }
 
 function optimizeRouteIds(routeIds, lockedIds) {
@@ -881,10 +901,12 @@ function routeSignatureFor(routeIds) {
 function routeProviderLabel(mode, language) {
   if (mode === 'google-routes') return 'Google Routes';
   if (mode === 'osrm') return 'OSRM';
+  if (mode === 'mixed') return homeText(language, '混合规划', 'Mixed routing');
   return homeText(language, '坐标估算', 'Estimated');
 }
 
 function travelModeLabel(mode, language) {
+  if (mode === 'MIXED') return homeText(language, '混合', 'Mixed');
   if (mode === 'WALK') return homeText(language, '步行', 'Walking');
   return homeText(language, '驾车', 'Driving');
 }
@@ -911,21 +933,38 @@ function routeRecommendationMetrics(recommendation, metricsMap) {
   };
 }
 
-function routeSegmentsFor(routeStops) {
+function routeSegmentsFor(routeStops, metricSegments = []) {
   return routeStops.slice(1).map((stop, index) => {
     const from = routeStops[index];
+    const metricSegment = metricSegments.find((segment) => (
+      (segment.fromId === from.id && segment.toId === stop.id) || segment.index === index
+    ));
+    if (metricSegment) {
+      return {
+        from,
+        to: stop,
+        distance: safeNumber(metricSegment.distanceKm),
+        duration: safeNumber(metricSegment.durationHours),
+        source: metricSegment.mode ?? 'mixed',
+        travelMode: metricSegment.travelMode ?? 'MIXED',
+        diagnostics: metricSegment.diagnostics ?? null,
+        parts: metricSegment.parts ?? [],
+      };
+    }
     const fromIndex = routeMatrixIndex.get(from.id);
     const toIndex = routeMatrixIndex.get(stop.id);
     const distance = liveLandmarksData.routeMatrix?.distancesKm?.[fromIndex]?.[toIndex];
     const duration = liveLandmarksData.routeMatrix?.durationsHours?.[fromIndex]?.[toIndex];
     if (!Number.isFinite(distance) || !Number.isFinite(duration)) {
       const estimatedDistance = segmentDistanceKm(from, stop);
+      const travelMode = estimatedTravelModeForStops(from, stop);
       return {
         from,
         to: stop,
         distance: estimatedDistance,
-        duration: segmentDurationHours(estimatedDistance),
+        duration: segmentDurationHours(estimatedDistance, 'estimated', travelMode),
         source: 'estimated',
+        travelMode,
       };
     }
     return {
@@ -934,8 +973,22 @@ function routeSegmentsFor(routeStops) {
       distance,
       duration,
       source: 'osrm',
+      travelMode: estimatedTravelModeForStops(from, stop),
     };
   }).filter(Boolean);
+}
+
+function activeRouteSegmentsFor(metrics) {
+  return (metrics?.segments ?? []).flatMap((segment) => (
+    segment.parts?.length ? segment.parts : [segment]
+  ));
+}
+
+function estimatedTravelModeForStops(from, to) {
+  const city = cityKeyForId(from.id);
+  const sameCity = city && city === cityKeyForId(to.id);
+  if (sameCity && city.toLowerCase() === 'venice') return 'WALK';
+  return 'DRIVE';
 }
 
 function downloadTextFile(filename, content) {
@@ -2485,7 +2538,7 @@ function makeEmptyItineraryDay(index, dailyLimit) {
   };
 }
 
-function pushDriveActivity(days, segment, dailyLimit, paceProfile, language) {
+function pushTravelActivity(days, segment, dailyLimit, paceProfile, language) {
   if (!segment || segment.duration <= 0) return;
   let remainingHours = segment.duration;
   while (remainingHours > 0.01) {
@@ -2501,8 +2554,12 @@ function pushDriveActivity(days, segment, dailyLimit, paceProfile, language) {
     const dayCapacity = Math.max(0.5, dailyLimit - day.travelHours - day.visitHours - paceProfile.dailyBufferHours);
     const hours = Math.min(remainingHours, dayCapacity);
     const km = segment.distance * (hours / segment.duration);
+    const kind = segment.travelMode === 'WALK'
+      ? 'walk'
+      : segment.travelMode === 'MIXED' ? 'mixed' : 'drive';
     const item = {
-      kind: 'drive',
+      kind,
+      travelMode: segment.travelMode ?? 'DRIVE',
       from: segment.from,
       to: segment.to,
       hours,
@@ -2590,7 +2647,7 @@ function optimalDayGroups(uniqueStops, maxDays, pace, language) {
   return best?.groups ?? [groupStats(0, stopCount)];
 }
 
-function buildItineraryDays(routeStops, dayCount, pace, language) {
+function buildItineraryDays(routeStops, dayCount, pace, language, segmentOverrides = []) {
   const safeDays = clampDays(dayCount);
   const dailyLimit = paceDailyHours[pace] ?? paceDailyHours.Standard;
   const paceProfile = paceProfiles[pace] ?? paceProfiles.Standard;
@@ -2598,8 +2655,10 @@ function buildItineraryDays(routeStops, dayCount, pace, language) {
   const buckets = [makeEmptyItineraryDay(0, dailyLimit)];
 
   uniqueStops.forEach((stop, index) => {
-    const incoming = index > 0 ? routeSegmentsFor([uniqueStops[index - 1], stop])[0] ?? null : null;
-    if (incoming) pushDriveActivity(buckets, incoming, dailyLimit, paceProfile, language);
+    const incoming = index > 0
+      ? segmentOverrides[index - 1] ?? routeSegmentsFor([uniqueStops[index - 1], stop])[0] ?? null
+      : null;
+    if (incoming) pushTravelActivity(buckets, incoming, dailyLimit, paceProfile, language);
     pushVisitActivity(buckets, stop, plannedVisitHours(stop, language, pace), dailyLimit, paceProfile, language);
   });
 
@@ -2612,7 +2671,7 @@ function buildItineraryDays(routeStops, dayCount, pace, language) {
     return {
       ...day,
       bufferHours,
-      totalKm: Math.round(day.totalKm),
+      totalKm: Number(day.totalKm.toFixed(2)),
       travelHours: Math.round(day.travelHours * 100) / 100,
       visitHours: Math.round(day.visitHours * 100) / 100,
       totalHours: Math.round(totalHours * 100) / 100,
@@ -2622,19 +2681,19 @@ function buildItineraryDays(routeStops, dayCount, pace, language) {
   });
 }
 
-function minimumDaysFor(routeStops, pace, language) {
-  return buildItineraryDays(routeStops, MAX_TRIP_DAYS, pace, language)
+function minimumDaysFor(routeStops, pace, language, segmentOverrides = []) {
+  return buildItineraryDays(routeStops, MAX_TRIP_DAYS, pace, language, segmentOverrides)
     .filter((day) => day.activities.length > 0).length || 1;
 }
 
-function makeItineraryPlan(routeStops, days, pace = 'Standard', language = 'en') {
+function makeItineraryPlan(routeStops, days, pace = 'Standard', language = 'en', segmentOverrides = []) {
   const dailyLimit = paceDailyHours[pace] ?? paceDailyHours.Standard;
-  const itineraryDays = buildItineraryDays(routeStops, days, pace, language);
-  const segments = routeSegmentsFor(routeStops);
+  const segments = segmentOverrides.length ? segmentOverrides : routeSegmentsFor(routeStops);
+  const itineraryDays = buildItineraryDays(routeStops, days, pace, language, segments);
   const travelHours = segments.reduce((sum, segment) => sum + segment.duration, 0);
   const visitHours = routeStops.reduce((sum, stop) => sum + plannedVisitHours(stop, language, pace), 0);
   const bufferHours = itineraryDays.reduce((sum, day) => sum + day.bufferHours, 0);
-  const minimumDays = minimumDaysFor(routeStops, pace, language);
+  const minimumDays = minimumDaysFor(routeStops, pace, language, segments);
   return {
     days: itineraryDays,
     dailyLimit,
@@ -2643,7 +2702,7 @@ function makeItineraryPlan(routeStops, days, pace = 'Standard', language = 'en')
     visitHours,
     bufferHours,
     totalHours: travelHours + visitHours + bufferHours,
-    totalKm: Math.round(segments.reduce((sum, segment) => sum + segment.distance, 0)),
+    totalKm: Number(segments.reduce((sum, segment) => sum + segment.distance, 0).toFixed(2)),
     isFeasible: itineraryDays.every((day) => day.overHours <= 0.05) && clampDays(days) >= minimumDays,
   };
 }
@@ -2652,13 +2711,13 @@ function makeItinerary(routeStops, days, pace = 'Standard', language = 'en') {
   return makeItineraryPlan(routeStops, days, pace, language).days;
 }
 
-function itineraryExportText(language, routeStops, days, pace) {
-  const plan = makeItineraryPlan(routeStops, days, pace, language);
+function itineraryExportText(language, routeStops, days, pace, segmentOverrides = []) {
+  const plan = makeItineraryPlan(routeStops, days, pace, language, segmentOverrides);
   const lines = [
     homeText(language, 'Trip3D 意大利旅行手册', 'Trip3D Italy travel notebook'),
     `${homeText(language, '旅行节奏', 'Pace')}: ${paceLabel(pace, language)} (${plan.dailyLimit}h/${homeText(language, '天', 'day')})`,
     `${homeText(language, '建议至少预留', 'Suggested minimum')}: ${plan.minimumDays} ${homeText(language, '天', 'days')}`,
-    `${homeText(language, '全程', 'Whole trip')}: ${formatKm(plan.totalKm)}km / ${formatHours(plan.travelHours)}h ${homeText(language, '行驶', 'driving')} / ${formatHours(plan.visitHours)}h ${homeText(language, '参观', 'exploring')}`,
+    `${homeText(language, '全程', 'Whole trip')}: ${formatKm(plan.totalKm)} / ${formatDuration(plan.travelHours)} ${homeText(language, '交通', 'in transit')} / ${formatDuration(plan.visitHours)} ${homeText(language, '参观', 'exploring')}`,
     `${homeText(language, '路线', 'Route')}: ${routeStops.map((stop) => nameFor(stop, language)).join(' -> ') || homeText(language, '还没有添加景点', 'No stops yet')}`,
     '',
   ];
@@ -2667,11 +2726,11 @@ function itineraryExportText(language, routeStops, days, pace) {
     lines.push('');
   }
   plan.days.forEach((day) => {
-    lines.push(`${homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} - ${formatHours(day.totalHours)}h - ${formatKm(day.totalKm)}km`);
-    if (!day.activities.length) lines.push(homeText(language, '  机动日：没有固定驾驶或参观安排。', '  Flexible day: no fixed driving or visit plan.'));
+    lines.push(`${homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} - ${formatDuration(day.totalHours)} - ${formatKm(day.totalKm)}`);
+    if (!day.activities.length) lines.push(homeText(language, '  机动日：没有固定交通或参观安排。', '  Flexible day: no fixed transit or visit plan.'));
     day.activities.forEach((item) => {
-      if (item.kind === 'drive') {
-        lines.push(`  ${homeText(language, '行驶', 'Drive')}: ${item.label} - ${formatHours(item.hours)}h / ${formatKm(item.km)}km${item.continues ? homeText(language, '（次日继续）', ' (continues next day)') : ''}`);
+      if (item.kind !== 'visit') {
+        lines.push(`  ${travelModeLabel(item.travelMode, language)}: ${item.label} - ${formatDuration(item.hours)} / ${formatKm(item.km)}${item.continues ? homeText(language, '（次日继续）', ' (continues next day)') : ''}`);
         return;
       }
       const visit = visitFor(item.stop, language);
@@ -2808,13 +2867,51 @@ function routeMapPath(coordinates, close = false, projectPoint = projectRouteMap
   return close && path ? `${path} Z` : path;
 }
 
-function routeMapCityInfo(routeStops) {
-  const cities = [...new Set(routeStops.map((stop) => locationValue(stop, 'city', 'zh') || locationValue(stop, 'city', 'en')).filter(Boolean))];
-  if (routeStops.length >= 3 && cities.length === 1) return { isCity: true, city: cities[0] };
-  return { isCity: false, city: null };
+function convexHull(coordinates) {
+  const points = coordinates
+    .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat))
+    .map(([lon, lat]) => [lon, lat])
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (points.length <= 2) return points;
+  const cross = (origin, a, b) => (
+    (a[0] - origin[0]) * (b[1] - origin[1]) - (a[1] - origin[1]) * (b[0] - origin[0])
+  );
+  const lower = [];
+  points.forEach((point) => {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) lower.pop();
+    lower.push(point);
+  });
+  const upper = [];
+  [...points].reverse().forEach((point) => {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) upper.pop();
+    upper.push(point);
+  });
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }
 
-function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoading = false }) {
+function routeMapCityInfo(routeStops) {
+  const cityEntries = routeStops.map((stop) => ({
+    en: locationValue(stop, 'city', 'en'),
+    zh: locationValue(stop, 'city', 'zh'),
+  })).filter((city) => city.en || city.zh);
+  const cityKeys = [...new Set(cityEntries.map((city) => city.en || city.zh))];
+  if (routeStops.length >= 2 && cityKeys.length === 1) {
+    return {
+      isCity: true,
+      city: cityEntries[0]?.zh || cityEntries[0]?.en,
+      cityEn: cityEntries[0]?.en || '',
+    };
+  }
+  return { isCity: false, city: null, cityEn: '' };
+}
+
+function RouteSketchMap({
+  language,
+  routeStops,
+  routeGeometry = [],
+  routeGeometrySegments = [],
+  isRouteLoading = false,
+}) {
   const routeSignature = routeStops.map((stop) => stop.id).join('|');
   const previousRouteSignature = useRef(routeSignature);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -2849,24 +2946,32 @@ function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoadi
   });
   const routeStep = Math.max(1, Math.floor(displayGeometry.length / 1200));
   const simplifiedRoute = displayGeometry.filter((_, index) => index % routeStep === 0);
+  const displaySegments = showRouteLoading ? [] : routeGeometrySegments
+    .map((segment) => {
+      const coordinates = segment.geometryCoordinates ?? [];
+      const step = Math.max(1, Math.floor(coordinates.length / 500));
+      return {
+        ...segment,
+        geometryCoordinates: coordinates.filter((_, index) => index % step === 0),
+      };
+    })
+    .filter((segment) => segment.geometryCoordinates.length >= 2);
   const cityInfo = routeMapCityInfo(routeStops);
+  const cityHullSource = displayGeometry.length >= 3 ? displayGeometry : stopCoordinates;
+  const cityOutline = cityInfo.isCity ? convexHull(cityHullSource) : [];
   const labelEvery = points.length > 14 ? 2 : 1;
 
   return (
     <div
-      className={`paper-route-map ${showRouteLoading ? 'is-loading' : ''} ${cityInfo.isCity ? 'is-city-route' : ''}`}
+      className={`paper-route-map ${showRouteLoading ? 'is-loading' : ''} ${cityInfo.isCity ? 'is-city-route' : ''} ${cityInfo.cityEn === 'Venice' ? 'is-water-city' : ''}`}
       aria-busy={showRouteLoading}
       aria-label={language === 'zh' ? '手绘道路路线地图' : 'Hand-drawn road route map'}
     >
       <svg viewBox="0 0 100 100" role="img" aria-hidden="true">
         {cityInfo.isCity ? (
           <g className="paper-route-map__city">
-            <path d="M8 24 C26 12, 38 28, 55 18 S82 18, 94 9" />
-            <path d="M6 62 C22 48, 36 63, 52 50 S78 46, 94 35" />
-            <path d="M16 92 C31 75, 47 83, 63 66 S82 60, 96 50" />
-            <path d="M20 10 L27 94 M45 6 L38 96 M66 8 L72 95 M88 15 L82 88" />
-            {[18, 34, 50, 66, 82].map((x) => <rect key={`a-${x}`} x={x - 5} y="30" width="10" height="8" rx="1.5" />)}
-            {[24, 42, 60, 78].map((x) => <rect key={`b-${x}`} x={x - 4} y="70" width="8" height="7" rx="1.2" />)}
+            {cityOutline.length >= 3 && <path className="paper-route-map__city-shape" d={routeMapPath(cityOutline, true, projectPoint)} />}
+            {displayGeometry.length >= 2 && <path className="paper-route-map__city-network" d={routeMapPath(simplifiedRoute, false, projectPoint)} />}
           </g>
         ) : (
           <>
@@ -2874,8 +2979,20 @@ function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoadi
             {ROUTE_NETWORK.map((line, index) => <path key={index} className="paper-route-map__network" d={routeMapPath(line, false, projectPoint)} />)}
           </>
         )}
-        {simplifiedRoute.length >= 2 && <path className="paper-route-map__path-casing" d={routeMapPath(simplifiedRoute, false, projectPoint)} />}
-        {simplifiedRoute.length >= 2 && <path className="paper-route-map__path" d={routeMapPath(simplifiedRoute, false, projectPoint)} />}
+        {displaySegments.length ? displaySegments.map((segment, index) => (
+          <g key={`${segment.travelMode}-${index}`}>
+            <path className="paper-route-map__path-casing" d={routeMapPath(segment.geometryCoordinates, false, projectPoint)} />
+            <path
+              className={`paper-route-map__path is-${String(segment.travelMode ?? 'DRIVE').toLowerCase()}`}
+              d={routeMapPath(segment.geometryCoordinates, false, projectPoint)}
+            />
+          </g>
+        )) : (
+          <>
+            {simplifiedRoute.length >= 2 && <path className="paper-route-map__path-casing" d={routeMapPath(simplifiedRoute, false, projectPoint)} />}
+            {simplifiedRoute.length >= 2 && <path className="paper-route-map__path" d={routeMapPath(simplifiedRoute, false, projectPoint)} />}
+          </>
+        )}
         {points.map((point, index) => (
           <g key={point.stop.id} className="paper-route-map__stop">
             <circle cx={point.x} cy={point.y} r="3.2" />
@@ -2884,6 +3001,12 @@ function RouteSketchMap({ language, routeStops, routeGeometry = [], isRouteLoadi
         ))}
       </svg>
       {cityInfo.isCity && <b className="paper-route-map__city-label">{cityInfo.city}</b>}
+      {displaySegments.length > 0 && (
+        <div className="paper-route-map__legend">
+          {displaySegments.some((segment) => segment.travelMode === 'DRIVE') && <span className="is-drive">{homeText(language, '驾车', 'Drive')}</span>}
+          {displaySegments.some((segment) => segment.travelMode === 'WALK') && <span className="is-walk">{homeText(language, '步行', 'Walk')}</span>}
+        </div>
+      )}
       {points.map((point, index) => (
         <span
           key={point.stop.id}
@@ -3016,15 +3139,15 @@ function PrintableItinerary({ language, routeStops, plan, pace }) {
       {!plan.isFeasible && <p>{homeText(language, '这份安排会有些赶，建议再留一天。', 'This plan is rather full, so consider adding another day.')}</p>}
       {plan.days.map((day) => (
         <article key={day.day}>
-          <h2>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} · {formatKm(day.totalKm)} km · {formatHours(day.totalHours)} h</h2>
+          <h2>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)} · {formatKm(day.totalKm)} · {formatDuration(day.totalHours)}</h2>
           {day.activities.length ? (
             <>
               {day.activities.map((item, index) => {
-                if (item.kind === 'drive') {
+                if (item.kind !== 'visit') {
                   return (
                     <section key={`${item.from.id}-${item.to.id}-${index}`}>
-                      <h3>{homeText(language, '行驶', 'Drive')}: {item.label}</h3>
-                      <p>{formatHours(item.hours)}h / {formatKm(item.km)}km{item.continues ? homeText(language, '，次日继续。', ', continues next day.') : ''}</p>
+                      <h3>{travelModeLabel(item.travelMode, language)}: {item.label}</h3>
+                      <p>{formatDuration(item.hours)} / {formatKm(item.km)}{item.continues ? homeText(language, '，次日继续。', ', continues next day.') : ''}</p>
                     </section>
                   );
                 }
@@ -3051,8 +3174,8 @@ function PrintableItinerary({ language, routeStops, plan, pace }) {
 
 function RoutePlannerSection(props) {
   const { language, routeStops, routeSegments, routeGeometry, isRouteLoading, routeQuery, setRouteQuery, routeMatches, days, setDays, pace, setPace, lockedIds } = props;
-  const plan = makeItineraryPlan(routeStops, days, pace, language);
-  const exportText = itineraryExportText(language, routeStops, days, pace);
+  const plan = makeItineraryPlan(routeStops, days, pace, language, routeSegments);
+  const exportText = itineraryExportText(language, routeStops, days, pace, routeSegments);
   const routeRecommendations = useMemo(() => [...(props.routeRecommendations ?? [])]
     .map((recommendation) => ({
       ...recommendation,
@@ -3074,6 +3197,23 @@ function RoutePlannerSection(props) {
         <div className="cinematic-route-planner__controls">
           <section className="home-module home-module--planner">
             <div className="home-module__head"><span>{homeText(language, '路线控制', 'Route controls')}</span><strong>{routeStops.length}</strong></div>
+            <div className="route-mode-control" aria-label={homeText(language, '路线交通方式', 'Route travel mode')}>
+              {[
+                ['AUTO', homeText(language, '自动混合', 'Auto mix')],
+                ['DRIVE', homeText(language, '驾车', 'Drive')],
+                ['WALK', homeText(language, '步行', 'Walk')],
+              ].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={props.routeTravelPreference === mode ? 'is-active' : ''}
+                  aria-pressed={props.routeTravelPreference === mode}
+                  onClick={() => props.setRouteTravelPreference(mode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <label className="home-search">
               <span>{homeText(language, '添加景点', 'Add stop')}</span>
               <input value={routeQuery} onChange={(event) => setRouteQuery(event.target.value)} placeholder={homeText(language, '搜一个景点，放进当前路线', 'Search a stop and add it to this route')} />
@@ -3094,6 +3234,7 @@ function RoutePlannerSection(props) {
             <div className="concept-actions concept-actions--compact">
               <button className="concept-btn" type="button" onClick={props.onOptimize}>{homeText(language, '优化顺序', 'Optimize')}</button>
               <button className="concept-btn" type="button" onClick={props.onResetRoute}>{homeText(language, '回到默认路线', 'Reset route')}</button>
+              <button className="concept-btn" type="button" onClick={props.onClearRoute}>{homeText(language, '一键清空', 'Clear route')}</button>
               <button className="concept-btn" type="button" onClick={props.onSaveRoute}>
                 {props.userSession ? homeText(language, '保存当前路线', 'Save route') : homeText(language, '登录后保存', 'Sign in to save')}
               </button>
@@ -3115,7 +3256,7 @@ function RoutePlannerSection(props) {
                 <article key={recommendation.id}>
                   <div>
                     <strong>{recommendation.title}</strong>
-                    <span>{formatKm(recommendation.metrics.distance)} km / {formatHours(recommendation.metrics.duration)} h</span>
+                    <span>{formatKm(recommendation.metrics.distance)} / {formatDuration(recommendation.metrics.duration)}</span>
                   </div>
                   <p>{recommendation.detail}</p>
                   <small>{routeProviderLabel(recommendation.metrics.provider, language)} · {travelModeLabel(recommendation.metrics.travelMode, language)}{recommendation.metrics.isEstimated ? ` · ${homeText(language, '选择后会尝试加载真实路线', 'will try live routing after selection')}` : ''}</small>
@@ -3161,19 +3302,20 @@ function RoutePlannerSection(props) {
         <div className="cinematic-route-planner__visual">
           <section className="home-module home-module--map">
             <div className="home-module__head"><span>{homeText(language, '路线预览', 'Route preview')}</span><strong>{isRouteLoading ? homeText(language, '正在画路线', 'Drawing route') : routeGeometry.length >= 2 ? homeText(language, '已按道路整理', 'Road route ready') : homeText(language, '大致方向', 'Rough direction')}</strong></div>
-            <RouteSketchMap language={language} routeStops={routeStops} routeGeometry={routeGeometry} isRouteLoading={isRouteLoading} />
+            <RouteSketchMap language={language} routeStops={routeStops} routeGeometry={routeGeometry} routeGeometrySegments={props.routeGeometrySegments} isRouteLoading={isRouteLoading} />
             {!isRouteLoading && routeGeometry.length < 2 && <p className="planner-note">{homeText(language, '道路信息暂时没回来，先显示景点之间的大致方向，稍后可以再试。', 'Road details are taking a little longer, so the map is showing the general direction for now.')}</p>}
+            {props.routeDiagnostics?.excessiveOverlap && <p className="planner-note is-warning">{homeText(language, `检测到约 ${Math.round(props.routeDiagnostics.overlapRatio * 100)}% 的道路重复，建议使用“同城少回头”路线或调整景点顺序。`, `About ${Math.round(props.routeDiagnostics.overlapRatio * 100)}% of the route repeats. Try the city-local route or reorder stops.`)}</p>}
           </section>
           <section className="home-module home-module--schema">
             <div className="home-module__head"><span>{homeText(language, '站点连接', 'Stop connections')}</span><strong>{routeSegments.length}</strong></div>
             <div className="home-schema-list">
-              {routeSegments.map((segment, index) => <article key={segment.from.id + '-' + segment.to.id}><span>{String(index + 1).padStart(2, '0')}</span><strong>{nameFor(segment.from, language) + ' -> ' + nameFor(segment.to, language)}</strong><small>{formatKm(segment.distance)} km / {formatHours(segment.duration)} h · {routeProviderLabel(segment.source, language)}</small></article>)}
+              {routeSegments.map((segment, index) => <article key={segment.from.id + '-' + segment.to.id}><span>{String(index + 1).padStart(2, '0')}</span><strong>{nameFor(segment.from, language) + ' -> ' + nameFor(segment.to, language)}</strong><small>{formatKm(segment.distance)} / {formatDuration(segment.duration)} · {travelModeLabel(segment.travelMode, language)} · {routeProviderLabel(segment.source, language)}</small>{segment.travelMode === 'DRIVE' && segment.diagnostics?.excessiveDetour && segment.diagnostics.straightDistanceKm <= 8 && <em>{homeText(language, '驾车绕行明显，可切换“自动混合”或“步行”', 'Driving detour detected; try Auto mix or Walk')}</em>}</article>)}
             </div>
           </section>
           <section className="home-module home-module--metrics">
             <div className="home-module__head"><span>{homeText(language, '路线概览', 'Route overview')}</span><strong>{pace}</strong></div>
             <div className="home-metric-grid">
-              <section><strong>{formatKm(plan.totalKm)} km</strong><span>{homeText(language, '全程里程', 'Distance')}</span></section>
+              <section><strong>{formatKm(plan.totalKm)}</strong><span>{homeText(language, '全程里程', 'Distance')}</span></section>
               <section><strong>{formatHours(plan.travelHours)} h</strong><span>{homeText(language, '在路上', 'On the road')}</span></section>
               <section><strong>{formatHours(plan.visitHours)} h</strong><span>{homeText(language, '慢慢看', 'Exploring')}</span></section>
               <section><strong>{formatHours(plan.bufferHours)} h</strong><span>{homeText(language, '机动缓冲', 'Buffer time')}</span></section>
@@ -3185,18 +3327,21 @@ function RoutePlannerSection(props) {
               {plan.days.map((day) => (
                 <article key={day.day} className={`cinematic-day-card ${day.overHours > 0 ? 'is-tight' : ''}`}>
                   <span>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)}</span>
-                  <strong>{formatHours(day.totalHours)} h / {formatKm(day.totalKm)} km</strong>
-                  <p>{day.activities.length ? homeText(language, '按实际发生顺序交错显示行驶和参观', 'Driving and visits are shown in real sequence') : homeText(language, '留作机动日', 'A flexible day')}</p>
+                  <strong>{formatDuration(day.totalHours)} / {formatKm(day.totalKm)}</strong>
+                  <p>{day.activities.length ? homeText(language, '当天安排', 'Day plan') : homeText(language, '留作机动日', 'A flexible day')}</p>
                   {day.activities.length > 0 && (
                     <div className="cinematic-day-card__timeline">
                       {day.activities.map((item, index) => {
-                        if (item.kind === 'drive') {
+                        if (item.kind !== 'visit') {
+                          const activityClass = item.kind === 'walk'
+                            ? 'is-walk'
+                            : item.kind === 'mixed' ? 'is-mixed' : 'is-drive';
                           return (
-                            <div key={`${item.from.id}-${item.to.id}-${index}`} className="cinematic-day-card__activity is-drive">
+                            <div key={`${item.from.id}-${item.to.id}-${index}`} className={`cinematic-day-card__activity ${activityClass}`}>
                               <i aria-hidden="true">→</i>
-                              <span>{homeText(language, '行驶', 'Drive')}</span>
+                              <span>{travelModeLabel(item.travelMode, language)}</span>
                               <strong>{item.label}</strong>
-                              <em>{formatHours(item.hours)}h / {formatKm(item.km)}km{item.continues ? homeText(language, ' · 次日继续', ' · continues next day') : ''}</em>
+                              <em>{formatDuration(item.hours)} / {formatKm(item.km)}{item.continues ? homeText(language, ' · 次日继续', ' · continues next day') : ''}</em>
                             </div>
                           );
                         }
@@ -3213,7 +3358,7 @@ function RoutePlannerSection(props) {
                   )}
                   <small>{day.overHours > 0
                     ? homeText(language, `会多出约 ${formatHours(day.overHours)} 小时，建议挪走一个景点。`, `About ${formatHours(day.overHours)} hours over the limit. Move one stop to another day.`)
-                    : homeText(language, `${formatHours(day.travelHours)} 小时行驶，${formatHours(day.visitHours)} 小时参观，${formatHours(day.bufferHours)} 小时机动`, `${formatHours(day.travelHours)} hours driving, ${formatHours(day.visitHours)} hours exploring, ${formatHours(day.bufferHours)} hours buffer`)}</small>
+                    : homeText(language, `${formatHours(day.travelHours)} 小时在路上，${formatHours(day.visitHours)} 小时参观，${formatHours(day.bufferHours)} 小时机动`, `${formatHours(day.travelHours)} hours in transit, ${formatHours(day.visitHours)} hours exploring, ${formatHours(day.bufferHours)} hours buffer`)}</small>
                 </article>
               ))}
             </div>
@@ -3230,7 +3375,7 @@ function ThreeDGuideSection({ language, selectedStop, routeStops, onOpenDrive })
   const entryStop = selectedStop && routeStops.some((stop) => stop.id === selectedStop.id)
     ? selectedStop
     : routeStops[0] ?? null;
-  return <section id="home-3d" className="cinematic-section cinematic-3d"><div className="cinematic-section__head"><span>{language === 'zh' ? '3D旅行导览' : '3D travel guide'}</span><h2>{language === 'zh' ? '沿真实道路进入意大利路线' : 'Enter the Italy route along real roads'}</h2><p>{language === 'zh' ? '路线规划完成后，直接进入沉浸式驾驶导览。' : 'Once the route is ready, enter the immersive driving guide directly.'}</p></div><div className="cinematic-3d__layout"><div className="cinematic-3d__copy"><strong>{entryStop ? nameFor(entryStop, language) : homeText(language, '还没有选择路线', 'No route selected')}</strong><p>{language === 'zh' ? '当前路线包含 ' + routeStops.length + ' 个停靠点，准备好后就沿着选好的路出发。' : 'Your route has ' + routeStops.length + ' stops. When you are ready, set off along the roads you picked.'}</p></div><div className="cinematic-entry-grid cinematic-entry-grid--single"><article><strong>3D Drive</strong><p>{language === 'zh' ? '沿当前道路路线进入沉浸式导览。城市内部路线会优先按步行路径规划。' : 'Enter immersive guidance along the current route. City routes prefer walking paths.'}</p><button type="button" disabled={!entryStop} onClick={() => entryStop && onOpenDrive(entryStop.id)}>{language === 'zh' ? '进入' : 'Enter'}</button></article></div></div></section>;
+  return <section id="home-3d" className="cinematic-section cinematic-3d"><div className="cinematic-section__head"><span>{language === 'zh' ? '3D旅行导览' : '3D travel guide'}</span><h2>{language === 'zh' ? '沿真实道路进入意大利路线' : 'Enter the Italy route along real roads'}</h2><p>{language === 'zh' ? '路线规划完成后，直接进入沉浸式驾驶导览。' : 'Once the route is ready, enter the immersive driving guide directly.'}</p></div><div className="cinematic-3d__layout"><div className="cinematic-3d__copy"><strong>{entryStop ? nameFor(entryStop, language) : homeText(language, '还没有选择路线', 'No route selected')}</strong><p>{language === 'zh' ? '当前路线包含 ' + routeStops.length + ' 个停靠点，准备好后就沿着选好的路出发。' : 'Your route has ' + routeStops.length + ' stops. When you are ready, set off along the roads you picked.'}</p></div><div className="cinematic-entry-grid cinematic-entry-grid--single"><article><strong>3D Drive</strong><p>{language === 'zh' ? '沿当前路线进入沉浸式导览；规划页会按距离和城市条件自动混合驾车与步行。' : 'Enter immersive guidance along the current route; the planner mixes driving and walking based on distance and city conditions.'}</p><button type="button" disabled={!entryStop} onClick={() => entryStop && onOpenDrive(entryStop.id)}>{language === 'zh' ? '进入' : 'Enter'}</button></article></div></div></section>;
 }
 
 function FeatureSection({ language, favorites, compare, routeStops, userSession, onOpenService }) {
@@ -3575,7 +3720,9 @@ export function HomeShowcase({ onOpenDrive }) {
   const [routeSaveStatus, setRouteSaveStatus] = useState('');
   const [recommendationMetrics, setRecommendationMetrics] = useState({});
   const [onboardingOpen, setOnboardingOpen] = useState(() => hasEnteredHome && window.localStorage.getItem(ONBOARDING_SEEN_KEY) !== '1');
-  const routeMetricsQuery = useRouteMetrics(routeIds);
+  const [routeTravelPreference, setRouteTravelPreference] = useState('AUTO');
+  const routeSignature = routeSignatureFor(routeIds);
+  const routeMetricsQuery = useRouteMetrics(routeIds, routeTravelPreference);
 
   const options = useMemo(() => ({
     regions: locationFilterOptions(language),
@@ -3642,13 +3789,13 @@ export function HomeShowcase({ onOpenDrive }) {
 
   useEffect(() => {
     const metrics = routeMetricsQuery.data;
-    const routeSignature = routeIds.join('|');
     if (!metrics?.geometryCoordinates?.length || metrics.routeSignature !== routeSignature) return;
     setActiveRouteGeometry({
       coordinates: metrics.geometryCoordinates,
       distanceKm: metrics.distanceKm,
+      segments: activeRouteSegmentsFor(metrics),
     });
-  }, [routeIds, routeMetricsQuery.data, setActiveRouteGeometry]);
+  }, [routeMetricsQuery.data, routeSignature, setActiveRouteGeometry]);
 
   useLayoutEffect(() => {
     if (!hasEnteredHome) return;
@@ -3741,20 +3888,24 @@ export function HomeShowcase({ onOpenDrive }) {
     return () => window.clearTimeout(timer);
   }, [accountPlanReady, authToken, compare, days, favorites, language, lockedIds, pace, routeIds, userSession]);
 
-  const routeStops = useMemo(() => routeIds.map((id) => landmarks.find((stop) => stop.id === id)).filter(Boolean), [routeIds]);
-  const routeSegments = useMemo(() => routeSegmentsFor(routeStops), [routeStops]);
+  const routeStops = useMemo(() => routeIds.map((id) => landmarks.find((stop) => stop.id === id)).filter(Boolean), [routeSignature]);
+  const activeMetricSegments = useMemo(
+    () => (routeMetricsQuery.data?.routeSignature === routeSignature ? routeMetricsQuery.data.segments ?? [] : []),
+    [routeMetricsQuery.data, routeSignature],
+  );
+  const routeSegments = useMemo(() => routeSegmentsFor(routeStops, activeMetricSegments), [activeMetricSegments, routeStops]);
   const routeRecommendations = useMemo(
     () => buildRouteRecommendations(routeIds, lockedIds, language),
     [language, lockedIds, routeIds],
   );
   useEffect(() => {
-    const suggestedDays = clampDays(minimumDaysFor(routeStops, pace, language));
+    const suggestedDays = clampDays(minimumDaysFor(routeStops, pace, language, routeSegments));
     setDays((current) => (current === suggestedDays ? current : suggestedDays));
-  }, [language, pace, routeIds.join('|')]);
+  }, [language, pace, routeSegments, routeStops]);
   useEffect(() => {
     if (!routeIds.length) return;
     setSelectedId((current) => (routeIds.includes(current) ? current : routeIds[0]));
-  }, [routeIds.join('|')]);
+  }, [routeIds, routeSignature]);
   const selectedStop = routeStops.find((stop) => stop.id === selectedId) ?? routeStops[0] ?? landmarks.find((stop) => stop.id === selectedId) ?? landmarks[0];
   const detailStop = landmarks.find((stop) => stop.id === detailStopId);
   const routeMatches = useMemo(() => {
@@ -3765,28 +3916,6 @@ export function HomeShowcase({ onOpenDrive }) {
       .sort((a, b) => b.score - a.score)
       .map(({ stop }) => stop);
   }, [language, routeQuery]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const candidates = routeRecommendations.filter((recommendation) => recommendation.ids.length >= 2);
-    if (!candidates.length) {
-      setRecommendationMetrics({});
-      return undefined;
-    }
-    candidates.forEach((recommendation) => {
-      const signature = routeSignatureFor(recommendation.ids);
-      if (recommendationMetrics[signature]) return;
-      fetchRouteMetrics(recommendation.ids)
-        .then((metrics) => {
-          if (cancelled || !metrics?.routeSignature) return;
-          setRecommendationMetrics((current) => ({ ...current, [metrics.routeSignature]: metrics }));
-        })
-        .catch(() => {});
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [recommendationMetrics, routeRecommendations]);
 
   const toggleSet = (setter, id) => {
     setter((current) => {
@@ -3853,10 +3982,14 @@ export function HomeShowcase({ onOpenDrive }) {
       `Selected “${recommendation.title}”. You can still move or lock stops.`,
     ));
     setRouteSaveStatus('');
-    fetchRouteMetrics(recommendation.ids)
+    fetchRouteMetrics(recommendation.ids, routeTravelPreference)
       .then((metrics) => {
         if (metrics?.geometryCoordinates?.length && metrics.routeSignature === routeSignatureFor(recommendation.ids)) {
-          setActiveRouteGeometry({ coordinates: metrics.geometryCoordinates, distanceKm: metrics.distanceKm });
+          setActiveRouteGeometry({
+            coordinates: metrics.geometryCoordinates,
+            distanceKm: metrics.distanceKm,
+            segments: activeRouteSegmentsFor(metrics),
+          });
           setRecommendationMetrics((current) => ({ ...current, [metrics.routeSignature]: metrics }));
         }
       })
@@ -3867,6 +4000,17 @@ export function HomeShowcase({ onOpenDrive }) {
     setSelectedId(initialRouteIds[0]);
     setLockedIds(new Set());
     setActiveRouteIds(initialRouteIds);
+    setActiveRouteGeometry();
+    setRouteSaveStatus('');
+  };
+  const clearRoute = () => {
+    setRouteIds([]);
+    setSelectedId(null);
+    setLockedIds(new Set());
+    setActiveRouteIds([]);
+    setActiveRouteGeometry();
+    setOptimizeMessage('');
+    setRouteSaveStatus('');
   };
   const previewRoute = (route) => {
     setRouteIds(route.ids);
@@ -3881,23 +4025,30 @@ export function HomeShowcase({ onOpenDrive }) {
     if (startId) setSelectedId(startId);
     setLockedIds(new Set());
     setActiveRouteIds(route.ids);
-    const metrics = await fetchRouteMetrics(route.ids).catch(() => null);
+    const metrics = await fetchRouteMetrics(route.ids, routeTravelPreference).catch(() => null);
     if (metrics?.geometryCoordinates?.length) {
-      setActiveRouteGeometry({ coordinates: metrics.geometryCoordinates, distanceKm: metrics.distanceKm });
+      setActiveRouteGeometry({
+        coordinates: metrics.geometryCoordinates,
+        distanceKm: metrics.distanceKm,
+        segments: activeRouteSegmentsFor(metrics),
+      });
     }
     onOpenDrive(startId);
   };
   const openDriveWithCurrentRoute = async (landmarkId = null) => {
     setActiveRouteIds(routeIds);
-    const routeSignature = routeIds.join('|');
     let metrics = routeMetricsQuery.data?.routeSignature === routeSignature
       ? routeMetricsQuery.data
       : null;
     if (!metrics?.geometryCoordinates?.length) {
-      metrics = await fetchRouteMetrics(routeIds).catch(() => null);
+      metrics = await fetchRouteMetrics(routeIds, routeTravelPreference).catch(() => null);
     }
     if (metrics?.geometryCoordinates?.length && metrics.routeSignature === routeSignature) {
-      setActiveRouteGeometry({ coordinates: metrics.geometryCoordinates, distanceKm: metrics.distanceKm });
+      setActiveRouteGeometry({
+        coordinates: metrics.geometryCoordinates,
+        distanceKm: metrics.distanceKm,
+        segments: activeRouteSegmentsFor(metrics),
+      });
     }
     onOpenDrive(landmarkId);
   };
@@ -4013,9 +4164,19 @@ export function HomeShowcase({ onOpenDrive }) {
     routeSegments,
     routeRecommendations,
     recommendationMetrics,
-    routeGeometry: routeMetricsQuery.data?.routeSignature === routeIds.join('|')
+    routeGeometry: routeMetricsQuery.data?.routeSignature === routeSignature
       ? routeMetricsQuery.data.geometryCoordinates ?? []
       : [],
+    routeGeometrySegments: routeMetricsQuery.data?.routeSignature === routeSignature
+      ? (routeMetricsQuery.data.segments ?? []).flatMap((segment) => (
+        segment.parts?.length ? segment.parts : [segment]
+      ))
+      : [],
+    routeDiagnostics: routeMetricsQuery.data?.routeSignature === routeSignature
+      ? routeMetricsQuery.data.diagnostics ?? null
+      : null,
+    routeTravelPreference,
+    setRouteTravelPreference,
     isRouteLoading: routeMetricsQuery.isFetching,
     routeQuery,
     setRouteQuery,
@@ -4050,6 +4211,7 @@ export function HomeShowcase({ onOpenDrive }) {
     onSelectRecommendation: selectRouteRecommendation,
     onSaveRoute: saveCurrentRoute,
     onResetRoute: resetRoute,
+    onClearRoute: clearRoute,
     onPreviewRoute: previewRoute,
     onStartRoute: startRoute,
     onShowMore: () => setVisibleCount((count) => Math.min(count + 8, filteredStops.length)),

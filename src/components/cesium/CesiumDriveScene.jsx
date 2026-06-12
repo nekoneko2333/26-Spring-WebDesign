@@ -9,6 +9,7 @@ import {
   createWorldImageryAsync,
   createWorldTerrainAsync,
   DistanceDisplayCondition,
+  EllipsoidTerrainProvider,
   EllipsoidGeodesic,
   HeadingPitchRange,
   HeightReference,
@@ -18,6 +19,7 @@ import {
   Matrix4,
   Math as CesiumMath,
   NearFarScalar,
+  OpenStreetMapImageryProvider,
   Quaternion,
   Rectangle,
   sampleTerrainMostDetailed,
@@ -43,6 +45,8 @@ const PASSED_CHUNK_KM = 5;
 const ACTIVE_TRAIL_UPDATE_KM = 0.4;
 const NORMAL_SPEED_KMH = 100;
 const BOOST_SPEED_KMH = 175;
+const WALK_SPEED_KMH = 5;
+const WALK_BOOST_SPEED_KMH = 7;
 const NORMAL_TIME_SCALE = 12;
 const BOOST_TIME_SCALE = 24;
 const BUILDING_CACHE_BYTES = 128 * 1024 * 1024;
@@ -53,6 +57,158 @@ const tempGeodesic = new EllipsoidGeodesic();
 
 function routePositions(points) {
   return points.map(({ lon, lat }) => Cartesian3.fromDegrees(lon, lat));
+}
+
+function createWalkingPersonFrame(step = 1) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 176;
+  const context = canvas.getContext('2d');
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+
+  const outline = '#252525';
+  const skin = '#efb38f';
+  const coat = '#d94f4f';
+  const coatShade = '#b83d3d';
+  const trousers = '#364657';
+  const shoe = '#20252a';
+  const forward = step > 0;
+
+  context.save();
+  context.translate(forward ? 0 : canvas.width, 0);
+  context.scale(forward ? 1 : -1, 1);
+
+  // Shadow keeps the figure grounded without obscuring the route.
+  context.fillStyle = 'rgba(37, 37, 37, 0.18)';
+  context.beginPath();
+  context.ellipse(64, 163, 34, 7, 0, 0, Math.PI * 2);
+  context.fill();
+
+  // Back leg.
+  context.strokeStyle = outline;
+  context.lineWidth = 17;
+  context.beginPath();
+  context.moveTo(60, 105);
+  context.lineTo(forward ? 45 : 76, 134);
+  context.lineTo(forward ? 34 : 82, 157);
+  context.stroke();
+  context.strokeStyle = trousers;
+  context.lineWidth = 11;
+  context.stroke();
+
+  // Back arm.
+  context.strokeStyle = outline;
+  context.lineWidth = 13;
+  context.beginPath();
+  context.moveTo(53, 66);
+  context.lineTo(forward ? 34 : 79, 88);
+  context.lineTo(forward ? 29 : 88, 109);
+  context.stroke();
+  context.strokeStyle = coatShade;
+  context.lineWidth = 8;
+  context.stroke();
+
+  // Torso and coat.
+  context.fillStyle = coat;
+  context.strokeStyle = outline;
+  context.lineWidth = 5;
+  context.beginPath();
+  context.moveTo(48, 55);
+  context.quadraticCurveTo(64, 47, 80, 58);
+  context.lineTo(76, 108);
+  context.quadraticCurveTo(62, 116, 47, 106);
+  context.closePath();
+  context.fill();
+  context.stroke();
+  context.strokeStyle = 'rgba(255,255,255,0.65)';
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(64, 57);
+  context.lineTo(63, 104);
+  context.stroke();
+
+  // Front leg.
+  context.strokeStyle = outline;
+  context.lineWidth = 18;
+  context.beginPath();
+  context.moveTo(67, 106);
+  context.lineTo(forward ? 82 : 52, 133);
+  context.lineTo(forward ? 100 : 42, 154);
+  context.stroke();
+  context.strokeStyle = trousers;
+  context.lineWidth = 12;
+  context.stroke();
+
+  // Shoes.
+  context.strokeStyle = shoe;
+  context.lineWidth = 10;
+  context.beginPath();
+  context.moveTo(forward ? 94 : 35, 157);
+  context.lineTo(forward ? 111 : 48, 158);
+  context.moveTo(forward ? 27 : 75, 160);
+  context.lineTo(forward ? 42 : 91, 160);
+  context.stroke();
+
+  // Front arm and hand.
+  context.strokeStyle = outline;
+  context.lineWidth = 14;
+  context.beginPath();
+  context.moveTo(75, 66);
+  context.lineTo(forward ? 91 : 43, 87);
+  context.lineTo(forward ? 99 : 34, 105);
+  context.stroke();
+  context.strokeStyle = coat;
+  context.lineWidth = 8;
+  context.stroke();
+  context.fillStyle = skin;
+  context.strokeStyle = outline;
+  context.lineWidth = 3;
+  context.beginPath();
+  context.arc(forward ? 101 : 32, 108, 6, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+
+  // Neck and head.
+  context.fillStyle = skin;
+  context.strokeStyle = outline;
+  context.lineWidth = 4;
+  context.fillRect(59, 44, 13, 15);
+  context.beginPath();
+  context.ellipse(65, 30, 17, 20, -0.08, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+
+  // Hair, ear, and face.
+  context.fillStyle = '#3a2c28';
+  context.beginPath();
+  context.arc(62, 24, 18, Math.PI, Math.PI * 1.95);
+  context.quadraticCurveTo(75, 12, 82, 28);
+  context.lineTo(77, 37);
+  context.quadraticCurveTo(72, 22, 49, 24);
+  context.closePath();
+  context.fill();
+  context.strokeStyle = outline;
+  context.lineWidth = 3;
+  context.stroke();
+  context.fillStyle = skin;
+  context.beginPath();
+  context.arc(81, 32, 5, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+  context.fillStyle = outline;
+  context.beginPath();
+  context.arc(73, 30, 2, 0, Math.PI * 2);
+  context.fill();
+  context.strokeStyle = '#9b4b3f';
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(73, 40);
+  context.quadraticCurveTo(77, 42, 80, 39);
+  context.stroke();
+
+  context.restore();
+  return canvas;
 }
 
 function pointToSegmentDistanceSquared(point, start, end) {
@@ -298,16 +454,34 @@ export function CesiumDriveScene({ isStarted }) {
     async function initialize() {
       try {
         const token = import.meta.env.VITE_CESIUM_ION_TOKEN?.trim();
-        if (!token) throw new Error('VITE_CESIUM_ION_TOKEN is not configured.');
-        Ion.defaultAccessToken = token;
+        if (token) Ion.defaultAccessToken = token;
         setCesiumStatus({ terrain: 'loading', imagery: 'loading', buildings: 'loading', ready: false, error: '' });
 
-        const [terrainProvider, imageryProvider] = await Promise.all([
-          createWorldTerrainAsync({ requestWaterMask: true, requestVertexNormals: true }),
-          createWorldImageryAsync(),
-        ]);
+        let terrainProvider;
+        let hasDetailedTerrain = false;
+        try {
+          if (!token) throw new Error('Cesium ion token is not configured.');
+          terrainProvider = await createWorldTerrainAsync({
+            requestWaterMask: true,
+            requestVertexNormals: true,
+          });
+          hasDetailedTerrain = true;
+        } catch {
+          terrainProvider = new EllipsoidTerrainProvider();
+        }
         if (disposed) return;
         viewer.terrainProvider = terrainProvider;
+
+        let imageryProvider;
+        try {
+          if (!token) throw new Error('Cesium ion token is not configured.');
+          imageryProvider = await createWorldImageryAsync();
+        } catch {
+          imageryProvider = new OpenStreetMapImageryProvider({
+            url: 'https://tile.openstreetmap.org/',
+          });
+        }
+        if (disposed) return;
         const imageryLayer = viewer.imageryLayers.addImageryProvider(imageryProvider);
         imageryLayer.brightness = 1.08;
         imageryLayer.contrast = 1.02;
@@ -315,13 +489,21 @@ export function CesiumDriveScene({ isStarted }) {
         setCesiumStatus({ terrain: 'ready', imagery: 'ready' });
 
         const first = route.sample(START_PROGRESS);
-        const sampled = await sampleTerrainMostDetailed(terrainProvider, [
-          Cartographic.fromDegrees(first.lon, first.lat),
-        ]);
-        if (disposed) return;
-        const startHeight = Number.isFinite(sampled[0]?.height) ? sampled[0].height : 0;
+        let startHeight = 0;
+        if (hasDetailedTerrain) {
+          try {
+            const sampled = await sampleTerrainMostDetailed(terrainProvider, [
+              Cartographic.fromDegrees(first.lon, first.lat),
+            ]);
+            if (disposed) return;
+            startHeight = Number.isFinite(sampled[0]?.height) ? sampled[0].height : 0;
+          } catch {
+            startHeight = 0;
+          }
+        }
 
         try {
+          if (!token) throw new Error('Cesium ion token is not configured.');
           buildings = await createOsmBuildingsAsync({
             cacheBytes: BUILDING_CACHE_BYTES,
             maximumCacheOverflowBytes: BUILDING_OVERFLOW_BYTES,
@@ -363,6 +545,8 @@ export function CesiumDriveScene({ isStarted }) {
           },
         });
         const initialPosition = Cartesian3.fromDegrees(first.lon, first.lat, startHeight + 0.65);
+        const walkingFrames = [createWalkingPersonFrame(-1), createWalkingPersonFrame(1)];
+        const startsWalking = route.travelModeAt(0) === 'WALK';
         const initialOrientation = Transforms.headingPitchRollQuaternion(
           initialPosition,
           new HeadingPitchRoll(routeHeading(route, 0), 0, 0),
@@ -378,6 +562,20 @@ export function CesiumDriveScene({ isStarted }) {
             maximumScale: 1.4,
             heightReference: HeightReference.RELATIVE_TO_GROUND,
           },
+          show: !startsWalking,
+        });
+        const walker = viewer.entities.add({
+          id: 'tour-walker',
+          position: initialPosition,
+          billboard: {
+            image: walkingFrames[0],
+            width: 58,
+            height: 80,
+            heightReference: HeightReference.RELATIVE_TO_GROUND,
+            disableDepthTestDistance: 5000,
+            scaleByDistance: new NearFarScalar(100, 1.15, 8000, 0.55),
+          },
+          show: startsWalking,
         });
 
         const indexedLandmarks = route.routeIds
@@ -406,6 +604,7 @@ export function CesiumDriveScene({ isStarted }) {
         let lastLandmarkKey = '';
         let smoothedHeading = routeHeading(route, progress);
         let smoothedRange = 1500;
+        let walkingFrameIndex = 0;
         let mapModeApplied = false;
         let focusModeId = null;
         let previousCameraMode = 'follow';
@@ -545,15 +744,19 @@ export function CesiumDriveScene({ isStarted }) {
             }
           }
           const input = controls.current;
+          const currentTravelMode = route.travelModeAt(progress);
+          const isWalking = currentTravelMode === 'WALK';
           const hasManualInput = input.forward || input.backward;
           if (routeLocked || (hasManualInput && state.autoDrive)) state.setAutoDrive(false);
 
           if (!isStartedRef.current || routeLocked || !state.cesiumStatus.ready) {
             targetSpeedKmh = 0;
           } else if (state.autoDrive || input.forward) {
-            targetSpeedKmh = input.boost ? BOOST_SPEED_KMH : NORMAL_SPEED_KMH;
+            targetSpeedKmh = isWalking
+              ? (input.boost ? WALK_BOOST_SPEED_KMH : WALK_SPEED_KMH)
+              : (input.boost ? BOOST_SPEED_KMH : NORMAL_SPEED_KMH);
           } else if (input.backward) {
-            targetSpeedKmh = input.boost ? -36 : -22;
+            targetSpeedKmh = isWalking ? -3 : input.boost ? -36 : -22;
           } else {
             targetSpeedKmh = 0;
           }
@@ -602,6 +805,16 @@ export function CesiumDriveScene({ isStarted }) {
           );
           vehicle.position.setValue(scratchPosition);
           vehicle.orientation.setValue(scratchOrientation);
+          vehicle.show = !isWalking;
+          walker.position.setValue(scratchPosition);
+          walker.show = isWalking;
+          if (isWalking) {
+            const nextWalkingFrame = Math.floor(now / 280) % walkingFrames.length;
+            if (nextWalkingFrame !== walkingFrameIndex) {
+              walkingFrameIndex = nextWalkingFrame;
+              walker.billboard.image.setValue(walkingFrames[walkingFrameIndex]);
+            }
+          }
 
           updatePassedRoute();
           applyLandmarks(state.cameraMode);
@@ -660,8 +873,17 @@ export function CesiumDriveScene({ isStarted }) {
               routeHour: 7 + (progress * 36 % 12),
               routeContext: {
                 point: { id: `cesium-${point.index}`, roadType: '真实道路' },
-                segment: { id: 'cesium-route', type: 'scenic', speedLimit: 110, trafficState: 'normal' },
-                profile: { label: 'Cesium 实景路线', surfaceLabel: '地形贴合道路', color: '#59666b' },
+                segment: {
+                  id: 'cesium-route',
+                  type: isWalking ? 'walk' : 'scenic',
+                  speedLimit: isWalking ? WALK_SPEED_KMH : 110,
+                  trafficState: 'normal',
+                },
+                profile: {
+                  label: isWalking ? '步行路线' : 'Cesium 实景路线',
+                  surfaceLabel: isWalking ? '步行道路' : '地形贴合道路',
+                  color: '#59666b',
+                },
                 currentStopId,
               },
             });

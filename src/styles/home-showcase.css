@@ -2213,6 +2213,18 @@
   font: 800 11px/1 var(--font-ui, system-ui);
 }
 
+.home-schema-list em {
+  grid-column: 2 / -1;
+  color: #ff4d4d;
+  font: 400 15px/1.25 "Patrick Hand", "Noto Sans SC", cursive;
+}
+
+.planner-note.is-warning {
+  border-left: 3px solid #ff4d4d;
+  padding-left: 10px;
+  color: #2d2d2d;
+}
+
 .home-metric-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3584,24 +3596,36 @@
   stroke-linecap: round;
 }
 
-.paper-route-map__city path {
-  fill: none;
-  stroke: rgba(45, 93, 161, 0.36);
+.paper-route-map__city-shape {
+  fill: rgba(255, 255, 255, 0.62);
+  stroke: #2d2d2d;
   stroke-width: 1.1;
-  stroke-dasharray: 2.4 1.2;
+  stroke-dasharray: 2.2 1.2;
+  stroke-linejoin: round;
+}
+
+.paper-route-map__city-network {
+  fill: none;
+  stroke: rgba(45, 93, 161, 0.42);
+  stroke-width: 0.8;
+  stroke-dasharray: 1.5 1.1;
   stroke-linecap: round;
 }
 
-.paper-route-map__city path:nth-child(-n + 3) {
-  stroke: rgba(45, 93, 161, 0.62);
-  stroke-width: 1.8;
-  stroke-dasharray: none;
+.paper-route-map.is-water-city {
+  background:
+    radial-gradient(#2d5da1 0.8px, transparent 1px),
+    #e9f1f4;
+  background-size: 18px 18px, auto;
 }
 
-.paper-route-map__city rect {
-  fill: rgba(255, 255, 255, 0.58);
-  stroke: rgba(45, 45, 45, 0.28);
-  stroke-width: 0.55;
+.paper-route-map.is-water-city .paper-route-map__city-shape {
+  fill: #fdfbf7;
+  stroke: #2d2d2d;
+}
+
+.paper-route-map.is-water-city .paper-route-map__city-network {
+  stroke: #2d5da1;
 }
 
 .paper-route-map__path-casing {
@@ -3618,6 +3642,84 @@
   stroke-width: 1.25;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.paper-route-map__path.is-walk {
+  stroke: #2d2d2d;
+  stroke-width: 1.05;
+  stroke-dasharray: 2.2 1.5;
+}
+
+.paper-route-map__path.is-drive {
+  stroke: #ff4d4d;
+}
+
+.paper-route-map__legend {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  z-index: 3;
+  display: flex;
+  gap: 12px;
+  padding: 7px 10px;
+  border: 2px solid #2d2d2d;
+  border-radius: 18px 8px 16px 7px / 8px 17px 7px 15px;
+  background: rgba(253, 251, 247, 0.94);
+  box-shadow: 2px 2px 0 #2d2d2d;
+}
+
+.paper-route-map__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #2d2d2d;
+  font: 400 14px/1 "Patrick Hand", "Noto Sans SC", cursive;
+}
+
+.paper-route-map__legend span::before {
+  content: "";
+  width: 24px;
+  border-top: 3px solid #ff4d4d;
+}
+
+.paper-route-map__legend span.is-walk::before {
+  border-top-color: #2d2d2d;
+  border-top-style: dashed;
+}
+
+.route-mode-control {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 12px 0 16px;
+  padding: 5px;
+  border: 2px dashed #2d2d2d;
+  border-radius: 20px 9px 18px 7px / 8px 20px 7px 18px;
+  background: #fff9c4;
+}
+
+.showcase-home--cinema .route-mode-control button {
+  min-height: 38px;
+  padding: 0 8px;
+  border: 2px solid transparent;
+  border-radius: 16px 7px 14px 6px / 7px 15px 6px 14px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 16px;
+}
+
+.showcase-home--cinema .route-mode-control button:hover {
+  background: #fff;
+  color: #2d2d2d;
+  box-shadow: none;
+  transform: rotate(-0.5deg);
+}
+
+.showcase-home--cinema .route-mode-control button.is-active {
+  border-color: #2d2d2d;
+  background: #ff4d4d;
+  color: #fff;
+  box-shadow: 2px 2px 0 #2d2d2d;
 }
 
 .paper-route-map__stop circle {
@@ -4171,9 +4273,10 @@
   gap: 6px 10px;
   align-items: center;
   padding: 9px 10px;
-  border: 1px solid #2d2d2d;
-  border-radius: 8px;
-  background: #fffdf8;
+  border: 2px solid #2d2d2d;
+  border-radius: 22px 9px 18px 7px / 8px 20px 7px 18px;
+  background: #fff;
+  box-shadow: 3px 3px 0 #2d2d2d;
 }
 
 .cinematic-day-card__activity i {
@@ -4181,7 +4284,8 @@
   width: 26px;
   height: 26px;
   place-items: center;
-  border-radius: 999px;
+  border: 2px solid #2d2d2d;
+  border-radius: 52% 48% 43% 57% / 46% 55% 45% 54%;
   color: #fff;
   font-style: normal;
   font-weight: 900;
@@ -4206,31 +4310,53 @@
 }
 
 .cinematic-day-card__activity.is-drive {
-  border-color: #2d5da1;
-  background: #edf4ff;
+  border-color: #2d2d2d;
+  background: #fff9c4;
+  transform: rotate(-0.25deg);
 }
 
 .cinematic-day-card__activity.is-drive i {
-  background: #2d5da1;
+  background: #ff4d4d;
 }
 
 .cinematic-day-card__activity.is-drive span,
 .cinematic-day-card__activity.is-drive em {
-  color: #244a82;
+  color: #2d2d2d;
+}
+
+.cinematic-day-card__activity.is-walk {
+  border-style: dashed;
+  background: #fff;
+  transform: rotate(0.15deg);
+}
+
+.cinematic-day-card__activity.is-walk i {
+  background: #2d2d2d;
+}
+
+.cinematic-day-card__activity.is-mixed {
+  background: linear-gradient(104deg, #fff 0 46%, #fff9c4 46% 100%);
+  transform: rotate(-0.1deg);
+}
+
+.cinematic-day-card__activity.is-mixed i {
+  background: #ff4d4d;
 }
 
 .cinematic-day-card__activity.is-visit {
-  border-color: #2f7a52;
-  background: #edf8f1;
+  border-color: #2d2d2d;
+  background: #fff;
+  border-style: dashed;
+  transform: rotate(0.2deg);
 }
 
 .cinematic-day-card__activity.is-visit i {
-  background: #2f7a52;
+  background: #2d2d2d;
 }
 
 .cinematic-day-card__activity.is-visit span,
 .cinematic-day-card__activity.is-visit em {
-  color: #276241;
+  color: #2d2d2d;
 }
 
 .cinematic-route-planner .home-module--export textarea {

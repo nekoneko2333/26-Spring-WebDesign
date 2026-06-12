@@ -102,7 +102,7 @@ class RouteCoordinate(BaseModel):
 
 class RoutePlanPayload(BaseModel):
     coordinates: list[RouteCoordinate] = Field(min_length=2, max_length=25)
-    travelMode: str = Field(default='DRIVE', pattern='^(DRIVE|WALK)$')
+    travelMode: str = Field(default='DRIVE', pattern='^(DRIVE|WALK|MIXED)$')
 
 
 def _now_iso():
@@ -180,14 +180,18 @@ def _plan_google_route(coordinates, api_key, travel_mode='DRIVE'):
 
 def _plan_osrm_route(coordinates, travel_mode='DRIVE'):
     encoded = ';'.join(f'{point.lon},{point.lat}' for point in coordinates)
-    profile = 'foot' if travel_mode == 'WALK' else 'driving'
+    base_url = (
+        'https://routing.openstreetmap.de/routed-foot/route/v1/driving'
+        if travel_mode == 'WALK'
+        else 'https://router.project-osrm.org/route/v1/driving'
+    )
     query = urllib.parse.urlencode({
         'overview': 'full',
         'geometries': 'geojson',
         'annotations': 'false',
         'steps': 'false',
     })
-    response = _request_json(f'https://router.project-osrm.org/route/v1/{profile}/{encoded}?{query}')
+    response = _request_json(f'{base_url}/{encoded}?{query}')
     route = (response.get('routes') or [None])[0]
     if not route:
         raise RuntimeError('OSRM returned no route')
@@ -453,6 +457,66 @@ def _distance_km(a_lon, a_lat, b_lon, b_lat):
     lat2 = math.radians(b_lat)
     h = math.sin(d_lat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(d_lon / 2) ** 2
     return radius * 2 * math.atan2(math.sqrt(h), math.sqrt(1 - h))
+
+
+def _dedupe_geometry(parts):
+    geometry = []
+    for part in parts:
+        for coordinate in part.get('geometryCoordinates') or []:
+            if geometry and geometry[-1] == coordinate:
+                continue
+            geometry.append(coordinate)
+    return geometry
+
+
+def _mixed_segment_mode(origin, destination):
+    return 'DRIVE'
+
+
+def _plan_single_segment(coordinates, travel_mode, google_api_key):
+    if google_api_key:
+        try:
+            return _plan_google_route(coordinates, google_api_key, travel_mode)
+        except (KeyError, RuntimeError, ValueError, urllib.error.URLError):
+            pass
+    return _plan_osrm_route(coordinates, travel_mode)
+
+
+def _plan_mixed_route(coordinates, google_api_key):
+    segments = []
+    for index in range(len(coordinates) - 1):
+        origin = coordinates[index]
+        destination = coordinates[index + 1]
+        travel_mode = _mixed_segment_mode(origin, destination)
+        try:
+            segment = _plan_single_segment([origin, destination], travel_mode, google_api_key)
+        except (RuntimeError, ValueError, urllib.error.URLError):
+            straight_km = _distance_km(origin.lon, origin.lat, destination.lon, destination.lat)
+            speed = 4.5 if travel_mode == 'WALK' else 32 if straight_km <= 8 else 58
+            segment = {
+                'provider': 'estimated',
+                'travelMode': travel_mode,
+                'distanceKm': round(straight_km * (1.12 if travel_mode == 'WALK' else 1.22), 2),
+                'durationHours': round((straight_km * (1.12 if travel_mode == 'WALK' else 1.22)) / speed, 2),
+                'geometryCoordinates': [[origin.lon, origin.lat], [destination.lon, destination.lat]],
+            }
+        segments.append({
+            **segment,
+            'index': index,
+            'fromIndex': index,
+            'toIndex': index + 1,
+            'straightDistanceKm': round(_distance_km(origin.lon, origin.lat, destination.lon, destination.lat), 3),
+        })
+
+    providers = {segment.get('provider') for segment in segments if segment.get('provider')}
+    return {
+        'provider': 'mixed' if len(providers) > 1 else (next(iter(providers)) if providers else 'mixed'),
+        'travelMode': 'MIXED',
+        'distanceKm': round(sum(float(segment.get('distanceKm') or 0) for segment in segments), 2),
+        'durationHours': round(sum(float(segment.get('durationHours') or 0) for segment in segments), 2),
+        'geometryCoordinates': _dedupe_geometry(segments),
+        'segments': segments,
+    }
 
 
 _RAW_LANDMARKS = [
@@ -757,6 +821,11 @@ def get_current_route():
 def plan_route(payload: RoutePlanPayload):
     google_api_key = os.getenv('GOOGLE_MAPS_API_KEY', '').strip()
     travel_mode = payload.travelMode
+    if travel_mode == 'MIXED':
+        try:
+            return _plan_mixed_route(payload.coordinates, google_api_key)
+        except (RuntimeError, ValueError, urllib.error.URLError) as error:
+            raise HTTPException(status_code=502, detail=f'Route provider failed: {error}') from error
     if google_api_key:
         try:
             return _plan_google_route(payload.coordinates, google_api_key, travel_mode)

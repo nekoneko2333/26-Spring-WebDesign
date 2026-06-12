@@ -20,15 +20,47 @@ function haversineKm(a, b) {
 }
 
 function orientToFirstStop(points, routeIds) {
-  if (points.length < 2 || routeIds.length === 0) return points;
+  if (points.length < 2 || routeIds.length === 0) return { points, reversed: false };
   const firstStop = landmarks.find((item) => item.id === routeIds[0]);
-  if (!firstStop) return points;
+  if (!firstStop) return { points, reversed: false };
   const startDistance = haversineKm(points[0], firstStop);
   const endDistance = haversineKm(points[points.length - 1], firstStop);
-  return endDistance < startDistance ? [...points].reverse() : points;
+  return endDistance < startDistance
+    ? { points: [...points].reverse(), reversed: true }
+    : { points, reversed: false };
 }
 
-function buildRoute(points) {
+function buildModeRanges(segments, reversed) {
+  const measured = segments
+    .map((segment) => {
+      const coordinates = segment.geometryCoordinates ?? [];
+      const distanceKm = coordinates.slice(1).reduce((sum, coordinate, index) => (
+        sum + haversineKm(
+          { lon: coordinates[index][0], lat: coordinates[index][1] },
+          { lon: coordinate[0], lat: coordinate[1] },
+        )
+      ), 0);
+      return { travelMode: segment.travelMode ?? 'DRIVE', distanceKm };
+    })
+    .filter((segment) => segment.distanceKm > 0);
+  const totalKm = measured.reduce((sum, segment) => sum + segment.distanceKm, 0);
+  if (!totalKm) return [];
+  let cursor = 0;
+  const ranges = measured.map((segment) => {
+    const start = cursor / totalKm;
+    cursor += segment.distanceKm;
+    return { start, end: cursor / totalKm, travelMode: segment.travelMode };
+  });
+  return reversed
+    ? ranges.reverse().map((range) => ({
+      start: 1 - range.end,
+      end: 1 - range.start,
+      travelMode: range.travelMode,
+    }))
+    : ranges;
+}
+
+function buildRoute(points, modeRanges = []) {
   const cumulativeKm = [0];
   for (let index = 1; index < points.length; index += 1) {
     cumulativeKm[index] = cumulativeKm[index - 1] + haversineKm(points[index - 1], points[index]);
@@ -39,6 +71,13 @@ function buildRoute(points) {
     points,
     cumulativeKm,
     totalKm,
+    travelModeAt(progress) {
+      const safeProgress = Math.max(0, Math.min(1, progress));
+      return modeRanges.find((range, index) => (
+        safeProgress >= range.start
+        && (safeProgress < range.end || index === modeRanges.length - 1)
+      ))?.travelMode ?? 'DRIVE';
+    },
     sample(progress) {
       if (points.length === 1) return { ...points[0], index: 0, fraction: 0 };
       const distance = Math.max(0, Math.min(1, progress)) * totalKm;
@@ -60,6 +99,7 @@ function buildRoute(points) {
 export function useActiveRouteGeo() {
   const routeIds = useAppStore((state) => state.activeRouteIds);
   const geometryCoordinates = useAppStore((state) => state.activeRouteGeometryCoordinates);
+  const routeSegments = useAppStore((state) => state.activeRouteSegments);
   const distanceKm = useAppStore((state) => state.activeRouteDistanceKm);
 
   return useMemo(() => {
@@ -78,13 +118,15 @@ export function useActiveRouteGeo() {
         .map(({ lon, lat }) => ({ lon, lat }));
     }
 
-    points = orientToFirstStop(points, effectiveRouteIds);
-    const route = buildRoute(points);
+    const oriented = orientToFirstStop(points, effectiveRouteIds);
+    points = oriented.points;
+    const modeRanges = buildModeRanges(routeSegments, oriented.reversed);
+    const route = buildRoute(points, modeRanges);
     return {
       ...route,
       routeIds: effectiveRouteIds,
       distanceKm: Number.isFinite(distanceKm) && distanceKm > 0 ? distanceKm : route.totalKm,
-      signature: `${points.length}:${points[0]?.lon ?? 0}:${points.at(-1)?.lat ?? 0}`,
+      signature: `${points.length}:${points[0]?.lon ?? 0}:${points.at(-1)?.lat ?? 0}:${modeRanges.map((range) => range.travelMode).join(',')}`,
     };
-  }, [distanceKm, geometryCoordinates, routeIds]);
+  }, [distanceKm, geometryCoordinates, routeIds, routeSegments]);
 }
