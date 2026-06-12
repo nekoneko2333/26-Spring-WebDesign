@@ -1950,11 +1950,18 @@
   grid-template-rows: auto 1fr auto;
   gap: 13px;
   min-height: 300px;
+  max-height: 430px;
+  overflow: hidden;
   padding: 12px;
   border: 1px solid color-mix(in srgb, var(--concept-line) 76%, transparent);
   border-radius: 8px;
   background: rgba(255,255,255,0.46);
   box-shadow: 0 14px 34px rgba(45, 82, 112, 0.045);
+}
+
+.home-destination-card > div:not(.home-card-actions) {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .home-destination-card > img {
@@ -1970,6 +1977,13 @@
   margin: 8px 0 8px;
   color: var(--concept-ink);
   font: 880 17px/1.18 var(--font-ui, system-ui);
+}
+
+.home-destination-card p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
 }
 
 .home-card-actions {
@@ -3387,6 +3401,8 @@
   grid-template-rows: auto 1fr auto;
   gap: 14px;
   min-height: 430px;
+  max-height: 590px;
+  overflow: hidden;
   padding: 14px;
   border: 3px solid #2d2d2d;
   border-radius: 255px 18px 225px 16px / 18px 225px 18px 255px;
@@ -3418,6 +3434,8 @@
 .cinematic-destination-card__body {
   display: grid;
   gap: 8px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .cinematic-destination-card__body strong,
@@ -3458,10 +3476,17 @@
   line-height: 1.42;
 }
 
+.cinematic-destination-card__body p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
 .cinematic-route-planner__main {
   display: grid;
-  grid-template-columns: minmax(360px, 0.82fr) minmax(0, 1.18fr);
-  gap: 24px;
+  grid-template-columns: minmax(340px, 0.9fr) minmax(520px, 1.1fr);
+  gap: 28px;
   align-items: start;
 }
 
@@ -3469,6 +3494,7 @@
 .cinematic-route-planner__visual {
   display: grid;
   gap: 18px;
+  min-width: 0;
 }
 
 .cinematic-route-planner .home-module--map .concept-map {
@@ -4059,6 +4085,14 @@
   white-space: nowrap;
 }
 
+.route-recommendations article small.route-recommendations__path {
+  display: block;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .route-recommendations article button {
   min-height: 36px;
   border: 0;
@@ -4123,6 +4157,85 @@
 .cinematic-day-card small {
   color: #5f574e;
   font-size: 15px;
+}
+
+.cinematic-day-card__timeline {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cinematic-day-card__activity {
+  display: grid;
+  grid-template-columns: 30px minmax(48px, auto) minmax(0, 1fr);
+  gap: 6px 10px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid #2d2d2d;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.cinematic-day-card__activity i {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.cinematic-day-card__activity span {
+  color: inherit;
+  font: 850 13px/1 var(--font-ui, system-ui);
+}
+
+.cinematic-day-card__activity strong {
+  min-width: 0;
+  color: #2d2d2d;
+  font: 780 15px/1.25 var(--font-ui, system-ui);
+}
+
+.cinematic-day-card__activity em {
+  grid-column: 3;
+  color: #5f574e;
+  font-style: normal;
+  font-size: 13px;
+}
+
+.cinematic-day-card__activity.is-drive {
+  border-color: #2d5da1;
+  background: #edf4ff;
+}
+
+.cinematic-day-card__activity.is-drive i {
+  background: #2d5da1;
+}
+
+.cinematic-day-card__activity.is-drive span,
+.cinematic-day-card__activity.is-drive em {
+  color: #244a82;
+}
+
+.cinematic-day-card__activity.is-visit {
+  border-color: #2f7a52;
+  background: #edf8f1;
+}
+
+.cinematic-day-card__activity.is-visit i {
+  background: #2f7a52;
+}
+
+.cinematic-day-card__activity.is-visit span,
+.cinematic-day-card__activity.is-visit em {
+  color: #276241;
+}
+
+.cinematic-route-planner .home-module--export textarea {
+  min-height: 360px;
+  resize: vertical;
 }
 
 .travel-service-drawer {
@@ -4777,6 +4890,14 @@
 
   .cinematic-hero__copy h1 {
     font-size: clamp(42px, 15vw, 68px);
+  }
+
+  .home-module--day-cards .cinematic-day-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cinematic-route-planner .home-module--export textarea {
+    min-height: 260px;
   }
 
   .cinematic-hero__media,

@@ -90,7 +90,7 @@ class PlanPayload(BaseModel):
     locked_ids: list[str] = Field(default_factory=list, max_length=100)
     favorites: list[str] = Field(default_factory=list, max_length=100)
     compare: list[str] = Field(default_factory=list, max_length=100)
-    days: int = Field(default=3, ge=1, le=10)
+    days: int = Field(default=3, ge=1, le=30)
     pace: str = Field(default='Standard', pattern='^(Relaxed|Standard|Fast)$')
     language: str = Field(default='zh', pattern='^(zh|en)$')
 
