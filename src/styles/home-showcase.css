@@ -2225,6 +2225,20 @@
   color: #2d2d2d;
 }
 
+.section-expand-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.home-download-btn.is-secondary,
+.day-collapse-toggle {
+  background: #fff;
+  color: #2d2d2d;
+}
+
 .home-metric-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3037,7 +3051,6 @@
 .showcase-home.is-zh :is(
   .cinematic-section__head h2,
   .cinematic-hero__copy h1,
-  .cinematic-stats strong,
   .cinematic-destination-card__body strong,
   .cinematic-entry-grid strong,
   .cinematic-feature-grid strong,
@@ -3238,8 +3251,7 @@
 .cinematic-review-grid article,
 .cinematic-notes-grid article,
 .cinematic-account-summary__grid,
-.cinematic-footer,
-.cinematic-stats article {
+.cinematic-footer {
   border: 3px solid #2d2d2d;
   border-radius: 255px 18px 225px 16px / 18px 225px 18px 255px;
   background: rgba(255, 255, 255, 0.94);
@@ -3370,33 +3382,6 @@
 .cinematic-hero__route span {
   background: #fff9c4;
   color: #2d5da1;
-}
-
-.cinematic-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.cinematic-stats article {
-  min-height: 118px;
-  display: grid;
-  align-content: center;
-  gap: 4px;
-  padding: 18px;
-  text-align: center;
-}
-
-.cinematic-stats strong {
-  color: #2d2d2d;
-  font-family: "Kalam", "Noto Serif SC", cursive;
-  font-size: clamp(34px, 4vw, 54px);
-  line-height: 1;
-}
-
-.cinematic-stats span {
-  color: #2d5da1;
-  font-size: 20px;
 }
 
 .cinematic-destination-grid,
@@ -4243,6 +4228,11 @@
   margin-top: 0;
 }
 
+.day-collapse-toggle {
+  justify-self: center;
+  margin-top: 16px;
+}
+
 .cinematic-day-card {
   border: 2px solid #2d2d2d;
   border-radius: 255px 14px 225px 12px / 12px 225px 14px 255px;
@@ -5031,7 +5021,6 @@
     min-height: 280px;
   }
 
-  .cinematic-stats,
   .cinematic-destination-grid,
   .cinematic-feature-grid,
   .cinematic-review-grid,
@@ -5232,7 +5221,6 @@
   .showcase-home::after,
   .cinematic-home-nav,
   .cinematic-hero,
-  .cinematic-stats,
   .cinematic-destinations,
   .cinematic-route-planner__main,
   .cinematic-day-grid,

@@ -1,4 +1,4 @@
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -8,33 +8,7 @@ import { useAppStore } from '../../state/useAppStore.js';
 import { fetchRouteMetrics, useRouteMetrics } from '../../hooks/useRouteMetrics.js';
 import liveLandmarksData from '../../../public/data/live-landmarks.json';
 
-const versions = [
-  {
-    id: 'cinema',
-    name: 'Italy Journey',
-    accent: '#80d7ff',
-    label: { en: 'Journey', zh: '旅程' },
-    detail: { en: 'Start planning', zh: '开始规划' },
-    title: { en: 'Where do you want to begin?', zh: '你想从哪里开始？' },
-    summary: {
-      en: 'Pick a city, landmark, or route idea. We will help you turn it into a trip through Italy.',
-      zh: '输入城市、景点或一段想法，我们帮你把它变成一条意大利旅程。',
-    },
-  },
-  /*
-  {
-    id: 'radial',
-    name: '08 Radial Navigator',
-    accent: '#ff6f91',
-    label: { en: 'Radial', zh: '环形导航' },
-    detail: { en: 'Central 3D CTA', zh: '中心 3D 入口' },
-    title: { en: 'Navigate Around the Core', zh: '围绕 3D 核心规划路线' },
-    summary: {
-      en: 'A radial navigation shell with the same destination, planner, review, account, route, and drive workflows.',
-      zh: '围绕你想去的地方，整理目的地、路线、点评和下一步安排。',
-    },
-  },
-*/];
+const ACTIVE_HOME_VERSION = { id: 'cinema', accent: '#80d7ff' };
 
 const storyModelPaths = {
   colosseum: '/models/romes_colosseum.glb',
@@ -47,35 +21,6 @@ const routeMatrixIds = liveLandmarksData.routeMatrix?.ids ?? [];
 const routeMatrixIndex = new Map(routeMatrixIds.map((id, index) => [id, index]));
 const initialRouteIds = ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
 
-const routePresets = [
-  {
-    id: 'classic_heritage',
-    name: '意大利经典建筑线',
-    ids: ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'],
-    hours: '约 11 小时',
-    distance: '约 920 km',
-    tags: ['经典路线', '建筑', '历史'],
-    intro: '从米兰主教座堂出发，串联威尼斯、佛罗伦萨、比萨、罗马与庞贝，适合作为完整课堂演示路线。',
-  },
-  {
-    id: 'north_water_city',
-    name: '北部水城与文艺复兴',
-    ids: ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa'],
-    hours: '约 6 小时',
-    distance: '约 510 km',
-    tags: ['水城', '文艺复兴', '轻量路线'],
-    intro: '聚焦北部城市与托斯卡纳景观，站点更少，适合快速预览路线选择、到站卡片和视角切换。',
-  },
-  {
-    id: 'rome_ancient',
-    name: '古罗马遗产短线',
-    ids: ['colosseum', 'pompeii'],
-    hours: '约 3 小时',
-    distance: '约 240 km',
-    tags: ['历史', '古迹', '短线'],
-    intro: '以罗马斗兽场和庞贝为核心，适合在较短时间内展示导览完成总结和重新导览流程。',
-  },
-];
 const STORY_PARTICLE_COUNT = 7600;
 const STORY_MODEL_SAMPLE_COUNT = 8200;
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
@@ -167,148 +112,7 @@ const storyScenes = [
   },
 ];
 
-const copy = {
-  en: {
-    switcher: 'Concept styles',
-    switcherSub: '04 with full original page workflow',
-    language: 'Language',
-    nav: [
-      ['home', 'Home'],
-      ['destinations', 'Destinations'],
-      ['planner', 'Plan'],
-      ['reviews', 'Travel notes'],
-      ['drive', 'Drive'],
-      ['map', 'Map'],
-    ],
-    cta3d: 'Start driving',
-    routeMap: 'View route',
-    searchTitle: 'Search & plan',
-    searchPlaceholder: 'Search landmarks, cities, regions, or route notes',
-    filters: 'Filters',
-    region: 'Region',
-    type: 'Type',
-    season: 'Best season',
-    any: 'Any',
-    sort: 'Sort',
-    featured: 'Featured',
-    name: 'Name',
-    north: 'North to south',
-    model: '3D model first',
-    account: 'Account',
-    guest: 'Guest mode',
-    routeStops: 'Route stops',
-    favorites: 'Favorites',
-    compared: 'Compared',
-    services: 'Travel services',
-    destinations: 'Browse stops and build a route',
-    showCompare: 'Show compare',
-    addRoute: 'Add stop',
-    focus: 'Focus',
-    compare: 'Compare',
-    favorite: 'Favorite',
-    background: 'Background',
-    routeEditor: 'Route editor',
-    addFromSearch: 'Add stop from search',
-    optimize: 'Optimize',
-    reset: 'Reset',
-    lock: 'Lock',
-    unlock: 'Unlock',
-    remove: 'Remove',
-    up: 'Up',
-    down: 'Down',
-    routePreview: 'Route preview',
-    metrics: 'Route metrics',
-    itinerary: 'Itinerary generator',
-    days: 'Days',
-    pace: 'Pace',
-    export: 'Export itinerary',
-    reviews: 'Destination notes',
-    read: 'Read background',
-    driveReady: 'Ready to go',
-    driveBody: 'Follow your selected route and visit the focused stop.',
-    nextStop: 'Next stop',
-    weather: 'Live weather',
-    kicker: 'Italy travel planner',
-    temperature: 'Temperature',
-    wind: 'Wind',
-    modelPreview: 'Landmarks',
-    keyPoints: 'Stops',
-    homeQuestion: 'Where should the day begin?',
-    homePrompt: 'Try Rome, Florence, Venice, Pisa, or a place you have in mind',
-    homeLead: 'Tell us the first place on your mind. We will keep the route, notes, and saved stops close by while you explore.',
-    homeSuggestions: 'Places people start with',
-  },
-  zh: {
-    switcher: '首页风格',
-    switcherSub: '04，保留原主页完整分页流程',
-    language: '语言',
-    nav: [
-      ['home', '首页'],
-      ['destinations', '目的地'],
-      ['planner', '行程'],
-      ['reviews', '行前资料'],
-      ['drive', '导览'],
-      ['map', '地图'],
-    ],
-    cta3d: '开始导览',
-    routeMap: '查看路线',
-    searchTitle: '搜索与规划',
-    searchPlaceholder: '搜索景点、城市、区域或路线说明',
-    filters: '筛选',
-    region: '地区',
-    type: '体验',
-    season: '最佳时间',
-    any: '不限',
-    sort: '排序',
-    featured: '推荐',
-    name: '名称',
-    north: '从北到南',
-    model: '优先 3D 模型',
-    account: '账户',
-    guest: '游客模式',
-    routeStops: '路线停靠点',
-    favorites: '收藏',
-    compared: '对比',
-    services: '旅行服务',
-    destinations: '浏览景点并构建路线',
-    showCompare: '查看对比',
-    addRoute: '加入路线',
-    focus: '聚焦',
-    compare: '对比',
-    favorite: '收藏',
-    background: '背景资料',
-    routeEditor: '路线编辑器',
-    addFromSearch: '从搜索结果加入路线',
-    optimize: '优化路线',
-    reset: '重置',
-    lock: '锁定',
-    unlock: '解锁',
-    remove: '移除',
-    up: '上移',
-    down: '下移',
-    routePreview: '路线预览',
-    metrics: '路线指标',
-    itinerary: '行程生成器',
-    days: '天数',
-    pace: '节奏',
-    export: '导出行程',
-    reviews: '景点资料',
-    read: '查看背景资料',
-    driveReady: '准备出发',
-    driveBody: '跟随你选好的路线，查看当前关注的目的地。',
-    nextStop: '下一站',
-    weather: '实时天气',
-    kicker: '意大利旅行规划',
-    temperature: '温度',
-    wind: '风速',
-    modelPreview: '景点',
-    keyPoints: '停靠点',
-    homeQuestion: '今天从哪一站出发？',
-    homePrompt: '试试罗马、佛罗伦萨、威尼斯、比萨，或输入你想去的地方',
-    homeLead: '把第一个想去的地方告诉我们。路线、收藏和沿途信息会随时跟上。',
-    homeSuggestions: '大家常从这里开始',
-  },
-};
+
 
 const regionLabels = {
   en: { North: 'North', Central: 'Central', South: 'South', Islands: 'Islands' },
@@ -349,31 +153,8 @@ const seasonLabels = {
   },
 };
 
-const serviceCopy = {
-  en: [
-    ['Hotels', 'Stay ideas'],
-    ['Tickets', 'Attraction entry'],
-    ['Food', 'Restaurant notes'],
-    ['Transit', 'Route transfers'],
-    ['Weather', 'Trip timing'],
-    ['Budget', 'Cost outline'],
-    ['Guides', 'City tips'],
-    ['AI', 'Smart plan'],
-  ],
-  zh: [
-    ['\u9152\u5e97', '\u4f4f\u5bbf\u63a8\u8350'],
-    ['\u95e8\u7968', '\u666f\u70b9\u9884\u7ea6'],
-    ['\u7f8e\u98df', '\u9910\u5385\u7075\u611f'],
-    ['\u4ea4\u901a', '\u8def\u7ebf\u63a5\u9a73'],
-    ['\u5929\u6c14', '\u51fa\u53d1\u53c2\u8003'],
-    ['\u9884\u7b97', '\u82b1\u8d39\u4f30\u7b97'],
-    ['\u653b\u7565', '\u57ce\u5e02\u8d34\u58eb'],
-    ['AI', '\u667a\u80fd\u884c\u7a0b'],
-  ],
-};
-function t(value, language) {
-  return value?.[language] ?? value?.en ?? value ?? '';
-}
+
+
 
 function liveFor(id) {
   return liveIndex.get(id);
@@ -587,9 +368,7 @@ function seasonText(landmark, language) {
   return seasonLabels[language]?.[season] ?? season;
 }
 
-function distanceKm(routeStops) {
-  return Math.round(routeSegmentsFor(routeStops).reduce((sum, segment) => sum + segment.distance, 0));
-}
+
 
 function routeDistanceForIds(routeIds) {
   const stops = routeIds.map((id) => landmarks.find((stop) => stop.id === id)).filter(Boolean);
@@ -786,39 +565,7 @@ function sortRouteIdsByCorridor(routeIds, lockedIds, direction = 1) {
   return routeIds.map((id) => (locked.has(id) ? id : stops[index++]));
 }
 
-function sortRouteIdsByPrincipalAxis(routeIds, lockedIds, direction = 1) {
-  const locked = new Set(lockedIds);
-  const stops = routeIds
-    .filter((id) => !locked.has(id))
-    .map((id) => landmarks.find((stop) => stop.id === id))
-    .filter(Boolean);
-  if (stops.length < 3) return sortRouteIdsByCorridor(routeIds, lockedIds, direction);
-  const avgLon = stops.reduce((sum, stop) => sum + stop.lon, 0) / stops.length;
-  const avgLat = stops.reduce((sum, stop) => sum + stop.lat, 0) / stops.length;
-  const lonScale = Math.cos(avgLat * Math.PI / 180);
-  let sxx = 0;
-  let syy = 0;
-  let sxy = 0;
-  stops.forEach((stop) => {
-    const x = (stop.lon - avgLon) * lonScale;
-    const y = stop.lat - avgLat;
-    sxx += x * x;
-    syy += y * y;
-    sxy += x * y;
-  });
-  const angle = 0.5 * Math.atan2(2 * sxy, sxx - syy);
-  const ordered = stops
-    .sort((a, b) => {
-      const ax = (a.lon - avgLon) * lonScale;
-      const ay = a.lat - avgLat;
-      const bx = (b.lon - avgLon) * lonScale;
-      const by = b.lat - avgLat;
-      return direction * ((bx * Math.cos(angle) + by * Math.sin(angle)) - (ax * Math.cos(angle) + ay * Math.sin(angle)));
-    })
-    .map((stop) => stop.id);
-  let index = 0;
-  return routeIds.map((id) => (locked.has(id) ? id : ordered[index++]));
-}
+
 
 function smoothUnlockedRouteIds(routeIds, lockedIds) {
   const locked = new Set(lockedIds);
@@ -1009,65 +756,9 @@ function sampleBox(cx, cy, cz, sx, sy, sz) {
   ];
 }
 
-function sampleSecondGatePoint() {
-  const r = Math.random();
-  if (r < 0.18) return sampleBox(0, -1.36, 0, 7.1, 0.34, 0.34);
-  if (r < 0.34) return sampleBox(0, 1.24, 0, 7.2, 0.3, 0.32);
-  if (r < 0.44) return sampleBox(0, 1.56, 0, 6.4, 0.22, 0.28);
-  if (r < 0.58) {
-    const xs = [-3.0, -1.82, -0.62, 0.62, 1.82, 3.0];
-    return sampleBox(xs[Math.floor(Math.random() * xs.length)], -0.18, 0, 0.22, 2.3, 0.24);
-  }
-  if (r < 0.74) {
-    const centers = [-2.35, 0, 2.35];
-    const center = centers[Math.floor(Math.random() * centers.length)];
-    const angle = Math.PI * Math.random();
-    const radius = 0.73 + Math.random() * 0.11;
-    return [
-      center + Math.cos(angle) * radius,
-      -0.52 + Math.sin(angle) * radius * 1.18,
-      (Math.random() - 0.5) * 0.2,
-    ];
-  }
-  if (r < 0.86) {
-    const x = -3.2 + Math.random() * 6.4;
-    return [x, 1.75 - Math.abs(x) * 0.09 + (Math.random() - 0.5) * 0.1, (Math.random() - 0.5) * 0.2];
-  }
-  if (r < 0.94) return sampleBox(0, 0.74, 0, 1.65, 0.16, 0.18);
-  return sampleBox((Math.random() < 0.5 ? -1 : 1) * (3.32 + Math.random() * 0.16), 0.22, 0, 0.1, 2.25, 0.18);
-}
 
-function createMorphData(count = 5200) {
-  const random = new Float32Array(count * 3);
-  const target = new Float32Array(count * 3);
-  const seeds = new Float32Array(count);
 
-  for (let i = 0; i < count; i += 1) {
-    const radius = 4.2 + Math.random() * 5.8;
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(Math.random() * 2 - 1);
-    random[i * 3] = Math.sin(phi) * Math.cos(theta) * radius;
-    random[i * 3 + 1] = Math.sin(phi) * Math.sin(theta) * radius * 0.72;
-    random[i * 3 + 2] = Math.cos(phi) * radius * 0.8;
 
-    const [x, y, z] = sampleSecondGatePoint();
-    target[i * 3] = x;
-    target[i * 3 + 1] = y;
-    target[i * 3 + 2] = z;
-    seeds[i] = Math.random();
-  }
-
-  const linkCount = 520;
-  const links = new Float32Array(linkCount * 6);
-  for (let i = 0; i < linkCount; i += 1) {
-    const a = Math.floor(Math.random() * count);
-    const b = Math.min(count - 1, a + 1 + Math.floor(Math.random() * 8));
-    links.set([target[a * 3], target[a * 3 + 1], target[a * 3 + 2]], i * 6);
-    links.set([target[b * 3], target[b * 3 + 1], target[b * 3 + 2]], i * 6 + 3);
-  }
-
-  return { random, target, seeds, links };
-}
 
 function sampleColosseumPoint() {
   const tier = Math.floor(Math.random() * 4);
@@ -1236,205 +927,11 @@ function ModelPointCloudLoader({ onTargetsReady }) {
   return null;
 }
 
-function ParticleField({ version }) {
-  const groupRef = useRef(null);
-  const materialRef = useRef(null);
-  const lineRef = useRef(null);
-  const accent = versions.find((item) => item.id === version)?.accent ?? '#80d7ff';
-  const morph = useMemo(() => createMorphData(), []);
-  const accentColor = useMemo(() => new THREE.Color(accent), [accent]);
 
-  useFrame(({ clock, pointer, camera }) => {
-    const elapsed = clock.getElapsedTime();
-    const cycle = (elapsed % 13) / 13;
-    const gather = THREE.MathUtils.smoothstep(cycle, 0.12, 0.42);
-    const scatter = 1 - THREE.MathUtils.smoothstep(cycle, 0.68, 0.94);
-    const morphValue = Math.min(gather, scatter);
 
-    if (groupRef.current) {
-      groupRef.current.rotation.y = elapsed * 0.085 + pointer.x * 0.18;
-      groupRef.current.rotation.x = -0.04 + pointer.y * 0.09;
-    }
-    if (materialRef.current) {
-      materialRef.current.uniforms.uTime.value = elapsed;
-      materialRef.current.uniforms.uMorph.value = morphValue;
-      materialRef.current.uniforms.uAccent.value = accentColor;
-    }
-    if (lineRef.current) lineRef.current.material.opacity = 0.02 + morphValue * 0.12;
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, pointer.x * 0.45, 0.05);
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, pointer.y * 0.26, 0.05);
-    camera.lookAt(0, 0, 0);
-  });
 
-  return (
-    <group ref={groupRef} position={[0, 0.12, 0]} scale={0.92}>
-      <points>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[morph.random, 3]} />
-          <bufferAttribute attach="attributes-aTarget" args={[morph.target, 3]} />
-          <bufferAttribute attach="attributes-aSeed" args={[morph.seeds, 1]} />
-        </bufferGeometry>
-        <shaderMaterial
-          ref={materialRef}
-          transparent
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          uniforms={{
-            uTime: { value: 0 },
-            uMorph: { value: 0 },
-            uAccent: { value: accentColor },
-          }}
-          vertexShader={`
-            uniform float uTime;
-            uniform float uMorph;
-            attribute vec3 aTarget;
-            attribute float aSeed;
-            varying float vAlpha;
-            varying float vMorph;
 
-            void main() {
-              float delay = smoothstep(0.0, 1.0, uMorph + (aSeed - 0.5) * 0.18);
-              vec3 p = mix(position, aTarget, delay);
-              float drift = (1.0 - delay) * 0.16;
-              p.x += sin(uTime * 0.52 + aSeed * 18.0) * drift;
-              p.y += cos(uTime * 0.42 + aSeed * 24.0) * drift;
-              p.z += sin(uTime * 0.36 + aSeed * 31.0) * drift;
 
-              vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
-              gl_Position = projectionMatrix * mvPosition;
-              gl_PointSize = (1.25 + delay * 1.05) * (9.0 / -mvPosition.z);
-              vAlpha = 0.28 + delay * 0.52 + sin(aSeed * 21.0 + uTime * 1.2) * 0.08;
-              vMorph = delay;
-            }
-          `}
-          fragmentShader={`
-            uniform vec3 uAccent;
-            varying float vAlpha;
-            varying float vMorph;
-
-            void main() {
-              vec2 uv = gl_PointCoord - vec2(0.5);
-              float d = length(uv);
-              float core = smoothstep(0.5, 0.0, d);
-              float glow = smoothstep(0.5, 0.12, d) * 0.28;
-              vec3 color = mix(vec3(0.46, 0.72, 0.86), uAccent, 0.36 + vMorph * 0.24);
-              gl_FragColor = vec4(color, (core + glow) * vAlpha);
-            }
-          `}
-        />
-      </points>
-      <lineSegments ref={lineRef}>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[morph.links, 3]} />
-        </bufferGeometry>
-        <lineBasicMaterial color={accent} transparent opacity={0.02} blending={THREE.AdditiveBlending} depthWrite={false} />
-      </lineSegments>
-    </group>
-  );
-}
-
-function LandmarkMorphCloud({ activeScene }) {
-  const groupRef = useRef(null);
-  const morphRef = useRef(0);
-  const currentRef = useRef(null);
-  const data = useMemo(() => createStoryMorphData(), []);
-  const activeTarget = data.proceduralTargets[activeScene.id] ?? data.proceduralTargets.intro;
-  const shouldAssemble = activeScene.id !== 'intro';
-  const geometry = useMemo(() => {
-    const geo = new THREE.BufferGeometry();
-    currentRef.current = data.random.slice();
-    geo.setAttribute('position', new THREE.BufferAttribute(currentRef.current, 3));
-    geo.computeBoundingSphere();
-    return geo;
-  }, [data]);
-
-  useEffect(() => {
-    morphRef.current = 0;
-  }, [activeTarget, geometry]);
-
-  useFrame(({ clock, pointer, camera }) => {
-    const elapsed = clock.getElapsedTime();
-    const targetMorph = shouldAssemble ? 1 : 0;
-    morphRef.current = THREE.MathUtils.lerp(morphRef.current, targetMorph, 0.055);
-
-    const position = geometry.getAttribute('position');
-    const array = position.array;
-    const morph = morphRef.current;
-    for (let i = 0; i < array.length; i += 3) {
-      const seed = data.seeds[i / 3];
-      const localMorph = THREE.MathUtils.clamp(morph + (seed - 0.5) * 0.18, 0, 1);
-      const loose = 1 - localMorph;
-      array[i] = THREE.MathUtils.lerp(data.random[i], activeTarget[i], localMorph) + Math.sin(elapsed * 0.55 + seed * 23) * loose * 0.22;
-      array[i + 1] = THREE.MathUtils.lerp(data.random[i + 1], activeTarget[i + 1], localMorph) + Math.cos(elapsed * 0.43 + seed * 31) * loose * 0.18;
-      array[i + 2] = THREE.MathUtils.lerp(data.random[i + 2], activeTarget[i + 2], localMorph) + Math.sin(elapsed * 0.38 + seed * 19) * loose * 0.2;
-    }
-    position.needsUpdate = true;
-    geometry.computeBoundingSphere();
-
-    if (groupRef.current) {
-      groupRef.current.rotation.y = elapsed * 0.11 + pointer.x * 0.22;
-      groupRef.current.rotation.x = -0.08 + pointer.y * 0.1;
-    }
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, pointer.x * 0.5, 0.06);
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, pointer.y * 0.3, 0.06);
-    camera.lookAt(0, 0, 0);
-  });
-
-  const xOffset = shouldAssemble ? 1.1 : 0;
-
-  return (
-    <group ref={groupRef} position={[xOffset, 0.02, 0]} scale={shouldAssemble ? 1.78 : 1.35}>
-      <points geometry={geometry}>
-        <pointsMaterial size={0.075} color="#064f82" transparent opacity={0.95} depthWrite={false} blending={THREE.NormalBlending} sizeAttenuation />
-      </points>
-    </group>
-  );
-}
-
-function LandmarkMorphFallback({ activeScene }) {
-  const groupRef = useRef(null);
-  const morphRef = useRef(0);
-  const currentRef = useRef(null);
-  const data = useMemo(() => createStoryMorphData(3200), []);
-  const activeTarget = data.proceduralTargets[activeScene.id] ?? data.proceduralTargets.intro;
-  const geometry = useMemo(() => {
-    const geo = new THREE.BufferGeometry();
-    currentRef.current = data.random.slice();
-    geo.setAttribute('position', new THREE.BufferAttribute(currentRef.current, 3));
-    geo.computeBoundingSphere();
-    return geo;
-  }, [data]);
-
-  useEffect(() => {
-    morphRef.current = 0;
-  }, [activeTarget, geometry]);
-
-  useFrame(({ clock }) => {
-    const elapsed = clock.getElapsedTime();
-    morphRef.current = THREE.MathUtils.lerp(morphRef.current, activeScene.id === 'intro' ? 0 : 1, 0.05);
-    const position = geometry.getAttribute('position');
-    const array = position.array;
-    const morph = morphRef.current;
-    for (let i = 0; i < array.length; i += 3) {
-      const seed = data.seeds[i / 3];
-      const localMorph = THREE.MathUtils.clamp(morph + (seed - 0.5) * 0.18, 0, 1);
-      const loose = 1 - localMorph;
-      array[i] = THREE.MathUtils.lerp(data.random[i], activeTarget[i], localMorph) + Math.sin(elapsed * 0.55 + seed * 23) * loose * 0.22;
-      array[i + 1] = THREE.MathUtils.lerp(data.random[i + 1], activeTarget[i + 1], localMorph) + Math.cos(elapsed * 0.43 + seed * 31) * loose * 0.18;
-      array[i + 2] = THREE.MathUtils.lerp(data.random[i + 2], activeTarget[i + 2], localMorph);
-    }
-    position.needsUpdate = true;
-    if (groupRef.current) groupRef.current.rotation.y = elapsed * 0.1;
-  });
-
-  return (
-    <group ref={groupRef} position={[activeScene.id === 'intro' ? 0 : 1.35, 0.02, 0]} scale={activeScene.id === 'intro' ? 1.25 : 1.42}>
-      <points geometry={geometry}>
-        <pointsMaterial size={0.045} color="#075f91" transparent opacity={0.82} depthWrite={false} blending={THREE.AdditiveBlending} sizeAttenuation />
-      </points>
-    </group>
-  );
-}
 
 function SemanticParticleCanvas2D({ activeScene, modelTargets }) {
   const canvasRef = useRef(null);
@@ -1618,76 +1115,11 @@ function SemanticParticleStory({ language, onEnterHome }) {
   );
 }
 
-function ConceptHeader({ language, setLanguage, activePage, setActivePage }) {
-  const c = copy[language];
-  return (
-    <header className="home-version-picker home-version-picker--single">
-      <div className="home-version-picker__head">
-        <span>{c.switcher}</span>
-        <strong>Italy Journey</strong>
-        <div className="home-language-toggle" aria-label={c.language}>
-          <button type="button" className={language === 'zh' ? 'is-active' : ''} onClick={() => setLanguage('zh')}>中文</button>
-          <button type="button" className={language === 'en' ? 'is-active' : ''} onClick={() => setLanguage('en')}>EN</button>
-        </div>
-      </div>
-      <nav className="concept-page-tabs" aria-label="Concept pages">
-        {c.nav.map(([id, label]) => (
-          <button key={id} type="button" className={activePage === id ? 'is-active' : ''} onClick={() => setActivePage(id)}>
-            {label}
-          </button>
-        ))}
-      </nav>
-    </header>
-  );
-}
 
-function HomeSidebar({ language, setLanguage, activePage, setActivePage, selectedStop, collapsed, onToggleCollapse, onOpenDrive }) {
-  const c = copy[language];
-  const handleNav = (id) => {
-    if (id === 'map') {
-      setActivePage(id);
-      return;
-    }
-    if (id === 'drive') {
-      setActivePage(id);
-      return;
-    }
-    setActivePage(id);
-  };
 
-  return (
-    <aside className={`home-sidebar ${collapsed ? 'is-collapsed' : ''}`}>
-      <div className="home-sidebar__brand">
-        <span>{language === 'zh' ? '意大利旅程' : 'Italy Journey'}</span>
-        <strong>{language === 'zh' ? '今天想去哪？' : 'Where to today?'}</strong>
-        <button className="home-sidebar__collapse" type="button" onClick={onToggleCollapse} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-          {collapsed ? '>' : '<'}
-        </button>
-        <div className="home-language-toggle" aria-label={c.language}>
-          <button type="button" className={language === 'zh' ? 'is-active' : ''} onClick={() => setLanguage('zh')}>中文</button>
-          <button type="button" className={language === 'en' ? 'is-active' : ''} onClick={() => setLanguage('en')}>EN</button>
-        </div>
-      </div>
-      <nav className="concept-page-tabs" aria-label={language === 'zh' ? '主页分页' : 'Home sections'}>
-        {c.nav.map(([id, label], index) => (
-          <button key={id} type="button" className={activePage === id ? 'is-active' : ''} data-index={String(index + 1).padStart(2, '0')} aria-label={label} onClick={() => handleNav(id)}>
-            {label}
-          </button>
-        ))}
-      </nav>
-    </aside>
-  );
-}
 
-function AccountAvatar({ language, userSession, onOpen }) {
-  const initials = userSession?.name?.slice(0, 1).toUpperCase() ?? 'A';
-  return (
-    <button className={`home-account-avatar ${userSession ? 'is-signed-in' : ''}`} type="button" onClick={onOpen} aria-label={language === 'zh' ? '账户' : 'Account'}>
-      <span>{initials}</span>
-      <strong>{userSession ? userSession.name : (language === 'zh' ? '登录' : 'Sign in')}</strong>
-    </button>
-  );
-}
+
+
 
 function AuthDialog({ language, mode, setMode, form, setForm, error, loading, userSession, history, onSubmit, onClose, onSignOut }) {
   const isRegister = mode === 'register';
@@ -1747,185 +1179,19 @@ function AuthDialog({ language, mode, setMode, form, setForm, error, loading, us
   );
 }
 
-function HomeLanding({ language, query, setQuery, routeStops, onFocus }) {
-  const c = copy[language];
-  const featuredStops = routeStops.filter((stop) => imageFor(stop, language)).slice(0, 4);
 
-  return (
-    <section className="home-landing">
-      <div className="home-landing__copy">
-        <span>{language === 'zh' ? '开始规划' : 'Start planning'}</span>
-        <h1>{c.homeQuestion}</h1>
-        <p>{c.homeLead}</p>
-        <label className="home-landing-search">
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={c.homePrompt} />
-        </label>
-      </div>
-      <div className="home-landing__gallery" aria-label={c.homeSuggestions}>
-        {featuredStops.map((stop) => (
-          <button key={stop.id} type="button" onClick={() => onFocus(stop.id)}>
-            <img src={imageFor(stop, language)} alt="" loading="eager" />
-            <span>{nameFor(stop, language)}</span>
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
 
-function Hero({ version, language, routeStops, favorites, onOpenDrive }) {
-  const c = copy[language];
-  return (
-    <section className={`concept-hero concept-hero--${version.id}`}>
-      <div className="concept-hero__copy">
-        <p className="concept-kicker">{copy[language].kicker}</p>
-        <h1>{t(version.title, language)}</h1>
-        <p className="concept-summary">{t(version.summary, language)}</p>
-        <div className="concept-actions">
-          <button className="concept-btn concept-btn--primary" type="button" onClick={() => onOpenDrive()}>{c.cta3d}</button>
-        </div>
-      </div>
-      {version.id === 'radial' ? (
-        <div className="concept--radial">
-          <div className="radial-core">
-            <strong>{c.cta3d}</strong>
-            <button className="radial-drive" type="button" onClick={() => onOpenDrive()}>3D</button>
-          </div>
-          {c.nav.concat([['map', c.routeMap]]).map(([id, label], index) => (
-            <button key={id} className="radial-node" style={{ '--i': index }} type="button">
-              {label}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <HeroGallery language={language} routeStops={routeStops} onOpenDrive={onOpenDrive} />
-      )}
-      <StatStrip language={language} routeStops={routeStops} favorites={favorites} />
-    </section>
-  );
-}
 
-function HeroGallery({ language, routeStops, onOpenDrive }) {
-  const galleryStops = routeStops.filter((stop) => imageFor(stop, language)).slice(0, 5);
-  return (
-    <section className="home-hero-gallery" aria-label={copy[language].gallery}>
-      {galleryStops.map((stop, index) => (
-        <button key={stop.id} type="button" className={`home-hero-gallery__tile home-hero-gallery__tile--${index}`} onClick={() => onOpenDrive(stop.id)}>
-          <img src={imageFor(stop, language)} alt="" loading={index === 0 ? 'eager' : 'lazy'} />
-          <span>{nameFor(stop, language)}</span>
-        </button>
-      ))}
-    </section>
-  );
-}
 
-function StatStrip({ language, routeStops, favorites }) {
-  const c = copy[language];
-  const km = distanceKm(routeStops);
-  return (
-    <div className="concept-stats">
-      <article><strong>{routeStops.length}</strong><span>{c.routeStops}</span></article>
-      <article><strong>{favorites.size}</strong><span>{c.favorites}</span></article>
-      <article><strong>{km} km</strong><span>{c.metrics}</span></article>
-    </div>
-  );
-}
 
-function HighlightsPanel({ language, routeStops, favorites, compare, routeSegments }) {
-  const km = routeSegments.reduce((sum, segment) => sum + segment.distance, 0);
-  const hours = routeSegments.reduce((sum, segment) => sum + segment.duration, 0);
-  const modelCount = routeStops.filter((stop) => stop.modelPath).length;
-  const labels = language === 'zh'
-    ? ['智能路线', '3D 覆盖', '收藏/对比']
-    : ['Smart route', '3D coverage', 'Saved / compare'];
-  const details = language === 'zh'
-    ? [
-      `${routeStops.length} 个停靠点，约 ${Math.round(km)} km / ${Math.max(1, Math.round(hours))} h`,
-      `${modelCount}/${routeStops.length} 个景点有精细模型，其余使用程序化地标`,
-      `${favorites.size} 个收藏，${compare.size} 个对比候选`,
-    ]
-    : [
-      `${routeStops.length} stops, about ${Math.round(km)} km / ${Math.max(1, Math.round(hours))} h`,
-      `${modelCount}/${routeStops.length} stops include detailed models; others use procedural landmarks`,
-      `${favorites.size} saved stops and ${compare.size} compare candidates`,
-    ];
-  return (
-    <section className="home-module home-module--highlights">
-      <div className="home-module__head"><span>{language === 'zh' ? '实时概览' : 'Live overview'}</span><strong>{Math.round(km)} km</strong></div>
-      <div className="home-highlight-grid">
-        {labels.map((label, index) => (
-          <article key={label}>
-            <span>{label}</span>
-            <strong>{index === 0 ? `${Math.round(km)} km` : index === 1 ? `${modelCount}/${routeStops.length}` : `${favorites.size}/${compare.size}`}</strong>
-            <p>{details[index]}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
 
-function JourneyOverviewPanel({ language, routeStops, favorites, compare, routeSegments }) {
-  const km = routeSegments.reduce((sum, segment) => sum + segment.distance, 0);
-  const hours = routeSegments.reduce((sum, segment) => sum + segment.duration, 0);
-  const featuredCount = routeStops.filter((stop) => stop.modelPath).length;
-  const labels = language === 'zh'
-    ? ['路线概览', '值得停留', '收藏对比']
-    : ['Route at a glance', 'Places to linger', 'Saved ideas'];
-  const details = language === 'zh'
-    ? [
-      `${routeStops.length} 个停靠点，约 ${Math.round(km)} km / ${Math.max(1, Math.round(hours))} 小时`,
-      `${featuredCount} 个重点景点可深入查看，其余适合作为沿途停靠`,
-      `${favorites.size} 个收藏，${compare.size} 个正在对比`,
-    ]
-    : [
-      `${routeStops.length} stops, about ${Math.round(km)} km / ${Math.max(1, Math.round(hours))} h`,
-      `${featuredCount} featured stops are ready for a closer look`,
-      `${favorites.size} saved stops and ${compare.size} places in comparison`,
-    ];
 
-  return (
-    <section className="home-module home-module--highlights">
-      <div className="home-module__head"><span>{language === 'zh' ? '旅程概览' : 'Trip overview'}</span><strong>{Math.round(km)} km</strong></div>
-      <div className="home-highlight-grid">
-        {labels.map((label, index) => (
-          <article key={label}>
-            <span>{label}</span>
-            <strong>{index === 0 ? `${Math.round(km)} km` : index === 1 ? featuredCount : `${favorites.size}/${compare.size}`}</strong>
-            <p>{details[index]}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
 
-function SearchFilters({ language, query, setQuery, region, setRegion, kind, setKind, season, setSeason, sort, setSort, options }) {
-  const c = copy[language];
-  return (
-    <section className="home-module home-module--search">
-      <div className="home-module__head"><span>{c.searchTitle}</span><strong>{c.filters}</strong></div>
-      <label className="home-search">
-        <span>{c.searchTitle}</span>
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={c.searchPlaceholder} />
-      </label>
-      <div className="home-filter-row home-filter-row--wide">
-        <SelectField label={c.region} value={region} onChange={setRegion} options={options.regions} anyLabel={c.any} language={language} />
-        <SelectField label={c.type} value={kind} onChange={setKind} options={options.kinds} anyLabel={c.any} language={language} />
-        <SelectField label={c.season} value={season} onChange={setSeason} options={options.seasons} anyLabel={c.any} language={language} />
-        <label>
-          <span>{c.sort}</span>
-          <select value={sort} onChange={(event) => setSort(event.target.value)}>
-            <option value="featured">{c.featured}</option>
-            <option value="name">{c.name}</option>
-            <option value="north">{c.north}</option>
-            <option value="model">{c.model}</option>
-          </select>
-        </label>
-      </div>
-    </section>
-  );
-}
+
+
+
+
+
 
 function SelectField({ label, value, onChange, options, anyLabel, language }) {
   const grouped = options.some((option) => typeof option === 'object' && option.group);
@@ -1949,432 +1215,42 @@ function SelectField({ label, value, onChange, options, anyLabel, language }) {
   );
 }
 
-function ServicesPanel({ language }) {
-  return (
-    <section className="home-module home-module--services">
-      <div className="home-module__head"><span>{copy[language].services}</span><strong>8</strong></div>
-      <div className="home-tool-grid">
-        {serviceCopy[language].map(([label, detail]) => (
-          <section key={label}><strong>{label}</strong><span>{detail}</span></section>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function AccountPanel({ language, favorites, compare, routeStops, userSession, accountHistory = [], onSignIn, onSignOut, onReset }) {
-  const c = copy[language];
-  const signedIn = Boolean(userSession);
-  return (
-    <section className="home-module home-module--utility">
-      <div className="home-module__head"><span>{c.account}</span><strong>{signedIn ? userSession.name : c.guest}</strong></div>
-      <div className="home-tool-grid">
-        <section><strong>{routeStops.length}</strong><span>{c.routeStops}</span></section>
-        <section><strong>{favorites.size}</strong><span>{c.favorites}</span></section>
-        <section><strong>{compare.size}</strong><span>{c.compared}</span></section>
-        <button type="button" onClick={signedIn ? onSignOut : onSignIn}>{signedIn ? (language === 'zh' ? '退出' : 'Sign out') : (language === 'zh' ? '登录' : 'Sign in')}</button>
-        <button type="button" onClick={onReset}>{language === 'zh' ? '清空路线' : c.reset}</button>
-      </div>
-      {signedIn && (
-        <div className="home-account-history">
-          <strong>{language === 'zh' ? '账号历史' : 'Account history'}</strong>
-          {accountHistory.slice(0, 4).map((item) => (
-            <span key={item.id}>{item.action}</span>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function DestinationCards({ language, stops, favorites, compare, selectedId, visibleCount, onShowMore, onFavorite, onCompare, onAdd, onFocus }) {
-  const c = copy[language];
-  const visibleStops = stops.slice(0, visibleCount);
-  return (
-    <section className="home-module home-module--destinations">
-      <div className="home-module__head"><span>{c.destinations}</span><strong>{visibleStops.length}/{stops.length}</strong></div>
-      <div className="home-destination-grid">
-        {visibleStops.map((stop) => (
-          <article key={stop.id} className={`home-destination-card ${selectedId === stop.id ? 'is-selected' : ''}`}>
-            {imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}
-            <div>
-              <span>{locationLabel(stop, language) || regionText(stop, language)} / {kindText(stop, language)}</span>
-              <strong>{nameFor(stop, language)}</strong>
-              <p>{summaryFor(stop, language)}</p>
-            </div>
-            <div className="home-card-actions">
-              <button className={favorites.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => onFavorite(stop.id)}>{c.favorite}</button>
-              <button className={compare.has(stop.id) ? 'is-on' : ''} type="button" onClick={() => onCompare(stop.id)}>{c.compare}</button>
-              <button type="button" onClick={() => onAdd(stop.id)}>{c.addRoute}</button>
-              <button type="button" onClick={() => onFocus(stop.id)}>{c.focus}</button>
-            </div>
-          </article>
-        ))}
-      </div>
-      {visibleStops.length < stops.length && (
-        <button className="home-download-btn" type="button" onClick={onShowMore}>
-          {language === 'zh' ? '展示更多景点' : 'Show more destinations'}
-        </button>
-      )}
-    </section>
-  );
-}
 
 
-function RoutePresetCards({ routeIds, onPreviewRoute, onStartRoute }) {
-  return (
-    <section className="home-module home-module--route-cards">
-      <div className="home-module__head"><span>推荐路线</span><strong>{routePresets.length}</strong></div>
-      <div className="route-card-grid">
-        {routePresets.map((route) => {
-          const isActive = route.ids.join('|') === routeIds.join('|');
-          return (
-            <article key={route.id} className={`route-card ${isActive ? 'is-active' : ''}`}>
-              <div className="route-card__top">
-                <h3>{route.name}</h3>
-                <span>{route.ids.length} 个景点</span>
-              </div>
-              <p>{route.intro}</p>
-              <div className="route-card__meta">
-                <strong>{route.hours}</strong>
-                <strong>{route.distance}</strong>
-              </div>
-              <div className="route-card__tags">
-                {route.tags.map((tag) => <span key={tag}>{tag}</span>)}
-              </div>
-              <div className="route-card__actions">
-                <button type="button" onClick={() => onPreviewRoute(route)}>预览路线</button>
-                <button type="button" onClick={() => onStartRoute(route)}>开始 3D 导览</button>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
 
-function RouteEditor({ language, routeStops, routeQuery, setRouteQuery, routeMatches, lockedIds, onAdd, onRemove, onMove, onToggleLock, onOptimize, onReset, onOpenDrive }) {
-  const c = copy[language];
-  return (
-    <section className="home-module home-module--planner">
-      <div className="home-module__head"><span>{c.routeEditor}</span><strong>{routeStops.length}</strong></div>
-      <label className="home-search">
-        <span>{c.addFromSearch}</span>
-        <input value={routeQuery} onChange={(event) => setRouteQuery(event.target.value)} placeholder={c.searchPlaceholder} />
-      </label>
-      {routeQuery && (
-        <div className="concept-suggestion-list">
-          {routeMatches.slice(0, 5).map((stop) => (
-            <button key={stop.id} type="button" onClick={() => onAdd(stop.id)}>
-              <strong>{nameFor(stop, language)}</strong><span>{locationLabel(stop, language) || regionText(stop, language)} / {kindText(stop, language)}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="home-planner-list">
-        {routeStops.map((stop, index) => (
-          <section key={stop.id}>
-            <span>{String(index + 1).padStart(2, '0')}</span>
-            <strong>{nameFor(stop, language)}</strong>
-            <button type="button" onClick={() => onMove(stop.id, -1)}>{c.up}</button>
-            <button type="button" onClick={() => onMove(stop.id, 1)}>{c.down}</button>
-            <button type="button" onClick={() => onToggleLock(stop.id)}>{lockedIds.has(stop.id) ? c.unlock : c.lock}</button>
-            <button type="button" onClick={() => onRemove(stop.id)}>{c.remove}</button>
-          </section>
-        ))}
-      </div>
-      <div className="concept-actions concept-actions--compact">
-        <button className="concept-btn" type="button" onClick={onOptimize}>{c.optimize}</button>
-        <button className="concept-btn" type="button" onClick={onReset}>{c.reset}</button>
-      </div>
-    </section>
-  );
-}
 
-function MapBoard({ language, routeStops, onOpenDrive }) {
-  return (
-    <section className="home-module home-module--map">
-      <div className="home-module__head"><span>{copy[language].routePreview}</span><strong>{routeStops.length}</strong></div>
-      <RouteSketchMap language={language} routeStops={routeStops} />
-    </section>
-  );
-}
 
-function MetricsPanel({ language, routeStops, days, pace }) {
-  const km = distanceKm(routeStops);
-  const hours = Math.max(2, Math.round(km / (pace === 'Fast' ? 82 : pace === 'Relaxed' ? 58 : 70)));
-  const modelCount = routeStops.filter((stop) => stop.modelPath).length;
-  return (
-    <section className="home-module home-module--metrics">
-      <div className="home-module__head"><span>{copy[language].metrics}</span><strong>{pace}</strong></div>
-      <div className="home-metric-grid">
-        <section><strong>{km} km</strong><span>{language === 'zh' ? '预计里程' : 'Estimated distance'}</span></section>
-        <section><strong>{hours} h</strong><span>{language === 'zh' ? '驾驶时间' : 'Drive time'}</span></section>
-        <section><strong>{routeStops.length}</strong><span>{copy[language].routeStops}</span></section>
-        <section><strong>{modelCount}</strong><span>{language === 'zh' ? '模型预览' : 'Model previews'}</span></section>
-        <section><strong>{days}</strong><span>{copy[language].days}</span></section>
-        <section><strong>{routeStops.length * 4 + 2}</strong><span>{language === 'zh' ? '关键点' : 'Key points'}</span></section>
-      </div>
-    </section>
-  );
-}
 
-function ItineraryPanel({ language, routeStops, days, setDays, pace, setPace }) {
-  const c = copy[language];
-  const itinerary = makeItinerary(routeStops, days);
-  return (
-    <section className="home-module home-module--itinerary">
-      <div className="home-module__head"><span>{c.itinerary}</span><strong>{days}</strong></div>
-      <div className="home-planner-controls">
-        <label><span>{c.days}</span><input type="number" min="1" max={MAX_TRIP_DAYS} value={days} onChange={(event) => setDays(clampDays(event.target.value))} /></label>
-        <label><span>{c.pace}</span><select value={pace} onChange={(event) => setPace(event.target.value)}>{Object.keys(paceDailyHours).map((item) => <option key={item} value={item}>{paceLabel(item, language)}</option>)}</select></label>
-      </div>
-      <div className="home-itinerary-days">
-        {itinerary.map((day) => (
-          <section key={day.day}>
-            <span>{language === 'zh' ? `第 ${day.day} 天` : `Day ${day.day}`}</span>
-            <strong>{day.stops.map((stop) => nameFor(stop, language)).join(' / ')}</strong>
-            <p>{day.stops.map((stop) => regionFor(stop)).join(' -> ')}</p>
-          </section>
-        ))}
-      </div>
-    </section>
-  );
-}
 
-function ExportPanel({ language, routeStops, days, pace }) {
-  const c = copy[language];
-  const itinerary = makeItinerary(routeStops, days);
-  const text = [
-    c.itinerary,
-    `${c.pace}: ${pace}`,
-    ...itinerary.map((day) => `${language === 'zh' ? `第 ${day.day} 天` : `Day ${day.day}`}: ${day.stops.map((stop) => nameFor(stop, language)).join(' / ')}`),
-  ].join('\n');
-  return (
-    <section className="home-module home-module--export">
-      <div className="home-module__head"><span>{c.export}</span><strong>TXT</strong></div>
-      <textarea readOnly value={text} aria-label={c.export} />
-      <button className="home-download-btn" type="button" onClick={() => downloadTextFile('trip3d-itinerary.txt', text)}>
-        {language === 'zh' ? '下载行程' : 'Download itinerary'}
-      </button>
-    </section>
-  );
-}
 
-function FocusPanel({ language, stop, onOpenDrive }) {
-  const c = copy[language];
-  return (
-    <section className="home-module home-module--focus">
-      <div className="home-module__head"><span>{c.focus}</span><strong>{regionFor(stop)}</strong></div>
-      <div className="home-focus-card">
-        {imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}
-        <span>{stop.modelKind}</span>
-        <strong>{nameFor(stop, language)}</strong>
-        <p>{summaryFor(stop, language)}</p>
-        <dl>
-          <div><dt>LAT</dt><dd>{stop.lat.toFixed(3)}</dd></div>
-          <div><dt>LON</dt><dd>{stop.lon.toFixed(3)}</dd></div>
-          <div><dt>{language === 'zh' ? '查看' : 'View'}</dt><dd>{stop.modelPath ? (language === 'zh' ? '可深入浏览' : 'Closer look') : (language === 'zh' ? '沿途停靠' : 'Route stop')}</dd></div>
-        </dl>
-      </div>
-    </section>
-  );
-}
 
-function ReviewsPanel({ language, stops, favorites, onFavorite, onOpenDrive }) {
-  const c = copy[language];
-  return (
-    <section className="home-module home-module--reviews">
-      <div className="home-module__head"><span>{c.reviews}</span><strong>{stops.length}</strong></div>
-      <div className="home-review-list home-review-list--large">
-        {stops.slice(0, 12).map((stop) => {
-          const url = pageUrlFor(stop, language);
-          return (
-            <article key={stop.id}>
-              {imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}
-              <div>
-                <strong>{nameFor(stop, language)}</strong>
-                <p>{summaryFor(stop, language)}</p>
-                <span>{regionFor(stop)} / {seasonFor(stop)} / {sourceLabelsFor(stop, language)}</span>
-                <div className="home-card-actions">
-                  <button type="button" className={favorites.has(stop.id) ? 'is-on' : ''} onClick={() => onFavorite(stop.id)}>{c.favorite}</button>
-                  {url && <a href={url} target="_blank" rel="noreferrer">{c.read}</a>}
-                </div>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
 
-function ComparePanel({ language, compareIds, favoriteIds, onOpenDrive }) {
-  const c = copy[language];
-  const compared = compareIds.map((id) => landmarks.find((stop) => stop.id === id)).filter(Boolean);
-  const favorites = favoriteIds.map((id) => landmarks.find((stop) => stop.id === id)).filter(Boolean);
-  return (
-    <section className="home-module home-module--compare">
-      <div className="home-module__head"><span>{c.compare}</span><strong>{compared.length}</strong></div>
-      <div className="home-compare-columns">
-        <section>
-          <span>{c.compare}</span>
-          {(compared.length ? compared : landmarks.slice(0, 2)).map((stop) => <button key={stop.id} type="button">{nameFor(stop, language)}</button>)}
-        </section>
-        <section>
-          <span>{c.favorites}</span>
-          {(favorites.length ? favorites : landmarks.slice(2, 4)).map((stop) => <button key={stop.id} type="button">{nameFor(stop, language)}</button>)}
-        </section>
-      </div>
-    </section>
-  );
-}
 
-function WeatherPanel({ language, stop }) {
-  const live = liveFor(stop.id);
-  const weather = live?.weather;
-  return (
-    <section className="home-module home-module--weather">
-      <div className="home-module__head"><span>{copy[language].weather}</span><strong>{copy[language].nextStop}</strong></div>
-      <p>{nameFor(stop, language)}</p>
-      <div className="home-metric-grid">
-        <section><strong>{weather?.temperatureC != null ? `${Math.round(weather.temperatureC)}°C` : '--'}</strong><span>Temperature</span></section>
-        <section><strong>{weather?.windKph != null ? `${Math.round(weather.windKph)} km/h` : '--'}</strong><span>Wind</span></section>
-      </div>
-    </section>
-  );
-}
 
-function RouteSchemaPanel({ language, routeStops, routeSegments }) {
-  const total = routeSegments.reduce((sum, segment) => sum + segment.distance, 0);
-  const hours = routeSegments.reduce((sum, segment) => sum + segment.duration, 0);
-  return (
-    <section className="home-module home-module--schema">
-      <div className="home-module__head">
-        <span>{language === 'zh' ? '路线结构' : 'Route schema'}</span>
-        <strong>{routeSegments.length}</strong>
-      </div>
-      <div className="home-schema-summary">
-        <section><strong>{Math.round(total)} km</strong><span>{language === 'zh' ? '总里程' : 'Distance'}</span></section>
-        <section><strong>{Math.max(1, Math.round(hours))} h</strong><span>{language === 'zh' ? '预计时间' : 'Duration'}</span></section>
-        <section><strong>{routeStops.length}</strong><span>{copy[language].routeStops}</span></section>
-      </div>
-      <div className="home-schema-list">
-        {routeSegments.map((segment, index) => (
-          <article key={`${segment.from.id}-${segment.to.id}`}>
-            <span>{String(index + 1).padStart(2, '0')}</span>
-            <strong>{`${nameFor(segment.from, language)} -> ${nameFor(segment.to, language)}`}</strong>
-            <small>{Math.round(segment.distance)} km</small>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
 
-function DestinationsPage(props) {
-  const { language, filteredStops, favorites, compare, selectedId, routeStops, routeSegments, userSession, visibleCount, onShowMore, onOpenDrive } = props;
-  return (
-    <section className="concept-page concept-page--destinations">
-      <div className="concept-page__aside">
-        <SearchFilters {...props} />
-        <AccountPanel language={language} favorites={favorites} compare={compare} routeStops={routeStops} userSession={userSession} accountHistory={props.accountHistory} onSignIn={props.onSignIn} onSignOut={props.onSignOut} onReset={props.onResetRoute} />
-        <ServicesPanel language={language} />
-      </div>
-      <div className="concept-page__stack concept-page__stack--wide">
-        <JourneyOverviewPanel language={language} routeStops={routeStops} favorites={favorites} compare={compare} routeSegments={routeSegments} />
-      <DestinationCards
-        language={language}
-        stops={filteredStops}
-        favorites={favorites}
-        compare={compare}
-        selectedId={selectedId}
-        visibleCount={visibleCount}
-        onShowMore={onShowMore}
-        onFavorite={props.onFavorite}
-        onCompare={props.onCompare}
-        onAdd={props.onAddRoute}
-        onFocus={props.setSelectedId}
-        onOpenDrive={onOpenDrive}
-      />
-      </div>
-    </section>
-  );
-}
 
-function PlannerPage(props) {
-  const { language, routeStops, days, pace, routeSegments, onOpenDrive } = props;
-  return (
-    <section className="concept-page concept-page--planner">
-      <RouteEditor {...props} />
-      <div className="concept-page__stack">
-        <RoutePresetCards routeIds={props.routeIds} onPreviewRoute={props.onPreviewRoute} onStartRoute={props.onStartRoute} />
-        <MapBoard language={language} routeStops={routeStops} onOpenDrive={onOpenDrive} />
-        <MetricsPanel language={language} routeStops={routeStops} days={days} pace={pace} />
-        <RouteSchemaPanel language={language} routeStops={routeStops} routeSegments={routeSegments} />
-      </div>
-      <div className="concept-page__stack">
-        <ItineraryPanel language={language} routeStops={routeStops} days={days} setDays={props.setDays} pace={pace} setPace={props.setPace} />
-        <ExportPanel language={language} routeStops={routeStops} days={days} pace={pace} />
-      </div>
-    </section>
-  );
-}
 
-function ReviewsPage(props) {
-  const { language, filteredStops, routeStops, favorites, compare, onOpenDrive } = props;
-  return (
-    <section className="concept-page concept-page--reviews">
-      <ReviewsPanel language={language} stops={filteredStops} favorites={favorites} onFavorite={props.onFavorite} onOpenDrive={onOpenDrive} />
-      <div className="concept-page__stack">
-        <ComparePanel language={language} compareIds={[...compare]} favoriteIds={[...favorites]} onOpenDrive={onOpenDrive} />
-        <WeatherPanel language={language} stop={routeStops[0] ?? landmarks[0]} />
-        <ServicesPanel language={language} />
-      </div>
-    </section>
-  );
-}
 
-function DrivePage(props) {
-  const { language, routeStops, selectedStop, favorites, compare, routeSegments, userSession, onOpenDrive } = props;
-  return (
-    <section className="concept-page concept-page--drive">
-      <div className="concept-drive-gateway">
-        <p className="concept-kicker">{copy[language].driveReady}</p>
-        <h2>{copy[language].cta3d}</h2>
-        <p>{copy[language].driveBody}</p>
-        <div className="concept-actions">
-          <button className="concept-btn concept-btn--primary" type="button" onClick={() => onOpenDrive(selectedStop.id)}>{copy[language].cta3d}</button>
-        </div>
-        <HeroGallery language={language} routeStops={routeStops} onOpenDrive={onOpenDrive} />
-      </div>
-      <div className="concept-page__stack">
-        <FocusPanel language={language} stop={selectedStop} onOpenDrive={onOpenDrive} />
-        <StatStrip language={language} routeStops={routeStops} favorites={favorites} />
-        <AccountPanel language={language} favorites={favorites} compare={compare} routeStops={routeStops} userSession={userSession} accountHistory={props.accountHistory} onSignIn={props.onSignIn} onSignOut={props.onSignOut} onReset={props.onResetRoute} />
-        <RouteSchemaPanel language={language} routeStops={routeStops} routeSegments={routeSegments} />
-      </div>
-    </section>
-  );
-}
 
-function MapPage(props) {
-  const { language, routeStops, routeSegments, days, pace, onOpenDrive } = props;
-  return (
-    <section className="concept-page concept-page--map">
-      <MapBoard language={language} routeStops={routeStops} onOpenDrive={onOpenDrive} />
-      <div className="concept-page__stack">
-        <MetricsPanel language={language} routeStops={routeStops} days={days} pace={pace} />
-        <RouteSchemaPanel language={language} routeStops={routeStops} routeSegments={routeSegments} />
-      </div>
-      <div className="concept-page__stack">
-        <WeatherPanel language={language} stop={routeStops[0] ?? landmarks[0]} />
-        <ServicesPanel language={language} />
-      </div>
-    </section>
-  );
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function scrollToHomeSection(id) {
   if (window.location.hash && window.location.hash !== '#/' && !window.location.hash.startsWith('#home-')) {
@@ -2488,9 +1364,9 @@ function nearbyStopsFor(stop, routeStops, language) {
 function paceText(pace, language) {
   const clearCopy = {
     zh: {
-      Relaxed: '每天目标约 6 小时：参观更从容，预留 1 小时机动。行驶时间和参观时间会分开计算。',
+      Relaxed: '每天目标约 6 小时：预留 1 小时机动，适合休闲人群。',
       Standard: '每天目标约 8 小时：按建议参观时长安排，预留 0.5 小时机动。长距离驾驶会顺延到第二天。',
-      Fast: '每天目标约 10 小时：参观时长压缩约 25%，预留 0.25 小时机动，适合紧凑行程。',
+      Fast: '每天目标约 10 小时：参观时长压缩约 25%，预留 0.25 小时机动，适合特种兵行程。',
     },
     en: {
       Relaxed: 'Target about 6 hours per day: longer visits, 1 hour of buffer, and driving kept separate from exploring.',
@@ -2594,58 +1470,7 @@ function pushVisitActivity(days, stop, hours, dailyLimit, paceProfile, language)
   day.visitHours += hours;
 }
 
-function optimalDayGroups(uniqueStops, maxDays, pace, language) {
-  const dailyTarget = paceDailyHours[pace] ?? paceDailyHours.Standard;
-  const paceProfile = paceProfiles[pace] ?? paceProfiles.Standard;
-  const incomingSegments = uniqueStops.map((stop, index) => (
-    index > 0 ? routeSegmentsFor([uniqueStops[index - 1], stop])[0] ?? null : null
-  ));
-  const groupStats = (start, end) => {
-    const stops = uniqueStops.slice(start, end);
-    const segments = incomingSegments.slice(start, end).filter(Boolean);
-    const visitHours = stops.reduce((sum, stop) => sum + plannedVisitHours(stop, language, pace), 0);
-    const travelHours = segments.reduce((sum, segment) => sum + segment.duration, 0);
-    const totalKm = segments.reduce((sum, segment) => sum + segment.distance, 0);
-    const totalHours = visitHours + travelHours + paceProfile.dailyBufferHours;
-    return { start, end, stops, segments, visitHours, travelHours, totalKm, totalHours };
-  };
-  const scoreGroup = (group) => {
-    const overHours = Math.max(0, group.totalHours - dailyTarget);
-    const underHours = Math.max(0, dailyTarget - group.totalHours);
-    const overflowPenalty = overHours ** 2 * 80;
-    const unusedTimePenalty = underHours ** 2;
-    const sparseDayPenalty = group.stops.length === 1 ? 0.75 : 0;
-    const boundarySegment = group.start > 0 ? incomingSegments[group.start] : null;
-    const longBoundaryBonus = boundarySegment ? Math.min(boundarySegment.duration, 4) * 0.8 : 0;
-    return overflowPenalty + unusedTimePenalty + sparseDayPenalty + 0.35 - longBoundaryBonus;
-  };
 
-  const stopCount = uniqueStops.length;
-  const groupLimit = Math.min(Math.max(1, maxDays), stopCount);
-  const dp = Array.from({ length: groupLimit + 1 }, () => Array(stopCount + 1).fill(null));
-  dp[0][0] = { score: 0, groups: [] };
-
-  for (let groupCount = 1; groupCount <= groupLimit; groupCount += 1) {
-    for (let end = groupCount; end <= stopCount; end += 1) {
-      for (let start = groupCount - 1; start < end; start += 1) {
-        const previous = dp[groupCount - 1][start];
-        if (!previous) continue;
-        const group = groupStats(start, end);
-        const score = previous.score + scoreGroup(group);
-        if (!dp[groupCount][end] || score < dp[groupCount][end].score) {
-          dp[groupCount][end] = { score, groups: [...previous.groups, group] };
-        }
-      }
-    }
-  }
-
-  let best = null;
-  for (let groupCount = 1; groupCount <= groupLimit; groupCount += 1) {
-    const candidate = dp[groupCount][stopCount];
-    if (candidate && (!best || candidate.score < best.score)) best = candidate;
-  }
-  return best?.groups ?? [groupStats(0, stopCount)];
-}
 
 function buildItineraryDays(routeStops, dayCount, pace, language, segmentOverrides = []) {
   const safeDays = clampDays(dayCount);
@@ -2707,9 +1532,7 @@ function makeItineraryPlan(routeStops, days, pace = 'Standard', language = 'en',
   };
 }
 
-function makeItinerary(routeStops, days, pace = 'Standard', language = 'en') {
-  return makeItineraryPlan(routeStops, days, pace, language).days;
-}
+
 
 function itineraryExportText(language, routeStops, days, pace, segmentOverrides = []) {
   const plan = makeItineraryPlan(routeStops, days, pace, language, segmentOverrides);
@@ -2790,22 +1613,6 @@ function HomeHeader({ language, setLanguage, userSession, onAccount, onHelp }) {
 function HomeHero({ language, routeStops, selectedStop, onOpenDrive }) {
   const title = language === 'zh' ? '\u4eca\u5929\u60f3\u53bb\u54ea\uff1f' : 'Where to today?';
   return <section id="home-hero" className="cinematic-section cinematic-hero"><div className="cinematic-hero__copy"><span>{language === 'zh' ? '\u610f\u5927\u5229\u65c5\u884c\u624b\u8bb0' : 'Italy travel notebook'}</span><h1>{title}</h1><p>{language === 'zh' ? '\u7b5b\u9009\u666f\u70b9\uff0c\u5f00\u59cb\u89c4\u5212\uff01' : 'Filter stops and start planning.'}</p><div className="cinematic-actions"><button className="concept-btn concept-btn--primary" type="button" onClick={() => scrollToHomeSection('home-planner')}>{language === 'zh' ? '\u5f00\u59cb\u89c4\u5212\u8def\u7ebf' : 'Start planning'}</button><button className="concept-btn" type="button" onClick={() => scrollToHomeSection('home-3d')}>{language === 'zh' ? '\u8fdb\u51653D\u5bfc\u89c8' : 'Enter 3D guide'}</button></div></div><div className="cinematic-hero__preview" aria-label={language === 'zh' ? '\u8def\u7ebf\u548c3D\u5bfc\u89c8\u9884\u89c8' : 'Route and 3D guide preview'}><div className="cinematic-hero__media">{imageFor(selectedStop, language) && <img src={imageFor(selectedStop, language)} alt="" loading="eager" />}<button type="button" onClick={() => onOpenDrive(selectedStop.id)}>{language === 'zh' ? '\u6253\u5f00 3D Drive' : 'Open 3D Drive'}</button></div><div className="cinematic-hero__route"><span>{language === 'zh' ? '\u5f53\u524d\u8def\u7ebf' : 'Current route'}</span>{routeStops.slice(0, 5).map((stop, index) => <strong key={stop.id}>{index + 1}. {nameFor(stop, language)}</strong>)}</div></div></section>;
-}
-
-function HomeStats({ language }) {
-  const generatedDate = new Date(liveLandmarksData.generatedAt);
-  const dateLabel = Number.isNaN(generatedDate.getTime())
-    ? homeText(language, '本次构建', 'This build')
-    : generatedDate.toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-GB');
-  const sourceCount = Object.keys(liveLandmarksData.sources ?? {}).length;
-  const routingStat = routeMatrixIds.length > 1 ? String(routeMatrixIds.length ** 2) : (language === 'zh' ? '实时' : 'Live');
-  const routingLabel = routeMatrixIds.length > 1
-    ? homeText(language, '道路组合', 'Road combinations')
-    : homeText(language, 'Google/OSRM 路线', 'Google/OSRM routes');
-  const stats = language === 'zh'
-    ? [[String(liveIndex.size), '真实景点资料'], [String(sourceCount), '公开数据源'], [routingStat, routingLabel], [dateLabel, '数据更新时间']]
-    : [[String(liveIndex.size), 'Sourced landmarks'], [String(sourceCount), 'Public data sources'], [routingStat, routingLabel], [dateLabel, 'Data updated']];
-  return <section className="cinematic-stats" aria-label={language === 'zh' ? '\u6570\u636e\u6982\u89c8' : 'Overview stats'}>{stats.map(([value, label]) => <article key={label}><strong>{value}</strong><span>{label}</span></article>)}</section>;
 }
 
 const ROUTE_MAP_BOUNDS = { lonMin: 6.4, lonMax: 19.0, latMin: 35.4, latMax: 47.2 };
@@ -3020,7 +1827,7 @@ function RouteSketchMap({
       {showRouteLoading && (
         <div className="paper-route-map__loading" role="status">
           <i aria-hidden="true" />
-          <strong>{language === 'zh' ? '正在把沿途道路画进手册' : 'Drawing the roads into your notebook'}</strong>
+          <strong>{language === 'zh' ? '正在规划路线' : 'Drawing the roads into your notebook'}</strong>
         </div>
       )}
     </div>
@@ -3051,6 +1858,7 @@ function DestinationSection(props) {
     selectedId,
     visibleCount,
     onShowMore,
+    onCollapse,
     onOpenDetail,
   } = props;
   const visibleStops = filteredStops.slice(0, visibleCount);
@@ -3058,9 +1866,9 @@ function DestinationSection(props) {
   return (
     <section id="home-destinations" className="cinematic-section cinematic-destinations" data-guide="search">
       <div className="cinematic-section__head">
-        <span>{language === 'zh' ? '精选目的地' : 'Featured destinations'}</span>
+        <span>{language === 'zh' ? '目的地' : 'Featured destinations'}</span>
         <h2>{language === 'zh' ? '先选想停留的地方' : 'Pick the stops that feel worth your time'}</h2>
-        <p>{language === 'zh' ? '从公开资料整理出的城市与地标里，挑出你想加入旅行手账的停靠点。' : 'Choose from public-source city and landmark notes, then turn them into a route.'}</p>
+        <p>{language === 'zh' ? '根据筛选挑选合适的景点' : 'Choose from public-source city and landmark notes, then turn them into a route.'}</p>
       </div>
 
       <section className="home-module home-module--search">
@@ -3079,7 +1887,6 @@ function DestinationSection(props) {
               <option value="featured">{homeText(language, '推荐', 'Featured')}</option>
               <option value="name">{homeText(language, '名称', 'Name')}</option>
               <option value="north">{homeText(language, '从北到南', 'North to south')}</option>
-              <option value="model">{homeText(language, '优先3D模型', '3D model first')}</option>
             </select>
           </label>
         </div>
@@ -3124,7 +1931,10 @@ function DestinationSection(props) {
           );
         })}
       </div>
-      {visibleStops.length < filteredStops.length && <button className="home-download-btn" type="button" onClick={onShowMore}>{language === 'zh' ? '展示更多景点' : 'Show more destinations'}</button>}
+      <div className="section-expand-actions">
+        {visibleStops.length < filteredStops.length && <button className="home-download-btn" type="button" onClick={onShowMore}>{language === 'zh' ? '展示更多景点' : 'Show more destinations'}</button>}
+        {visibleCount > 12 && <button className="home-download-btn is-secondary" type="button" onClick={onCollapse}>{language === 'zh' ? '收起景点列表' : 'Collapse destinations'}</button>}
+      </div>
     </section>
   );
 }
@@ -3132,7 +1942,7 @@ function DestinationSection(props) {
 function PrintableItinerary({ language, routeStops, plan, pace }) {
   return (
     <section className="print-itinerary" aria-label={homeText(language, '可打印行程', 'Printable itinerary')}>
-      <h1>{homeText(language, 'Trip3D 意大利行程草稿', 'Trip3D Italy planning draft')}</h1>
+      <h1>{homeText(language, 'Trip3D 行程草稿', 'Trip3D Italy planning draft')}</h1>
       <p>{homeText(language, '路线', 'Route')}: {routeStops.map((stop) => nameFor(stop, language)).join(' -> ') || homeText(language, '还没有添加景点', 'No stops yet')}</p>
       <p>{homeText(language, '节奏', 'Pace')}: {paceLabel(pace, language)}</p>
       <p>{homeText(language, '建议至少预留', 'Suggested minimum')}: {plan.minimumDays} {homeText(language, '天', 'days')}</p>
@@ -3174,8 +1984,11 @@ function PrintableItinerary({ language, routeStops, plan, pace }) {
 
 function RoutePlannerSection(props) {
   const { language, routeStops, routeSegments, routeGeometry, isRouteLoading, routeQuery, setRouteQuery, routeMatches, days, setDays, pace, setPace, lockedIds } = props;
+  const [showAllDays, setShowAllDays] = useState(false);
   const plan = makeItineraryPlan(routeStops, days, pace, language, routeSegments);
   const exportText = itineraryExportText(language, routeStops, days, pace, routeSegments);
+  const visiblePlanDays = showAllDays ? plan.days : plan.days.slice(0, 4);
+  const hiddenDayCount = Math.max(0, plan.days.length - visiblePlanDays.length);
   const routeRecommendations = useMemo(() => [...(props.routeRecommendations ?? [])]
     .map((recommendation) => ({
       ...recommendation,
@@ -3189,8 +2002,8 @@ function RoutePlannerSection(props) {
     <section id="home-planner" className="cinematic-section cinematic-route-planner" data-guide="planner">
       <div className="cinematic-section__head">
         <span>{language === 'zh' ? '路线规划' : 'Route planner'}</span>
-        <h2>{language === 'zh' ? '把停靠点整理成每天能走的行程' : 'Turn stops into days you can actually follow'}</h2>
-        <p>{language === 'zh' ? '不加酒店坐标，也不改 3D 导览。这里只把景点、路程、停留时间和出发前要确认的事写清楚。' : 'No hotel coordinates and no changes to the 3D guide. This keeps the stop order, timing, travel gaps, and check-before-you-go notes readable.'}</p>
+        <h2>{language === 'zh' ? '进一步修改路线顺序及节奏' : 'Turn stops into days you can actually follow'}</h2>
+        <p>{language === 'zh' ? '修改景点顺序、游览方式、路程、停留时间。' : 'No hotel coordinates and no changes to the 3D guide. This keeps the stop order, timing, travel gaps, and check-before-you-go notes readable.'}</p>
       </div>
 
       <div className="cinematic-route-planner__main">
@@ -3249,7 +2062,7 @@ function RoutePlannerSection(props) {
               <strong>{routeRecommendations.length}</strong>
             </div>
             <p className="route-recommendations__intro">
-              {homeText(language, '基于当前景点和锁定位置生成，选择后仍可继续手动调整。', 'Generated from the current stops and locked positions. You can still edit after choosing.')}
+              {homeText(language, '基于当前景点和锁定位置生成，可继续手动调整。', 'Generated from the current stops and locked positions. You can still edit after choosing.')}
             </p>
             <div className="route-recommendations">
               {routeRecommendations.map((recommendation) => (
@@ -3279,8 +2092,8 @@ function RoutePlannerSection(props) {
             <p className="planner-note">{paceText(pace, language)}</p>
             <div className={`itinerary-readiness ${plan.isFeasible ? 'is-ready' : 'is-tight'}`}>
               <strong>{plan.isFeasible
-                ? homeText(language, '这份安排走得下来', 'This plan has room to breathe')
-                : homeText(language, '这份安排会有些赶', 'This plan is rather full')}</strong>
+                ? homeText(language, '行程时间合适', 'This plan has room to breathe')
+                : homeText(language, '行程有点赶', 'This plan is rather full')}</strong>
               <p>{homeText(
                 language,
                 `按现在的节奏，建议至少预留 ${plan.minimumDays} 天：约 ${formatHours(plan.travelHours)} 小时在路上，${formatHours(plan.visitHours)} 小时游览，另有 ${formatHours(plan.bufferHours)} 小时机动。`,
@@ -3301,9 +2114,9 @@ function RoutePlannerSection(props) {
 
         <div className="cinematic-route-planner__visual">
           <section className="home-module home-module--map">
-            <div className="home-module__head"><span>{homeText(language, '路线预览', 'Route preview')}</span><strong>{isRouteLoading ? homeText(language, '正在画路线', 'Drawing route') : routeGeometry.length >= 2 ? homeText(language, '已按道路整理', 'Road route ready') : homeText(language, '大致方向', 'Rough direction')}</strong></div>
+            <div className="home-module__head"><span>{homeText(language, '路线预览', 'Route preview')}</span><strong>{isRouteLoading ? homeText(language, '正在规划路线', 'Drawing route') : routeGeometry.length >= 2 ? homeText(language, '已按道路整理', 'Road route ready') : homeText(language, '大致方向', 'Rough direction')}</strong></div>
             <RouteSketchMap language={language} routeStops={routeStops} routeGeometry={routeGeometry} routeGeometrySegments={props.routeGeometrySegments} isRouteLoading={isRouteLoading} />
-            {!isRouteLoading && routeGeometry.length < 2 && <p className="planner-note">{homeText(language, '道路信息暂时没回来，先显示景点之间的大致方向，稍后可以再试。', 'Road details are taking a little longer, so the map is showing the general direction for now.')}</p>}
+            {!isRouteLoading && routeGeometry.length < 2 && <p className="planner-note">{homeText(language, '道路信息加载中，路线仅供参考。', 'Road details are taking a little longer, so the map is showing the general direction for now.')}</p>}
             {props.routeDiagnostics?.excessiveOverlap && <p className="planner-note is-warning">{homeText(language, `检测到约 ${Math.round(props.routeDiagnostics.overlapRatio * 100)}% 的道路重复，建议使用“同城少回头”路线或调整景点顺序。`, `About ${Math.round(props.routeDiagnostics.overlapRatio * 100)}% of the route repeats. Try the city-local route or reorder stops.`)}</p>}
           </section>
           <section className="home-module home-module--schema">
@@ -3324,7 +2137,7 @@ function RoutePlannerSection(props) {
           <section className="home-module home-module--day-cards" id="home-day-plan">
             <div className="home-module__head"><span>{homeText(language, '每天怎么走', 'Day by day')}</span><strong>{plan.dailyLimit}h / {homeText(language, '天', 'day')}</strong></div>
             <div className="cinematic-day-grid">
-              {plan.days.map((day) => (
+              {visiblePlanDays.map((day) => (
                 <article key={day.day} className={`cinematic-day-card ${day.overHours > 0 ? 'is-tight' : ''}`}>
                   <span>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)}</span>
                   <strong>{formatDuration(day.totalHours)} / {formatKm(day.totalKm)}</strong>
@@ -3362,6 +2175,13 @@ function RoutePlannerSection(props) {
                 </article>
               ))}
             </div>
+            {plan.days.length > 4 && (
+              <button className="home-download-btn day-collapse-toggle" type="button" onClick={() => setShowAllDays((current) => !current)}>
+                {showAllDays
+                  ? homeText(language, '收起天数', 'Collapse days')
+                  : homeText(language, `展开其余 ${hiddenDayCount} 天`, `Show ${hiddenDayCount} more days`)}
+              </button>
+            )}
           </section>
         </div>
       </div>
@@ -3436,7 +2256,7 @@ function TravelServiceDrawer({ language, mode, favorites, compare, routeIds, onC
   );
 }
 
-function ReviewSection({ language, stops, visibleCount = 6, onShowMore }) {
+function ReviewSection({ language, stops, visibleCount = 6, onShowMore, onCollapse }) {
   const visibleStops = stops.slice(0, visibleCount);
   return (
     <section id="home-reviews" className="cinematic-section cinematic-reviews">
@@ -3448,12 +2268,17 @@ function ReviewSection({ language, stops, visibleCount = 6, onShowMore }) {
       <div className="cinematic-review-grid">
         {visibleStops.map((stop) => {
           const visit = visitFor(stop, language);
+          const meta = [
+            visit.durationHours ? homeText(language, `建议停留 ${visit.durationHours} 小时`, `${visit.durationHours}h visit`) : '',
+            visit.bestTime,
+            locationLabel(stop, language) || regionText(stop, language),
+          ].filter(Boolean).join(' / ');
           return (
             <article key={stop.id}>
               <p>{summaryFor(stop, language).slice(0, 190) || homeText(language, '这处资料还需要补充，先把它当作待确认灵感。', 'This source note needs more detail, so keep it as a planning lead.')}</p>
               <div>
                 {imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}
-                <span>{visit.fit}</span>
+                <span>{meta}</span>
                 <strong>{nameFor(stop, language)}</strong>
                 <small>{homeText(language, '来源', 'Sources')}: {sourceLabelsFor(stop, language)}</small>
               </div>
@@ -3461,14 +2286,18 @@ function ReviewSection({ language, stops, visibleCount = 6, onShowMore }) {
           );
         })}
       </div>
-      {visibleStops.length < stops.length && <button className="home-download-btn cinematic-review-more" type="button" onClick={onShowMore}>{homeText(language, '显示更多资料卡', 'Show more notes')}</button>}
+      <div className="section-expand-actions">
+        {visibleStops.length < stops.length && <button className="home-download-btn cinematic-review-more" type="button" onClick={onShowMore}>{homeText(language, '显示更多资料卡', 'Show more notes')}</button>}
+        {visibleCount > 6 && <button className="home-download-btn is-secondary" type="button" onClick={onCollapse}>{homeText(language, '收起资料卡', 'Collapse notes')}</button>}
+      </div>
     </section>
   );
 }
 
 
 function TravelNotesSection({ language, stops }) {
-  return <section id="home-notes" className="cinematic-section cinematic-notes"><div className="cinematic-section__head"><span>{language === 'zh' ? '\u65c5\u884c\u653b\u7565 / \u80cc\u666f\u8d44\u6599' : 'Travel notes / background'}</span><h2>{language === 'zh' ? '\u51fa\u53d1\u524d\u8bfb\u4e00\u8bfb\u76ee\u7684\u5730\u6545\u4e8b' : 'Read the destination story before you go'}</h2></div><div className="cinematic-notes-grid">{stops.filter((stop) => pageUrlFor(stop, language)).slice(0, 3).map((stop) => <article key={stop.id}>{imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}<span>{regionText(stop, language)}</span><strong>{nameFor(stop, language)}</strong><p>{summaryFor(stop, language).slice(0, 160)}</p><a className="concept-btn" href={pageUrlFor(stop, language)} target="_blank" rel="noreferrer">{homeText(language, '\u67e5\u770b\u8be6\u60c5', 'View details')}</a></article>)}</div></section>;
+  const noteStops = stops.filter((stop) => pageUrlFor(stop, language)).slice(0, 3);
+  return <section id="home-notes" className="cinematic-section cinematic-notes"><div className="cinematic-section__head"><span>{language === 'zh' ? '\u65c5\u884c\u653b\u7565 / \u80cc\u666f\u8d44\u6599' : 'Travel notes / background'}</span><h2>{language === 'zh' ? '\u51fa\u53d1\u524d\u8bfb\u4e00\u8bfb\u5f53\u524d\u8def\u7ebf\u7684\u76ee\u7684\u5730' : 'Read about the stops in this route before you go'}</h2></div>{noteStops.length ? <div className="cinematic-notes-grid">{noteStops.map((stop) => <article key={stop.id}>{imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}<span>{regionText(stop, language)}</span><strong>{nameFor(stop, language)}</strong><p>{summaryFor(stop, language).slice(0, 160)}</p><a className="concept-btn" href={pageUrlFor(stop, language)} target="_blank" rel="noreferrer">{homeText(language, '\u67e5\u770b\u8be6\u60c5', 'View details')}</a></article>)}</div> : <p className="planner-note">{homeText(language, '当前路线里还没有可打开资料页的景点。', 'No route stop has a source page yet.')}</p>}</section>;
 }
 
 function AccountSummarySection({ language, favorites, routeStops, lockedIds, userSession, onSignIn }) {
@@ -3539,11 +2368,11 @@ function OnboardingGuide({ language, onClose }) {
   const steps = useMemo(() => (
     language === 'zh'
       ? [
-        { selector: '[data-guide="search"] .home-module--search', title: '先找一个想去的地方', detail: '输入城市、景点，或者用下面的旅行偏好缩小范围。' },
-        { selector: '[data-guide="add-route"]', title: '把景点放进路线', detail: '点“加入路线”添加景点，再点一次即可取消加入。' },
+        { selector: '[data-guide="search"] .home-module--search', title: '选择途径景点', detail: '输入城市、景点名称，或者用下面的旅行偏好缩小范围。' },
+        { selector: '[data-guide="add-route"]', title: '调整景点顺序', detail: '点“加入路线”添加景点，再点一次即可取消加入。' },
         { selector: '[data-guide="planner"] .home-module--itinerary-controls', title: '调整天数和节奏', detail: '轻松、标准和紧凑节奏分别按每天 6、8、10 小时来安排。' },
-        { selector: '[data-guide="export"]', title: '带走你的行程', detail: '可以下载 TXT，也可以打印并保存为 PDF。' },
-        { selector: '#home-3d', title: '最后再看 3D', detail: '路线确定后再进入 3D；这里只介绍入口，不改导览本身。' },
+        { selector: '[data-guide="export"]', title: '下载你的行程', detail: '可以下载 TXT，也可以打印并保存为 PDF。' },
+        { selector: '#home-3d', title: '最后再看 3D 导览', detail: '路线确定后再进入 3D导览。' },
       ]
       : [
         { selector: '[data-guide="search"] .home-module--search', title: 'Start with a place', detail: 'Search a city or landmark, or narrow the list with a travel preference.' },
@@ -3657,13 +2486,12 @@ function CinematicHomePage(props) {
       <HomeHeader language={language} setLanguage={setLanguage} userSession={userSession} onAccount={onSignIn} onHelp={onHelp} />
       <div className="cinematic-home-page">
         <HomeHero language={language} routeStops={routeStops} selectedStop={selectedStop} onOpenDrive={onOpenDrive} />
-        <HomeStats language={language} />
         <DestinationSection {...props} />
         <RoutePlannerSection {...props} />
         <ThreeDGuideSection language={language} selectedStop={selectedStop} routeStops={routeStops} onOpenDrive={onOpenDrive} />
         <FeatureSection language={language} favorites={props.favorites} compare={props.compare} routeStops={routeStops} userSession={userSession} onOpenService={props.onOpenService} />
-        <ReviewSection language={language} stops={filteredStops} visibleCount={props.reviewVisibleCount} onShowMore={props.onShowMoreReviews} />
-        <TravelNotesSection language={language} stops={filteredStops} />
+        <ReviewSection language={language} stops={routeStops} visibleCount={props.reviewVisibleCount} onShowMore={props.onShowMoreReviews} onCollapse={props.onCollapseReviews} />
+        <TravelNotesSection language={language} stops={routeStops} />
         <AccountSummarySection language={language} favorites={props.favorites} routeStops={routeStops} lockedIds={props.lockedIds} userSession={userSession} onSignIn={onSignIn} />
         <HomeFooter language={language} />
       </div>
@@ -3672,11 +2500,10 @@ function CinematicHomePage(props) {
 }
 
 export function HomeShowcase({ onOpenDrive }) {
-  const activeVersion = versions[0];
+  const activeVersion = ACTIVE_HOME_VERSION;
   const setActiveRouteIds = useAppStore((state) => state.setActiveRouteIds);
   const setActiveRouteGeometry = useAppStore((state) => state.setActiveRouteGeometry);
   const [hasEnteredHome, setHasEnteredHome] = useState(() => window.sessionStorage.getItem(HOME_ENTERED_KEY) === '1');
-  const [activePage, setActivePage] = useState('home');
   const [language, setLanguage] = useState(() => {
     const stored = window.localStorage.getItem(LANGUAGE_KEY);
     return stored === 'en' || stored === 'zh' ? stored : 'zh';
@@ -3711,7 +2538,6 @@ export function HomeShowcase({ onOpenDrive }) {
   const [authLoading, setAuthLoading] = useState(false);
   const [accountHistory, setAccountHistory] = useState([]);
   const [accountPlanReady, setAccountPlanReady] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [visibleCount, setVisibleCount] = useState(12);
   const [reviewVisibleCount, setReviewVisibleCount] = useState(6);
   const [detailStopId, setDetailStopId] = useState(null);
@@ -3751,7 +2577,6 @@ export function HomeShowcase({ onOpenDrive }) {
       if (query.trim() && b.searchScore !== a.searchScore) return b.searchScore - a.searchScore;
       if (sort === 'name') return nameFor(a.stop, language).localeCompare(nameFor(b.stop, language));
       if (sort === 'north') return b.stop.lat - a.stop.lat;
-      if (sort === 'model') return Number(Boolean(b.stop.modelPath)) - Number(Boolean(a.stop.modelPath));
       return landmarks.findIndex((stop) => stop.id === a.stop.id) - landmarks.findIndex((stop) => stop.id === b.stop.id);
     }).map(({ stop }) => stop);
   }, [kind, language, preference, query, region, season, sort]);
@@ -4012,29 +2837,6 @@ export function HomeShowcase({ onOpenDrive }) {
     setOptimizeMessage('');
     setRouteSaveStatus('');
   };
-  const previewRoute = (route) => {
-    setRouteIds(route.ids);
-    setSelectedId((current) => (route.ids.includes(current) ? current : route.ids[0] ?? current));
-    setLockedIds(new Set());
-    setActiveRouteIds(route.ids);
-    setActivePage('planner');
-  };
-  const startRoute = async (route) => {
-    setRouteIds(route.ids);
-    const startId = route.ids.includes(selectedId) ? selectedId : route.ids[0] ?? null;
-    if (startId) setSelectedId(startId);
-    setLockedIds(new Set());
-    setActiveRouteIds(route.ids);
-    const metrics = await fetchRouteMetrics(route.ids, routeTravelPreference).catch(() => null);
-    if (metrics?.geometryCoordinates?.length) {
-      setActiveRouteGeometry({
-        coordinates: metrics.geometryCoordinates,
-        distanceKm: metrics.distanceKm,
-        segments: activeRouteSegmentsFor(metrics),
-      });
-    }
-    onOpenDrive(startId);
-  };
   const openDriveWithCurrentRoute = async (landmarkId = null) => {
     setActiveRouteIds(routeIds);
     let metrics = routeMetricsQuery.data?.routeSignature === routeSignature
@@ -4076,7 +2878,7 @@ export function HomeShowcase({ onOpenDrive }) {
       if (!response.ok) throw new Error(payload.detail ?? 'Auth failed');
       saveAuthPayload(payload);
     } catch (error) {
-      setAuthError(homeText(language, '这次没有登录成功，请检查邮箱和密码后再试一次。', 'Sign-in did not work this time. Check your email and password and try again.'));
+      setAuthError(homeText(language, '登录失败，请检查邮箱和密码后再试一次。', 'Sign-in did not work this time. Check your email and password and try again.'));
     } finally {
       setAuthLoading(false);
     }
@@ -4212,11 +3014,11 @@ export function HomeShowcase({ onOpenDrive }) {
     onSaveRoute: saveCurrentRoute,
     onResetRoute: resetRoute,
     onClearRoute: clearRoute,
-    onPreviewRoute: previewRoute,
-    onStartRoute: startRoute,
     onShowMore: () => setVisibleCount((count) => Math.min(count + 8, filteredStops.length)),
+    onCollapse: () => setVisibleCount(12),
     reviewVisibleCount,
-    onShowMoreReviews: () => setReviewVisibleCount((count) => Math.min(count + 6, filteredStops.length)),
+    onShowMoreReviews: () => setReviewVisibleCount((count) => Math.min(count + 6, routeStops.length)),
+    onCollapseReviews: () => setReviewVisibleCount(6),
     onOpenDetail: (id) => setDetailStopId(id),
     onOpenService: (service) => {
       if (service === 'favorites' || service === 'compare') {
