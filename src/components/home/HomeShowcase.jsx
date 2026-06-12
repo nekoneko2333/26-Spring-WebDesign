@@ -658,6 +658,30 @@ function travelModeLabel(mode, language) {
   return homeText(language, '驾车', 'Driving');
 }
 
+function routeDetourHint(segment, routePreference, language) {
+  if (
+    segment.travelMode !== 'DRIVE'
+    || !segment.diagnostics?.excessiveDetour
+    || segment.diagnostics.straightDistanceKm > 8
+  ) {
+    return '';
+  }
+
+  if (routePreference === 'AUTO') {
+    return homeText(
+      language,
+      '\u81ea\u52a8\u6df7\u5408\u5df2\u4fdd\u7559\u9a7e\u8f66\uff0c\u5982\u9700\u66f4\u6162\u901f\u7684\u57ce\u5e02\u6b65\u884c\u53ef\u624b\u52a8\u5207\u6362\u201c\u6b65\u884c\u201d',
+      'Auto mix kept driving here; switch to Walk if you prefer a slower city segment',
+    );
+  }
+
+  return homeText(
+    language,
+    '\u9a7e\u8f66\u7ed5\u884c\u660e\u663e\uff0c\u53ef\u5207\u6362\u201c\u81ea\u52a8\u6df7\u5408\u201d\u6216\u201c\u6b65\u884c\u201d',
+    'Driving detour detected; try Auto mix or Walk',
+  );
+}
+
 function routeRecommendationMetrics(recommendation, metricsMap) {
   const signature = routeSignatureFor(recommendation.ids);
   const metrics = metricsMap[signature];
@@ -726,9 +750,7 @@ function routeSegmentsFor(routeStops, metricSegments = []) {
 }
 
 function activeRouteSegmentsFor(metrics) {
-  return (metrics?.segments ?? []).flatMap((segment) => (
-    segment.parts?.length ? segment.parts : [segment]
-  ));
+  return metrics?.segments ?? [];
 }
 
 function estimatedTravelModeForStops(from, to) {
@@ -2122,7 +2144,17 @@ function RoutePlannerSection(props) {
           <section className="home-module home-module--schema">
             <div className="home-module__head"><span>{homeText(language, '站点连接', 'Stop connections')}</span><strong>{routeSegments.length}</strong></div>
             <div className="home-schema-list">
-              {routeSegments.map((segment, index) => <article key={segment.from.id + '-' + segment.to.id}><span>{String(index + 1).padStart(2, '0')}</span><strong>{nameFor(segment.from, language) + ' -> ' + nameFor(segment.to, language)}</strong><small>{formatKm(segment.distance)} / {formatDuration(segment.duration)} · {travelModeLabel(segment.travelMode, language)} · {routeProviderLabel(segment.source, language)}</small>{segment.travelMode === 'DRIVE' && segment.diagnostics?.excessiveDetour && segment.diagnostics.straightDistanceKm <= 8 && <em>{homeText(language, '驾车绕行明显，可切换“自动混合”或“步行”', 'Driving detour detected; try Auto mix or Walk')}</em>}</article>)}
+              {routeSegments.map((segment, index) => {
+                const detourHint = routeDetourHint(segment, props.routeTravelPreference, language);
+                return (
+                  <article key={segment.from.id + '-' + segment.to.id}>
+                    <span>{String(index + 1).padStart(2, '0')}</span>
+                    <strong>{nameFor(segment.from, language) + ' -> ' + nameFor(segment.to, language)}</strong>
+                    <small>{formatKm(segment.distance)} / {formatDuration(segment.duration)} · {travelModeLabel(segment.travelMode, language)} · {routeProviderLabel(segment.source, language)}</small>
+                    {detourHint && <em>{detourHint}</em>}
+                  </article>
+                );
+              })}
             </div>
           </section>
           <section className="home-module home-module--metrics">

@@ -39,6 +39,11 @@ export function worldToLngLat(worldX, worldZ) {
   return { lon, lat };
 }
 
+const NAVIGATION_COORDINATES = {
+  italy_q1374: { lon: 7.6314, lat: 45.9369 }, // Matterhorn access: Breuil-Cervinia side.
+  italy_q583: { lon: 6.9584, lat: 45.8150 }, // Mont Blanc access: Courmayeur / Skyway side.
+};
+
 function makeLandmark({
   id,
   name,
@@ -496,6 +501,7 @@ export const landmarks = [
         visitorInfo: item.visitorInfo ?? null,
         lon,
         lat,
+        navigationCoordinates: NAVIGATION_COORDINATES[item.id] ?? existing.navigationCoordinates ?? null,
         position: lngLatToWorld(lon, lat),
         modelKind: enriched.category ?? existing.modelKind,
       };
@@ -518,6 +524,7 @@ export const landmarks = [
       location: enriched.location,
       searchMeta: enriched.search,
       visitorInfo: item.visitorInfo ?? null,
+      navigationCoordinates: NAVIGATION_COORDINATES[item.id] ?? null,
     };
   }),
   ...baseLandmarks.filter((landmark) => !liveLandmarkIds.has(landmark.id)),

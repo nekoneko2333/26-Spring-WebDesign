@@ -146,3 +146,117 @@
     transform-origin: bottom right;
   }
 }
+
+/* Final compass placement and sketch styling for the 3D HUD. */
+.free-view-compass {
+  top: auto;
+  right: 340px;
+  bottom: 104px;
+  z-index: 39;
+  width: 96px;
+  padding: 9px 9px 8px;
+  border: 3px solid #2d2d2d;
+  border-radius: 255px 18px 225px 18px / 18px 225px 18px 255px;
+  background:
+    radial-gradient(#e5e0d8 0.8px, transparent 0.9px),
+    #fdfbf7;
+  background-size: 18px 18px, auto;
+  box-shadow: 4px 4px 0 #2d2d2d;
+  backdrop-filter: none;
+  transform: rotate(1deg);
+}
+
+.free-view-compass__dial {
+  width: 58px;
+  height: 58px;
+  border: 3px solid #2d2d2d;
+  background: #fff9c4;
+}
+
+.free-view-compass__dial::before,
+.free-view-compass__dial::after {
+  background: rgba(45, 45, 45, 0.34);
+}
+
+.free-view-compass__dial strong,
+.free-view-compass__dial span {
+  color: #2d2d2d;
+  font: 700 11px/1 "Patrick Hand", "Noto Sans SC", cursive;
+}
+
+.free-view-compass__north {
+  color: #ff4d4d !important;
+}
+
+.free-view-compass > i {
+  top: 2px;
+  border-bottom-color: #ff4d4d;
+}
+
+.free-view-compass > p {
+  max-width: 82px;
+  margin-top: 6px;
+  overflow: hidden;
+  color: #2d2d2d;
+  font: 400 12px/1.15 "Patrick Hand", "Noto Sans SC", cursive;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1180px) {
+  .free-view-compass {
+    right: 318px;
+    bottom: 102px;
+    transform: scale(0.9) rotate(1deg);
+    transform-origin: bottom right;
+  }
+}
+
+@media (max-width: 780px) {
+  .free-view-compass {
+    top: 116px;
+    right: auto;
+    bottom: auto;
+    left: 10px;
+    transform: scale(0.76) rotate(1deg);
+    transform-origin: bottom right;
+  }
+}
+
+/* Restore compass to the original right-side HUD area while keeping the sketch styling. */
+.free-view-compass {
+  top: min(520px, calc(100dvh - 260px));
+  right: 20px;
+  bottom: auto;
+  left: auto;
+  transform: rotate(1deg);
+  transform-origin: top right;
+}
+
+@media (max-width: 1180px) {
+  .free-view-compass {
+    right: 16px;
+    bottom: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .free-view-compass {
+    top: auto;
+    right: 18px;
+    bottom: 150px;
+    left: auto;
+    transform: scale(0.88) rotate(1deg);
+    transform-origin: bottom right;
+  }
+}
+
+@media (max-width: 780px) {
+  .free-view-compass {
+    top: auto;
+    right: 10px;
+    bottom: 118px;
+    left: auto;
+    transform: scale(0.76) rotate(1deg);
+    transform-origin: bottom right;
+  }
+}

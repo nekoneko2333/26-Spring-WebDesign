@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../../state/useAppStore.js';
 import { landmarks } from '../../data/landmarks.js';
-import { useLandmarkReviews } from '../../hooks/useLandmarkReviews.js';
 import { ModelViewerOverlay } from './ModelViewerOverlay.jsx';
 import { reviewLocales } from '../../data/reviewLocales.js';
 import { travelLandmarkMeta } from '../../data/travelGuide.js';
@@ -207,9 +206,9 @@ function getLandmarkName(landmark, language) {
 }
 
 function getLandmarkDescription(landmark, language) {
-  return travelLandmarkMeta[landmark?.id]?.blurb?.[language]
-    ?? landmark?.localizedDescriptions?.[language]
+  return landmark?.localizedDescriptions?.[language]
     ?? landmark?.description
+    ?? travelLandmarkMeta[landmark?.id]?.blurb?.[language]
     ?? '';
 }
 
@@ -239,6 +238,9 @@ function formatHour(hour) {
 }
 
 export function UIOverlay({ isStarted, onClose }) {
+  const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  const [arrivalToastId, setArrivalToastId] = useState(null);
+  const [activeTimelineStopId, setActiveTimelineStopId] = useState(null);
   const {
     language,
     cameraMode,
@@ -249,10 +251,9 @@ export function UIOverlay({ isStarted, onClose }) {
     routeHour,
     routeProgress,
     activeRouteIds,
+    activeRouteSegments,
     activeRouteDistanceKm,
     guidedTourState,
-    guidedTourLandmarkId,
-    guidedTourMessage,
     vehicleSpeed,
     routePlaybackSpeed,
     arrivalNotice,
@@ -266,7 +267,6 @@ export function UIOverlay({ isStarted, onClose }) {
     setAutoDrive,
     setRoutePlaybackSpeed,
     resetVehicleTour,
-    continueVehicleTour,
     toggleMapView,
     toggleAutoDrive,
     openLandmarkFocus,
@@ -276,17 +276,11 @@ export function UIOverlay({ isStarted, onClose }) {
 
   const nearbyLandmark = landmarks.find((item) => item.id === nearbyLandmarkId);
   const selectedLandmark = landmarks.find((item) => item.id === selectedLandmarkId);
-  const guidedTourLandmark = landmarks.find((item) => item.id === guidedTourLandmarkId);
   const arrivalLandmark = landmarks.find((item) => item.id === arrivalNotice?.landmarkId);
+  const focusTargetId = nearbyLandmarkId ?? arrivalNotice?.landmarkId;
   const displayLandmark = selectedLandmark ?? nearbyLandmark;
-  const { data: reviewPayload, isLoading } = useLandmarkReviews(selectedLandmarkId, language);
   const locale = reviewLocales[language];
   const routeCopy = driveRouteCopy[language] ?? driveRouteCopy.en;
-  const localizedReviews = useMemo(() => {
-    if (!selectedLandmarkId) return [];
-    return locale.landmarks[selectedLandmarkId] ?? [];
-  }, [language, locale.landmarks, selectedLandmarkId]);
-  const comments = localizedReviews.length > 0 ? localizedReviews : reviewPayload?.reviews ?? [];
   const routeLocked = focusPanelOpen || modelViewerOpen;
   const routePoint = routeContext?.point;
   const routeSegment = routeContext?.segment;
@@ -294,6 +288,36 @@ export function UIOverlay({ isStarted, onClose }) {
   const panelCopy = routeCopy.tourPanel;
   const displayRouteIds = activeRouteIds.length ? activeRouteIds : ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
   const routeStops = displayRouteIds.map((id) => landmarks.find((item) => item.id === id)).filter(Boolean);
+  const timelinePositions = useMemo(() => {
+    if (routeStops.length <= 1) return routeStops.map(() => 0);
+    const distances = routeStops.slice(1).map((stop, index) => {
+      const from = routeStops[index];
+      const segment = activeRouteSegments.find((item) => (
+        (item.fromId === from.id && item.toId === stop.id) || item.index === index
+      ));
+      const distance = Number(segment?.distanceKm ?? 0);
+      return Number.isFinite(distance) && distance > 0 ? distance : 1;
+    });
+    const total = distances.reduce((sum, distance) => sum + distance, 0) || 1;
+    let cursor = 0;
+    return routeStops.map((_, index) => {
+      if (index === 0) return 0;
+      cursor += distances[index - 1] ?? 0;
+      return Math.min(100, Math.max(0, (cursor / total) * 100));
+    });
+  }, [activeRouteSegments, routeStops]);
+  const timelineOverlapGroups = useMemo(() => {
+    const groups = [];
+    routeStops.forEach((_, index) => {
+      const previousIndex = index - 1;
+      const previousGroup = groups.at(-1);
+      const overlapsPrevious = previousIndex >= 0
+        && Math.abs((timelinePositions[index] ?? 0) - (timelinePositions[previousIndex] ?? 0)) <= 2.8;
+      if (overlapsPrevious && previousGroup) previousGroup.push(index);
+      else groups.push([index]);
+    });
+    return groups;
+  }, [routeStops, timelinePositions]);
   const progressPercent = Math.round((routeProgress ?? 0) * 100);
   const contextualStopId = routeContext?.currentStopId ?? arrivalNotice?.landmarkId;
   const contextualStopIndex = routeStops.findIndex((stop) => stop.id === contextualStopId);
@@ -304,8 +328,10 @@ export function UIOverlay({ isStarted, onClose }) {
   const nextStop = routeStops.find((_, index) => index > currentStopIndex) ?? null;
   const isPaused = !autoDrive;
   const isComplete = progressPercent >= 100 || guidedTourState === 'FINISHED';
-  const tourHint = isComplete ? panelCopy.completeHint : autoDrive ? '' : progressPercent > 0 ? panelCopy.pausedHint : panelCopy.startHint;
   const arrivalMeta = getArrivalMeta(arrivalLandmark?.id);
+  const selectedMeta = travelLandmarkMeta[selectedLandmark?.id] ?? {};
+  const selectedArrivalMeta = getArrivalMeta(selectedLandmark?.id);
+  const selectedIsArrival = Boolean(selectedLandmark?.id && selectedLandmark.id === arrivalNotice?.landmarkId);
   const [timelineLandmarkId, setTimelineLandmarkId] = useState(null);
   const timelineLandmark = landmarks.find((item) => item.id === timelineLandmarkId);
   const timelineMeta = getArrivalMeta(timelineLandmark?.id);
@@ -321,6 +347,22 @@ export function UIOverlay({ isStarted, onClose }) {
       && !timelineLandmark
       && !isComplete,
   );
+  const handleTimelineStopClick = (index) => {
+    const clickedStop = routeStops[index];
+    if (!clickedStop) return;
+    const groupIndices = timelineOverlapGroups.find((group) => group.includes(index)) ?? [index];
+    const overlapGroup = groupIndices.map((stopIndex) => ({
+      stop: routeStops[stopIndex],
+      index: stopIndex,
+    }));
+    const activeIndex = overlapGroup.findIndex((item) => item.stop.id === activeTimelineStopId);
+    const target = activeIndex >= 0
+      ? overlapGroup[(activeIndex + 1) % overlapGroup.length]
+      : overlapGroup[0];
+
+    setActiveTimelineStopId(target.stop.id);
+    jumpVehicleToLandmark(target.stop.id);
+  };
 
   useEffect(() => {
     if (!isStarted) return undefined;
@@ -338,13 +380,17 @@ export function UIOverlay({ isStarted, onClose }) {
         return;
       }
 
-      if (key === 'f' && nearbyLandmarkId && !modelViewerOpen) {
+      if (key === 'f' && focusTargetId && !modelViewerOpen) {
         setAutoDrive(false);
-        if (selectedLandmarkId === nearbyLandmarkId && !focusPanelOpen) {
+        if (focusPanelOpen && selectedLandmarkId === focusTargetId) {
+          clearLandmark();
+          return;
+        }
+        if (selectedLandmarkId === focusTargetId) {
           setFocusPanelOpen(true);
           return;
         }
-        openLandmarkFocus(nearbyLandmarkId);
+        openLandmarkFocus(focusTargetId);
         return;
       }
 
@@ -366,14 +412,13 @@ export function UIOverlay({ isStarted, onClose }) {
     focusPanelOpen,
     isStarted,
     modelViewerOpen,
-    nearbyLandmarkId,
+    focusTargetId,
     openLandmarkFocus,
     routeLocked,
     selectedLandmarkId,
     setAutoDrive,
     setRoutePlaybackSpeed,
     resetVehicleTour,
-    continueVehicleTour,
     setFocusPanelOpen,
     setModelViewerOpen,
     toggleAutoDrive,
@@ -382,7 +427,15 @@ export function UIOverlay({ isStarted, onClose }) {
 
   useEffect(() => {
     setTimelineLandmarkId(null);
+    setActiveTimelineStopId(null);
   }, [displayRouteIds.join('|')]);
+
+  useEffect(() => {
+    if (!arrivalNotice?.landmarkId) return undefined;
+    setArrivalToastId(arrivalNotice.landmarkId);
+    const timeoutId = window.setTimeout(() => setArrivalToastId(null), 3200);
+    return () => window.clearTimeout(timeoutId);
+  }, [arrivalNotice?.landmarkId]);
 
   useEffect(() => {
     document.body.classList.toggle('route-locked', routeLocked);
@@ -395,10 +448,11 @@ export function UIOverlay({ isStarted, onClose }) {
   }, [showPoiBriefing]);
 
   useEffect(() => {
-    if (!selectedLandmarkId || !nearbyLandmarkId || selectedLandmarkId === nearbyLandmarkId) return;
+    if (!selectedLandmarkId || selectedLandmarkId === nearbyLandmarkId || selectedLandmarkId === arrivalNotice?.landmarkId) return;
+    if (!nearbyLandmarkId && !arrivalNotice?.landmarkId) return;
     if (focusPanelOpen || modelViewerOpen) return;
     clearLandmark();
-  }, [clearLandmark, focusPanelOpen, modelViewerOpen, nearbyLandmarkId, selectedLandmarkId]);
+  }, [arrivalNotice?.landmarkId, clearLandmark, focusPanelOpen, modelViewerOpen, nearbyLandmarkId, selectedLandmarkId]);
 
   if (!isStarted) return null;
 
@@ -407,34 +461,19 @@ export function UIOverlay({ isStarted, onClose }) {
 
   return (
     <>
-      <div className="hud-title is-visible">{routeCopy.title}</div>
-      <div className={`hud-mode is-visible ${autoDrive ? 'is-autodriving' : ''}`}>
-        {cameraMode === 'focus' ? locale.ui.landmarkFocus : cameraMode === 'follow' ? (autoDrive ? locale.ui.autoDriving : locale.ui.drivingView) : cameraMode === 'free' ? panelCopy.freeView : panelCopy.mapView}
-      </div>
-
-      <div className={`guided-tour-status is-visible guided-tour-status--${guidedTourState || 'IDLE'}`} aria-live="polite">
-        <span>{routeCopy.guideStateLabel}</span>
-        <strong>{routeCopy.guideStates[guidedTourState] ?? routeCopy.guideStates.IDLE}</strong>
-        {(guidedTourLandmark || guidedTourMessage || tourHint) && (
-          <p>{guidedTourMessage || getLandmarkName(guidedTourLandmark, language) || tourHint}</p>
-        )}
-      </div>
-
-      <button className={`btn-map-view ${cameraMode !== 'map' && !routeLocked ? 'is-visible' : ''}`} onClick={() => setCameraMode('map')}>
-        <svg className="btn-map-view__icon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-          <rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="0.6" />
-          <rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor" />
-          <rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor" />
-          <rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="0.6" />
-        </svg>
-        {locale.ui.mapView}
-      </button>
-
-      <aside className="tour-info-panel" aria-live="polite">
-        <p className="tour-info-panel__eyebrow">{language === 'zh' ? '路线便签' : 'Route notes'}</p>
-        <h2>{panelCopy.defaultRoute}</h2>
+      <aside className={`tour-info-panel ${controlsCollapsed ? 'is-collapsed' : ''}`} aria-live="polite">
+        <button
+          className="tour-info-panel__toggle"
+          type="button"
+          onClick={() => setControlsCollapsed((current) => !current)}
+          aria-expanded={!controlsCollapsed}
+        >
+          {controlsCollapsed ? (language === 'zh' ? '展开' : 'Open') : (language === 'zh' ? '收起' : 'Hide')}
+        </button>
+        {!controlsCollapsed && (
+          <>
+        <p className="tour-info-panel__eyebrow">{language === 'zh' ? '导览控制' : 'Guide controls'}</p>
         <dl>
-          <div><dt>{panelCopy.routeName}</dt><dd>{activeRouteIds.length ? panelCopy.freeRoute : panelCopy.defaultRoute}</dd></div>
           <div><dt>{panelCopy.currentStop}</dt><dd>{isComplete ? panelCopy.completeHint : getLandmarkName(currentStop, language) || panelCopy.noStop}</dd></div>
           <div><dt>{panelCopy.nextStop}</dt><dd>{isComplete ? panelCopy.finished : getLandmarkName(nextStop, language) || panelCopy.finished}</dd></div>
           <div><dt>{panelCopy.progress}</dt><dd>{progressPercent}%</dd></div>
@@ -467,41 +506,35 @@ export function UIOverlay({ isStarted, onClose }) {
           <button type="button" onClick={() => setAutoDrive(false)} disabled={!autoDrive}>{panelCopy.pause}</button>
           <button type="button" onClick={resetVehicleTour}>{panelCopy.reset}</button>
         </div>
+          </>
+        )}
       </aside>
 
-      {arrivalLandmark && (
-        <aside className="arrival-card" role="dialog" aria-live="polite">
-          <p>{panelCopy.arrivalNotice} · {panelCopy.arrived}</p>
-          <h2>{getLandmarkName(arrivalLandmark, language)}</h2>
-          <span>{getShortText(getLandmarkDescription(arrivalLandmark, language))}</span>
-          <div className="arrival-card__meta">
-            <strong>{travelLandmarkMeta[arrivalLandmark.id]?.type?.[language] ?? '精选景点'}</strong>
-            <strong>{panelCopy.rating} {arrivalMeta.rating}</strong>
-            <strong>{panelCopy.stay} {arrivalMeta.stay}</strong>
-          </div>
-          <p className="arrival-card__reason">推荐理由：适合作为本段路线的重点停靠点，建议短暂停留拍照并查看建筑细节。</p>
-          <div className="arrival-card__actions">
-            <button type="button" onClick={continueVehicleTour}>{arrivalNotice?.source === 'jump' ? panelCopy.continueFromHere : panelCopy.continue}</button>
-            <button type="button" onClick={() => openLandmarkFocus(arrivalLandmark.id)}>{panelCopy.detail}</button>
-          </div>
+      {arrivalToastId && (
+        <aside className="arrival-toast" aria-live="polite">
+          <span>{language === 'zh' ? '已到达' : 'Arrived'}</span>
+          <strong>{getLandmarkName(landmarks.find((item) => item.id === arrivalToastId), language)}</strong>
         </aside>
       )}
 
 
-      <div className="route-timeline" aria-label={panelCopy.timeline}>
-        <p>{panelCopy.timeline}</p>
+      <div className="route-timeline" aria-label={panelCopy.timeline} style={{ '--route-progress-ratio': String(Math.min(1, Math.max(0, routeProgress ?? 0))) }}>
         <div className="route-timeline__track">
           {routeStops.map((stop, index) => {
-            const stopProgress = routeStops.length <= 1 ? 0 : index / (routeStops.length - 1);
-            const reached = arrivedLandmarkIds.includes(stop.id) || routeProgress >= stopProgress || isComplete;
-            const current = !isComplete && index === Math.min(currentStopIndex + 1, routeStops.length - 1);
+            const stopRatio = (timelinePositions[index] ?? 0) / 100;
+            const reached = isComplete || (routeProgress ?? 0) >= Math.max(0, stopRatio - 0.004);
+            const current = !isComplete && index === currentStopIndex;
             const statusText = reached ? panelCopy.reached : current ? panelCopy.heading : panelCopy.pending;
             return (
               <button
                 key={stop.id}
                 type="button"
-                className={`route-timeline__stop ${reached ? 'is-reached' : ''} ${current ? 'is-current' : ''}`}
-                onClick={() => jumpVehicleToLandmark(stop.id)}
+                className={`route-timeline__stop ${reached ? 'is-reached' : ''} ${current ? 'is-current' : ''} ${activeTimelineStopId === stop.id ? 'is-active-layer' : ''}`}
+                style={{
+                  '--stop-ratio': String((timelinePositions[index] ?? 0) / 100),
+                  '--stop-z': activeTimelineStopId === stop.id ? 40 : 2 + index,
+                }}
+                onClick={() => handleTimelineStopClick(index)}
               >
                 <span>{index + 1}</span>
                 <strong>{getLandmarkName(stop, language)}</strong>
@@ -515,7 +548,6 @@ export function UIOverlay({ isStarted, onClose }) {
       {timelineLandmark && (
         <aside className="timeline-popover">
           <button type="button" onClick={() => setTimelineLandmarkId(null)}>×</button>
-          <p>{panelCopy.timeline}</p>
           <h2>{getLandmarkName(timelineLandmark, language)}</h2>
           <span>{getShortText(getLandmarkDescription(timelineLandmark, language), 52)}</span>
           <div><strong>{panelCopy.rating} {timelineMeta.rating}</strong><strong>{panelCopy.stay} {timelineMeta.stay}</strong></div>
@@ -526,7 +558,7 @@ export function UIOverlay({ isStarted, onClose }) {
       {isComplete && (
         <aside className="tour-summary-card" role="dialog" aria-live="polite">
           <p>{panelCopy.summaryTitle}</p>
-          <h2>{panelCopy.defaultRoute}</h2>
+          <h2>{routeStops.length > 1 ? `${getLandmarkName(routeStops[0], language)} -> ${getLandmarkName(routeStops.at(-1), language)}` : panelCopy.freeRoute}</h2>
           <div><span>{panelCopy.visitedCount}</span><strong>{visitedCount} / {routeStops.length}</strong></div>
           <div><span>{panelCopy.routeDistance}</span><strong>{distanceText}</strong></div>
           <small>{panelCopy.nextStep}</small>
@@ -543,7 +575,7 @@ export function UIOverlay({ isStarted, onClose }) {
         <span className="hud-key hud-key--boost"><kbd>Shift</kbd> {language === 'zh' ? '加速' : 'Boost'}</span>
         <span className="hud-key"><kbd>R</kbd> {locale.ui.auto}</span>
         <span className="hud-key"><kbd>V</kbd> {locale.ui.view}</span>
-        <span className="hud-key"><kbd>F</kbd> {locale.ui.explore}</span>
+        <span className="hud-key"><kbd>F</kbd> {focusTargetId ? (language === 'zh' ? '查看详细信息' : 'View details') : locale.ui.explore}</span>
       </div>
 
       <div className="hud-time is-visible">
@@ -571,53 +603,37 @@ export function UIOverlay({ isStarted, onClose }) {
         </div>
       )}
 
-      <div className={`interact-prompt ${nearbyLandmarkId && cameraMode !== 'map' && !routeLocked ? 'is-visible' : ''}`} aria-live="polite">
-        <span className="interact-prompt__key">F</span>
-        <span className="interact-prompt__text">{nearbyLandmarkId ? locale.ui.openSideBriefing : locale.ui.cruiseAndDiscover}</span>
-      </div>
-
       <aside className={`poi-side poi-side--left ${showPoiBriefing ? 'is-visible' : ''}`} aria-live="polite">
         <div className="poi-side__panel">
-          <p className="poi-side__eyebrow">{locale.ui.routeBriefing}</p>
           <h2 className="poi-side__title">{getLandmarkName(displayLandmark, language) || 'Landmark'}</h2>
-          <p className="poi-side__body">{getLandmarkDescription(displayLandmark, language)}</p>
-          <div className="poi-side__actions">
-            <button className="poi-side__btn" type="button" onClick={() => displayLandmark && openLandmarkFocus(displayLandmark.id)}>
-              {locale.ui.enterFocus}
-            </button>
-          </div>
         </div>
       </aside>
 
       <div className={`focus-shell ${focusPanelOpen ? 'is-visible' : ''}`} aria-hidden={!focusPanelOpen}>
         <aside className="focus-side focus-side--left" role="dialog" aria-modal="true" aria-labelledby="focus-title">
           <button className="focus-back" type="button" onClick={() => clearLandmark()}>{locale.ui.backToRoute}</button>
-          <p className="focus-tag">{locale.ui.architecturalStory}</p>
           <h2 id="focus-title" className="focus-title">{getLandmarkName(selectedLandmark, language) || 'Landmark'}</h2>
           <p className="focus-description">{getLandmarkDescription(selectedLandmark, language)}</p>
+          {selectedLandmark && (
+            <div className="focus-detail-grid">
+              <span>{selectedMeta.type?.[language] ?? (language === 'zh' ? '精选景点' : 'Featured stop')}</span>
+              <span>{selectedMeta.city?.[language] ?? selectedLandmark.city}</span>
+              <span>{selectedMeta.region?.[language] ?? selectedLandmark.country}</span>
+              <span>{selectedMeta.season?.[language] ?? (language === 'zh' ? '建议现场观察光线与人流' : 'Check light and crowds on site')}</span>
+              <span>{panelCopy.rating} {selectedArrivalMeta.rating}</span>
+              <span>{panelCopy.stay} {selectedArrivalMeta.stay}</span>
+            </div>
+          )}
+          {selectedIsArrival && (
+            <div className="focus-arrival-actions">
+              <p>{language === 'zh' ? '推荐理由：适合作为本段路线的重点停靠点，建议短暂停留拍照并查看建筑细节。' : 'Recommended as a key stop for this route segment. Pause briefly for photos and architectural details.'}</p>
+            </div>
+          )}
           {selectedLandmark && (
             <button className="focus-model-btn" type="button" onClick={() => setModelViewerOpen(true)}>
               {locale.ui.view3dModel}
             </button>
           )}
-        </aside>
-
-        <aside className="focus-side focus-side--right">
-          <p className="focus-tag">{locale.ui.fieldNotes}</p>
-          <div className="focus-reviews">
-            {isLoading && <p className="focus-review-empty">{locale.ui.loadingReviews}</p>}
-            {!isLoading && comments.length === 0 && <p className="focus-review-empty">{locale.ui.noReviews}</p>}
-            {comments.map((comment) => (
-              <article key={comment.id ?? `${comment.author}-${comment.source}`} className="focus-review-card">
-                <div className="focus-review-card__meta">
-                  <span>{comment.author}</span>
-                  {comment.score != null && <span>{comment.score}</span>}
-                </div>
-                <p className="focus-review-card__body">{comment.comment}</p>
-                <p className="focus-review-card__source">{comment.source}</p>
-              </article>
-            ))}
-          </div>
         </aside>
       </div>
 

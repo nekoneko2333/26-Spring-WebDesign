@@ -101,11 +101,14 @@ export const useAppStore = create((set, get) => ({
     routeDay: routeDay ?? state.routeDay,
     routeHour: routeHour ?? state.routeHour,
   })),
-  setActiveRouteIds: (activeRouteIds) => set((state) => ({
+  setActiveRouteIds: (activeRouteIds) => set((state) => {
+    const sameRoute = state.activeRouteIds.length === activeRouteIds.length
+      && state.activeRouteIds.every((id, index) => id === activeRouteIds[index]);
+    return {
     activeRouteIds,
-    activeRouteGeometryCoordinates: [],
-    activeRouteSegments: [],
-    activeRouteDistanceKm: null,
+    activeRouteGeometryCoordinates: sameRoute ? state.activeRouteGeometryCoordinates : [],
+    activeRouteSegments: sameRoute ? state.activeRouteSegments : [],
+    activeRouteDistanceKm: sameRoute ? state.activeRouteDistanceKm : null,
     tourResetToken: state.tourResetToken + 1,
     autoDrive: false,
     routeProgress: 0,
@@ -121,7 +124,8 @@ export const useAppStore = create((set, get) => ({
     arrivalNotice: null,
     arrivedLandmarkIds: [],
     cameraMode: 'follow',
-  })),
+    };
+  }),
   setActiveRouteGeometry: ({ coordinates = [], distanceKm = null, segments = [] } = {}) => set((state) => ({
     activeRouteGeometryCoordinates: coordinates,
     activeRouteSegments: segments,

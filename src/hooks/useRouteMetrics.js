@@ -14,7 +14,11 @@ const DRIVABLE_ACCESS_POINTS = {
 const VENICE_ACCESS_POINT = { lon: 12.3181, lat: 45.4379 };
 const landmarkCoordinates = new Map(landmarks.map((landmark) => [
   landmark.id,
-  { lon: landmark.lon, lat: landmark.lat, city: landmark.location?.city?.en ?? null },
+  {
+    lon: landmark.navigationCoordinates?.lon ?? landmark.lon,
+    lat: landmark.navigationCoordinates?.lat ?? landmark.lat,
+    city: landmark.location?.city?.en ?? null,
+  },
 ]));
 
 function haversineKm(a, b) {
@@ -49,6 +53,17 @@ function shouldPreferWalking(walk, drive) {
     && walk.durationHours > 0
     && drive.durationHours > 0
     && walk.durationHours <= drive.durationHours * 0.8;
+}
+
+function shouldAutoUseWalking(walk, drive) {
+  if (shouldPreferWalking(walk, drive)) return true;
+  if (!walk || !drive || walk.mode === 'estimated' || drive.mode === 'estimated') return false;
+
+  const shortWalk = walk.distanceKm > 0 && walk.distanceKm <= 1.6 && walk.durationHours <= 0.4;
+  const driveLoopsAround = drive.diagnostics?.excessiveDetour
+    || (drive.distanceKm > 0 && walk.distanceKm > 0 && drive.distanceKm >= walk.distanceKm * 1.6);
+
+  return shortWalk && driveLoopsAround;
 }
 
 function osrmUrl(coords, travelMode) {
@@ -180,7 +195,7 @@ async function buildMixedSegment(from, to, index, routePreference = 'AUTO') {
         planLeg([from, to], 'DRIVE'),
         planLeg([from, to], 'WALK'),
       ]);
-      parts.push(shouldPreferWalking(walk, drive) ? walk : drive);
+      parts.push(shouldAutoUseWalking(walk, drive) ? walk : drive);
     } else {
       parts.push(await planLeg([
         from.city === 'Venice' && fromAccess && baseMode === 'DRIVE' ? { ...fromAccess, city: from.city } : from,

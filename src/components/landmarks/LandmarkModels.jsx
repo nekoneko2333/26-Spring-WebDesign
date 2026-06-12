@@ -113,11 +113,11 @@ function LandmarkModel({ landmark }) {
   return (
     <group position={[landmark.position[0], baseY, landmark.position[2]]} rotation={landmark.rotation} onClick={handleJumpToLandmark}>
       <mesh position={[0, 0.008, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <cylinderGeometry args={[0.3, 0.36, 0.016, 12]} />
+        <cylinderGeometry args={[0.18, 0.22, 0.012, 12]} />
         <meshStandardMaterial color={isActiveStop ? '#d6c49a' : '#b8aa8a'} roughness={0.86} transparent opacity={isActiveStop ? 0.52 : 0.28} />
       </mesh>
       <mesh position={[0, 0.016, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.3, 0.38, 40]} />
+        <ringGeometry args={[0.2, 0.26, 40]} />
         <meshBasicMaterial color={isActiveStop ? '#f0d490' : '#7ed0e4'} transparent opacity={isActiveStop ? 0.44 : 0.22} depthWrite={false} blending={THREE.AdditiveBlending} side={THREE.DoubleSide} />
       </mesh>
       {landmark.modelPath ? (
@@ -127,11 +127,11 @@ function LandmarkModel({ landmark }) {
       ) : <MonumentLandmarkMarker landmark={landmark} highlighted={isHighlighted} />}
       <pointLight position={[0, 0.75, 0]} color="#f0d490" distance={3.2} intensity={isHighlighted ? 0.32 : 0.08} />
       <mesh position={[0, 0.4, 0]} visible={false} onClick={handleJumpToLandmark}>
-        <cylinderGeometry args={[0.45, 0.45, 0.9, 16]} />
+        <cylinderGeometry args={[0.28, 0.28, 0.8, 16]} />
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
       {isHighlighted && (
-        <Html position={[0, 0.95, 0]} center distanceFactor={18} transform={false} sprite occlude={false}>
+        <Html position={[0, 0.9, 0]} center distanceFactor={22} transform={false} sprite occlude={false}>
           <div className={`landmark-chip ${isActiveStop ? 'is-active' : ''}`}>
             {displayName}
           </div>

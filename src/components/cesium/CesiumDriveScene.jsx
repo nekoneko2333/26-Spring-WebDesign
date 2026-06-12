@@ -41,8 +41,6 @@ const START_PROGRESS = 0;
 const UI_SYNC_INTERVAL_MS = 100;
 const DISPLAY_ROUTE_MAX_POINTS = 12000;
 const ROUTE_SIMPLIFY_TOLERANCE_DEGREES = 0.000045;
-const PASSED_CHUNK_KM = 5;
-const ACTIVE_TRAIL_UPDATE_KM = 0.4;
 const NORMAL_SPEED_KMH = 100;
 const BOOST_SPEED_KMH = 175;
 const WALK_SPEED_KMH = 5;
@@ -54,6 +52,7 @@ const BUILDING_OVERFLOW_BYTES = 48 * 1024 * 1024;
 const ITALY_RECTANGLE = Rectangle.fromDegrees(6.2, 36.1, 19, 47.6);
 const DAYLIGHT_TIME = JulianDate.fromIso8601('2026-06-21T10:30:00Z');
 const tempGeodesic = new EllipsoidGeodesic();
+let landmarkDotImage = null;
 
 function routePositions(points) {
   return points.map(({ lon, lat }) => Cartesian3.fromDegrees(lon, lat));
@@ -329,29 +328,103 @@ function getStreamingPressure(queue, wasPaused) {
   return { level: 'low', factor: 1, paused: false };
 }
 
+function getLandmarkDotImage() {
+  if (landmarkDotImage) return landmarkDotImage;
+  const canvas = document.createElement('canvas');
+  canvas.width = 28;
+  canvas.height = 28;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, 28, 28);
+  context.beginPath();
+  context.arc(14, 14, 8, 0, Math.PI * 2);
+  context.fillStyle = '#ff4d4d';
+  context.fill();
+  context.lineWidth = 4;
+  context.strokeStyle = '#ffffff';
+  context.stroke();
+  context.lineWidth = 1.5;
+  context.strokeStyle = '#2d2d2d';
+  context.stroke();
+  landmarkDotImage = canvas;
+  return landmarkDotImage;
+}
+
+function cameraProfileForLandmark(landmark) {
+  if (landmark?.modelKind === 'mountain') {
+    return { clearance: 18000, fallbackHeight: 24000, offsetKm: 0, pitch: -89, topDown: true };
+  }
+  if (landmark?.modelKind === 'lake' || landmark?.modelKind === 'coast') {
+    return { clearance: 2600, fallbackHeight: 5200, offsetKm: 3.2, pitch: -38 };
+  }
+  return { clearance: 1400, fallbackHeight: 2600, offsetKm: 1.6, pitch: -45 };
+}
+
+function offsetCoordinate(lon, lat, heading, distanceKm) {
+  const behindHeading = heading + Math.PI;
+  const latDelta = Math.cos(behindHeading) * distanceKm / 111.32;
+  const lonDelta = Math.sin(behindHeading) * distanceKm / (111.32 * Math.max(0.2, Math.cos(CesiumMath.toRadians(lat))));
+  return { lon: lon + lonDelta, lat: lat + latDelta };
+}
+
+function headingBetweenCoordinates(from, to) {
+  const lat1 = CesiumMath.toRadians(from.lat);
+  const lat2 = CesiumMath.toRadians(to.lat);
+  const deltaLon = CesiumMath.toRadians(to.lon - from.lon);
+  const y = Math.sin(deltaLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2)
+    - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon);
+  return CesiumMath.zeroToTwoPi(Math.atan2(y, x));
+}
+
+function orderedIndexedLandmarks(route) {
+  const stops = route.routeIds
+    .map((id) => landmarks.find((item) => item.id === id))
+    .filter(Boolean)
+    .map((landmark, index) => ({
+      landmark,
+      id: landmark.id,
+      index,
+      progress: route.stopProgressById?.get(landmark.id) ?? landmarkProgress(route, landmark),
+    }));
+
+  let previous = -1;
+  stops.forEach((stop, index) => {
+    const lowerBound = index === 0 ? 0 : previous + 0.0004;
+    stop.progress = Math.min(1, Math.max(stop.progress, lowerBound));
+    previous = stop.progress;
+  });
+
+  return stops.sort((a, b) => a.progress - b.progress || a.index - b.index);
+}
+
 function addLandmarkEntity(viewer, landmark, highlighted) {
   const common = {
     id: `landmark-${landmark.id}`,
     position: Cartesian3.fromDegrees(landmark.lon, landmark.lat),
-    point: {
-      pixelSize: highlighted ? 18 : 13,
-      color: highlighted ? Color.fromCssColorString('#f0d490') : Color.fromCssColorString('#d8c09a'),
-      outlineColor: Color.WHITE,
-      outlineWidth: 3,
-      heightReference: HeightReference.CLAMP_TO_GROUND,
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    billboard: {
+      image: getLandmarkDotImage(),
+      width: 14,
+      height: 14,
+      heightReference: HeightReference.RELATIVE_TO_GROUND,
+      disableDepthTestDistance: 1000000000,
+      distanceDisplayCondition: new DistanceDisplayCondition(0, 60000),
     },
     label: {
-      text: landmark.name,
-      font: '600 15px sans-serif',
+      text: useAppStore.getState().language === 'zh'
+        ? (landmark.localizedNames?.zh ?? landmark.name)
+        : (landmark.localizedNames?.en ?? landmark.name),
+      font: '700 16px sans-serif',
       fillColor: Color.WHITE,
       outlineColor: Color.fromCssColorString('#18324a'),
-      outlineWidth: 4,
+      outlineWidth: 5,
       style: LabelStyle.FILL_AND_OUTLINE,
-      pixelOffset: { x: 0, y: -32 },
-      distanceDisplayCondition: new DistanceDisplayCondition(0, 28000),
-      scaleByDistance: new NearFarScalar(1500, 1.1, 28000, 0.55),
-      disableDepthTestDistance: 16000,
+      showBackground: true,
+      backgroundColor: Color.fromCssColorString('#263238').withAlpha(0.72),
+      backgroundPadding: { x: 7, y: 5 },
+      pixelOffset: { x: 0, y: -30 },
+      distanceDisplayCondition: new DistanceDisplayCondition(0, 80000),
+      scaleByDistance: new NearFarScalar(1500, 1, 80000, 0.48),
+      disableDepthTestDistance: 1000000000,
     },
   };
 
@@ -360,8 +433,8 @@ function addLandmarkEntity(viewer, landmark, highlighted) {
       ...common,
       model: {
         uri: landmark.modelPath,
-        minimumPixelSize: highlighted ? 74 : 48,
-        maximumScale: 180,
+        minimumPixelSize: highlighted ? 24 : 16,
+        maximumScale: 24,
         heightReference: HeightReference.CLAMP_TO_GROUND,
         runAnimations: false,
         color: Color.WHITE,
@@ -423,7 +496,7 @@ export function CesiumDriveScene({ isStarted }) {
     viewer.clock.shouldAnimate = false;
     viewer.resolutionScale = window.innerWidth < 900 ? 0.78 : 0.9;
     viewer.scene.globe.depthTestAgainstTerrain = true;
-    viewer.scene.globe.enableLighting = true;
+    viewer.scene.globe.enableLighting = false;
     viewer.scene.globe.showGroundAtmosphere = true;
     viewer.scene.globe.maximumScreenSpaceError = 5;
     viewer.scene.globe.tileCacheSize = 70;
@@ -431,7 +504,7 @@ export function CesiumDriveScene({ isStarted }) {
     viewer.scene.globe.preloadSiblings = false;
     viewer.scene.globe.loadingDescendantLimit = 20;
     viewer.scene.skyAtmosphere.show = true;
-    viewer.scene.fog.enabled = true;
+    viewer.scene.fog.enabled = false;
     viewer.scene.fog.density = 0.00018;
     viewer.scene.screenSpaceCameraController.enableCollisionDetection = true;
     viewer.scene.screenSpaceCameraController.minimumZoomDistance = 12;
@@ -527,21 +600,23 @@ export function CesiumDriveScene({ isStarted }) {
         }
 
         viewer.entities.add({
+          id: 'route-base-outline',
+          polyline: {
+            positions: routeCartesian,
+            width: 10,
+            material: Color.fromCssColorString('#263238').withAlpha(0.72),
+            clampToGround: true,
+            zIndex: 8,
+          },
+        });
+        viewer.entities.add({
           id: 'route-base',
           polyline: {
             positions: routeCartesian,
             width: 6,
             material: Color.fromCssColorString('#f3e9c2').withAlpha(0.9),
             clampToGround: true,
-          },
-        });
-        const activePassedRoute = viewer.entities.add({
-          id: 'route-passed-active',
-          polyline: {
-            positions: routeCartesian.slice(0, 2),
-            width: 6,
-            material: Color.fromCssColorString('#d66f4d').withAlpha(0.96),
-            clampToGround: true,
+            zIndex: 9,
           },
         });
         const initialPosition = Cartesian3.fromDegrees(first.lon, first.lat, startHeight + 0.65);
@@ -578,29 +653,19 @@ export function CesiumDriveScene({ isStarted }) {
           show: startsWalking,
         });
 
-        const indexedLandmarks = route.routeIds
-          .map((id) => landmarks.find((item) => item.id === id))
-          .filter(Boolean)
-          .map((landmark) => ({
-            landmark,
-            id: landmark.id,
-            progress: landmarkProgress(route, landmark),
-          }))
-          .sort((a, b) => a.progress - b.progress);
+        const indexedLandmarks = orderedIndexedLandmarks(route);
         const landmarkEntities = new Map();
         const scratchPosition = new Cartesian3();
+        const scratchCameraTarget = new Cartesian3();
         const scratchOrientation = new Quaternion();
         const scratchHpr = new HeadingPitchRoll();
         let progress = START_PROGRESS;
         let previousProgress = START_PROGRESS;
-        let furthestProgress = START_PROGRESS;
         let speedKmh = 0;
         let targetSpeedKmh = 0;
         let effectiveTimeScale = 0;
         let lastTime = performance.now();
         let lastUiSync = 0;
-        let lastTrailDistanceKm = -ACTIVE_TRAIL_UPDATE_KM;
-        let completedChunkCount = 0;
         let lastLandmarkKey = '';
         let smoothedHeading = routeHeading(route, progress);
         let smoothedRange = 1500;
@@ -610,57 +675,13 @@ export function CesiumDriveScene({ isStarted }) {
         let previousCameraMode = 'follow';
         let handledJumpToken = 0;
         let jumpCameraHoldUntil = 0;
+        let forcedCurrentStopId = null;
+        let forcedCurrentStopUntil = 0;
+        let cameraGroundHeight = startHeight;
         let pressure = getStreamingPressure(0, false);
 
-        const positionsForProgressRange = (startProgress, endProgress) => {
-          const distanceKm = Math.max(0, endProgress - startProgress) * route.totalKm;
-          const pointCount = Math.max(2, Math.min(160, Math.ceil(distanceKm / 0.04) + 1));
-          return Array.from({ length: pointCount }, (_, index) => {
-            const fraction = pointCount === 1 ? 0 : index / (pointCount - 1);
-            const point = route.sample(
-              startProgress + (endProgress - startProgress) * fraction,
-            );
-            return Cartesian3.fromDegrees(point.lon, point.lat);
-          });
-        };
-
-        const updatePassedRoute = () => {
-          const passedDistanceKm = furthestProgress * route.totalKm;
-          const requiredCompletedChunks = Math.floor(passedDistanceKm / PASSED_CHUNK_KM);
-          while (completedChunkCount < requiredCompletedChunks) {
-            const startProgress = (completedChunkCount * PASSED_CHUNK_KM) / route.totalKm;
-            const endProgress = Math.min(1, ((completedChunkCount + 1) * PASSED_CHUNK_KM) / route.totalKm);
-            const entity = viewer.entities.add({
-              id: `route-passed-${completedChunkCount}`,
-              polyline: {
-                positions: positionsForProgressRange(startProgress, endProgress),
-                width: 6,
-                material: Color.fromCssColorString('#d66f4d').withAlpha(0.96),
-                clampToGround: true,
-              },
-            });
-            completedChunkCount += 1;
-          }
-
-          if (
-            passedDistanceKm - lastTrailDistanceKm >= ACTIVE_TRAIL_UPDATE_KM
-            || furthestProgress >= 1
-          ) {
-            lastTrailDistanceKm = passedDistanceKm;
-            const activeStartProgress = Math.min(
-              furthestProgress,
-              (completedChunkCount * PASSED_CHUNK_KM) / route.totalKm,
-            );
-            activePassedRoute.polyline.positions.setValue(
-              positionsForProgressRange(activeStartProgress, furthestProgress),
-            );
-          }
-        };
-
-        const applyLandmarks = (cameraMode) => {
-          const visible = cameraMode === 'map'
-            ? indexedLandmarks.map((item) => item.landmark)
-            : getVisibleLandmarks(indexedLandmarks, progress);
+        const applyLandmarks = () => {
+          const visible = indexedLandmarks.map((item) => item.landmark);
           const key = visible.map((item) => item.id).join('|');
           if (key === lastLandmarkKey) return;
           lastLandmarkKey = key;
@@ -686,10 +707,72 @@ export function CesiumDriveScene({ isStarted }) {
           return currentStop?.id ?? indexedLandmarks[0]?.id ?? route.routeIds[0] ?? null;
         };
 
-        const flyToLandmark = (landmark, duration = 0.9) => {
+        const terrainHeightCache = new Map();
+        const routeHeightCache = new Map();
+        const pendingRouteHeightSamples = new Set();
+        const getTerrainHeightForCamera = async (lon, lat) => {
+          const key = `${lon.toFixed(5)},${lat.toFixed(5)}`;
+          if (terrainHeightCache.has(key)) return terrainHeightCache.get(key);
+          let height = 0;
+          if (hasDetailedTerrain) {
+            try {
+              const sampled = await sampleTerrainMostDetailed(terrainProvider, [
+                Cartographic.fromDegrees(lon, lat),
+              ]);
+              height = Number.isFinite(sampled[0]?.height) ? sampled[0].height : 0;
+            } catch {
+              height = 0;
+            }
+          } else {
+            const globeHeight = viewer.scene.globe.getHeight(Cartographic.fromDegrees(lon, lat));
+            height = Number.isFinite(globeHeight) ? globeHeight : 0;
+          }
+          terrainHeightCache.set(key, height);
+          return height;
+        };
+        const getRouteGroundHeight = (lon, lat) => {
+          const key = `${lon.toFixed(5)},${lat.toFixed(5)}`;
+          const cartographic = Cartographic.fromDegrees(lon, lat);
+          const liveHeight = viewer.scene.globe.getHeight(cartographic);
+          if (Number.isFinite(liveHeight)) {
+            routeHeightCache.set(key, liveHeight);
+            return liveHeight;
+          }
+          if (routeHeightCache.has(key)) return routeHeightCache.get(key);
+          if (hasDetailedTerrain && !pendingRouteHeightSamples.has(key)) {
+            pendingRouteHeightSamples.add(key);
+            sampleTerrainMostDetailed(terrainProvider, [Cartographic.fromDegrees(lon, lat)])
+              .then((sampled) => {
+                const sampledHeight = Number.isFinite(sampled[0]?.height) ? sampled[0].height : 0;
+                routeHeightCache.set(key, sampledHeight);
+              })
+              .catch(() => {})
+              .finally(() => pendingRouteHeightSamples.delete(key));
+          }
+          return null;
+        };
+        const flyToLandmark = async (landmark, duration = 0.9) => {
+          const profile = cameraProfileForLandmark(landmark);
+          const heading = routeHeading(route, progress);
+          const cameraCoord = offsetCoordinate(landmark.lon, landmark.lat, heading, profile.offsetKm);
+          const terrainHeight = await getTerrainHeightForCamera(
+            profile.topDown ? landmark.lon : cameraCoord.lon,
+            profile.topDown ? landmark.lat : cameraCoord.lat,
+          );
+          if (disposed) return;
+          const cameraHeading = headingBetweenCoordinates(cameraCoord, landmark);
           viewer.camera.lookAtTransform(Matrix4.IDENTITY);
           viewer.camera.flyTo({
-            destination: Cartesian3.fromDegrees(landmark.lon, landmark.lat, 1800),
+            destination: Cartesian3.fromDegrees(
+              profile.topDown ? landmark.lon : cameraCoord.lon,
+              profile.topDown ? landmark.lat : cameraCoord.lat,
+              Math.max(profile.fallbackHeight, terrainHeight + profile.clearance),
+            ),
+            orientation: {
+              heading: profile.topDown ? 0 : cameraHeading,
+              pitch: CesiumMath.toRadians(profile.pitch),
+              roll: 0,
+            },
             duration,
           });
         };
@@ -703,7 +786,7 @@ export function CesiumDriveScene({ isStarted }) {
           useAppStore.getState().jumpVehicleToLandmark(landmarkId);
         }, ScreenSpaceEventType.LEFT_CLICK);
 
-        applyLandmarks(useAppStore.getState().cameraMode);
+        applyLandmarks();
         setCesiumStatus({ ready: true });
 
         tickRemove = viewer.clock.onTick.addEventListener(() => {
@@ -719,14 +802,16 @@ export function CesiumDriveScene({ isStarted }) {
               handledJumpToken = state.vehicleJumpTarget.token;
               progress = jumpStop.progress;
               previousProgress = progress;
-              furthestProgress = Math.max(furthestProgress, progress);
+              forcedCurrentStopId = jumpStop.id;
+              forcedCurrentStopUntil = now + 2400;
               speedKmh = 0;
               targetSpeedKmh = 0;
               effectiveTimeScale = 0;
               mapModeApplied = false;
               focusModeId = null;
-              jumpCameraHoldUntil = now + 1300;
-              flyToLandmark(jumpStop.landmark, 0.85);
+              jumpCameraHoldUntil = 0;
+              smoothedHeading = routeHeading(route, progress);
+              smoothedRange = 2500;
               state.setNearbyLandmarkId(jumpStop.id);
               state.setVehicleState({
                 vehicleSpeed: 0,
@@ -738,7 +823,7 @@ export function CesiumDriveScene({ isStarted }) {
                   point: { id: `cesium-${jumpStop.id}`, roadType: '真实道路' },
                   segment: { id: 'cesium-route', type: 'scenic', speedLimit: 110, trafficState: 'normal' },
                   profile: { label: 'Cesium 实景路线', surfaceLabel: '地形贴合道路', color: '#59666b' },
-                  currentStopId: jumpStop.id,
+                  currentStopId: forcedCurrentStopId,
                 },
               });
             }
@@ -783,7 +868,6 @@ export function CesiumDriveScene({ isStarted }) {
             1,
             progress + (speedKmh / Math.max(route.distanceKm, 1) / 3600) * effectiveTimeScale * delta,
           ));
-          furthestProgress = Math.max(furthestProgress, progress);
           if (progress >= 1 && speedKmh > 0) {
             speedKmh = 0;
             state.setAutoDrive(false);
@@ -792,7 +876,11 @@ export function CesiumDriveScene({ isStarted }) {
 
           const point = route.sample(progress);
           const heading = routeHeading(route, progress);
+          const routeGroundHeight = getRouteGroundHeight(point.lon, point.lat);
+          if (Number.isFinite(routeGroundHeight)) cameraGroundHeight = routeGroundHeight;
+          const cameraTargetHeight = cameraGroundHeight + 8;
           Cartesian3.fromDegrees(point.lon, point.lat, 0.65, undefined, scratchPosition);
+          Cartesian3.fromDegrees(point.lon, point.lat, cameraTargetHeight, undefined, scratchCameraTarget);
           scratchHpr.heading = heading;
           scratchHpr.pitch = 0;
           scratchHpr.roll = 0;
@@ -816,8 +904,7 @@ export function CesiumDriveScene({ isStarted }) {
             }
           }
 
-          updatePassedRoute();
-          applyLandmarks(state.cameraMode);
+          applyLandmarks();
 
           const crossedStop = indexedLandmarks.find((stop) => (
             previousProgress < stop.progress
@@ -854,7 +941,9 @@ export function CesiumDriveScene({ isStarted }) {
                 : settled ? 20 : 30;
             }
 
-            const currentStopId = currentStopIdForProgress(progress);
+            const currentStopId = now < forcedCurrentStopUntil && forcedCurrentStopId
+              ? forcedCurrentStopId
+              : currentStopIdForProgress(progress);
             let nearbyLandmark = null;
             let nearbyDistance = Number.POSITIVE_INFINITY;
             for (const { landmark } of indexedLandmarks) {
@@ -864,7 +953,11 @@ export function CesiumDriveScene({ isStarted }) {
                 nearbyLandmark = landmark;
               }
             }
-            state.setNearbyLandmarkId(nearbyDistance <= 5 ? nearbyLandmark?.id ?? null : null);
+            state.setNearbyLandmarkId(
+              now < forcedCurrentStopUntil && forcedCurrentStopId
+                ? forcedCurrentStopId
+                : nearbyDistance <= 5 ? nearbyLandmark?.id ?? null : null,
+            );
             state.setVehicleState({
               vehicleSpeed: Math.abs(speedKmh),
               vehicleSteer: 0,
@@ -912,13 +1005,9 @@ export function CesiumDriveScene({ isStarted }) {
           if (state.cameraMode === 'focus' && state.selectedLandmarkId) {
             if (focusModeId !== state.selectedLandmarkId) {
               focusModeId = state.selectedLandmarkId;
-              viewer.camera.lookAtTransform(Matrix4.IDENTITY);
               const landmark = landmarks.find((item) => item.id === state.selectedLandmarkId);
               if (landmark) {
-                viewer.camera.flyTo({
-                  destination: Cartesian3.fromDegrees(landmark.lon, landmark.lat, 1300),
-                  duration: 1.2,
-                });
+                flyToLandmark(landmark, 1.05);
               }
             }
             return;
@@ -930,13 +1019,14 @@ export function CesiumDriveScene({ isStarted }) {
           }
 
           const speedRatio = Math.min(Math.abs(speedKmh) / BOOST_SPEED_KMH, 1);
+          const playbackRatio = Math.min(Math.max(state.routePlaybackSpeed ?? 1, 1) / 8, 3);
           const headingDelta = CesiumMath.negativePiToPi(heading - smoothedHeading);
-          smoothedHeading += headingDelta * (1 - Math.exp(-delta * 0.65));
-          const targetRange = 2100 + speedRatio * 900;
-          smoothedRange += (targetRange - smoothedRange) * (1 - Math.exp(-delta * 0.55));
+          smoothedHeading += headingDelta * (1 - Math.exp(-delta * (0.85 + playbackRatio * 1.15)));
+          const targetRange = 2850 + speedRatio * 1200 + Math.max(0, (state.routePlaybackSpeed ?? 1) - 4) * 100;
+          smoothedRange += (targetRange - smoothedRange) * (1 - Math.exp(-delta * (0.75 + playbackRatio * 0.9)));
           viewer.camera.lookAt(
-            scratchPosition,
-            new HeadingPitchRange(smoothedHeading, CesiumMath.toRadians(-52), smoothedRange),
+            scratchCameraTarget,
+            new HeadingPitchRange(smoothedHeading, CesiumMath.toRadians(-30), smoothedRange),
           );
         });
       } catch (error) {

@@ -23,8 +23,9 @@ function orientToFirstStop(points, routeIds) {
   if (points.length < 2 || routeIds.length === 0) return { points, reversed: false };
   const firstStop = landmarks.find((item) => item.id === routeIds[0]);
   if (!firstStop) return { points, reversed: false };
-  const startDistance = haversineKm(points[0], firstStop);
-  const endDistance = haversineKm(points[points.length - 1], firstStop);
+  const firstStopTarget = firstStop.navigationCoordinates ?? firstStop;
+  const startDistance = haversineKm(points[0], firstStopTarget);
+  const endDistance = haversineKm(points[points.length - 1], firstStopTarget);
   return endDistance < startDistance
     ? { points: [...points].reverse(), reversed: true }
     : { points, reversed: false };
@@ -58,6 +59,37 @@ function buildModeRanges(segments, reversed) {
       travelMode: range.travelMode,
     }))
     : ranges;
+}
+
+function segmentDistanceKm(segment) {
+  const coordinates = segment?.geometryCoordinates ?? [];
+  const measured = coordinates.slice(1).reduce((sum, coordinate, index) => (
+    sum + haversineKm(
+      { lon: coordinates[index][0], lat: coordinates[index][1] },
+      { lon: coordinate[0], lat: coordinate[1] },
+    )
+  ), 0);
+  return measured > 0 ? measured : Number(segment?.distanceKm ?? 0);
+}
+
+function buildStopProgressById(segments, routeIds) {
+  const distances = routeIds.slice(1).map((toId, index) => {
+    const fromId = routeIds[index];
+    const segment = segments.find((item) => (
+      (item.fromId === fromId && item.toId === toId) || item.index === index
+    ));
+    return Math.max(0, segmentDistanceKm(segment));
+  });
+  const totalKm = distances.reduce((sum, distance) => sum + distance, 0);
+  if (!totalKm) return new Map();
+
+  const progressById = new Map([[routeIds[0], 0]]);
+  let cursor = 0;
+  routeIds.slice(1).forEach((id, index) => {
+    cursor += distances[index] ?? 0;
+    progressById.set(id, Math.min(1, cursor / totalKm));
+  });
+  return progressById;
 }
 
 function buildRoute(points, modeRanges = []) {
@@ -115,16 +147,21 @@ export function useActiveRouteGeo() {
       points = effectiveRouteIds
         .map((id) => landmarks.find((item) => item.id === id))
         .filter(Boolean)
-        .map(({ lon, lat }) => ({ lon, lat }));
+        .map((landmark) => ({
+          lon: landmark.navigationCoordinates?.lon ?? landmark.lon,
+          lat: landmark.navigationCoordinates?.lat ?? landmark.lat,
+        }));
     }
 
     const oriented = orientToFirstStop(points, effectiveRouteIds);
     points = oriented.points;
     const modeRanges = buildModeRanges(routeSegments, oriented.reversed);
+    const stopProgressById = buildStopProgressById(routeSegments, effectiveRouteIds);
     const route = buildRoute(points, modeRanges);
     return {
       ...route,
       routeIds: effectiveRouteIds,
+      stopProgressById,
       distanceKm: Number.isFinite(distanceKm) && distanceKm > 0 ? distanceKm : route.totalKm,
       signature: `${points.length}:${points[0]?.lon ?? 0}:${points.at(-1)?.lat ?? 0}:${modeRanges.map((range) => range.travelMode).join(',')}`,
     };
