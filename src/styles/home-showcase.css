@@ -961,6 +961,76 @@
   color: #234656;
 }
 
+.home-auth__saved-routes {
+  display: grid;
+  gap: 9px;
+}
+
+.home-auth__saved-routes h3 {
+  margin: 0;
+  color: #2d2d2d;
+  font: 700 20px/1 "Kalam", "Noto Serif SC", cursive;
+}
+
+.home-auth__saved-routes > p {
+  margin: 0;
+  color: #5f574e;
+  font: 400 16px/1.35 "Patrick Hand", "Noto Sans SC", cursive;
+}
+
+.home-auth__saved-routes section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.home-auth__saved-routes section > button {
+  min-width: 0;
+  border: 2px solid #2d2d2d;
+  background: #fff;
+  box-shadow: 2px 2px 0 #2d2d2d;
+  color: #2d2d2d;
+  cursor: pointer;
+}
+
+.home-auth__saved-routes section > button:first-child {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 22px 10px 18px 8px / 9px 20px 8px 18px;
+  text-align: left;
+}
+
+.home-auth__saved-routes section > button:last-child {
+  width: 36px;
+  padding: 0;
+  border-radius: 50% 44% 52% 46%;
+  font-size: 22px;
+}
+
+.home-auth__saved-routes button:hover {
+  background: #fff9c4;
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 #2d2d2d;
+}
+
+.home-auth__saved-routes strong,
+.home-auth__saved-routes span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-auth__saved-routes strong {
+  font: 700 17px/1.1 "Kalam", "Noto Serif SC", cursive;
+}
+
+.home-auth__saved-routes span {
+  color: #5f574e;
+  font: 400 14px/1 "Patrick Hand", "Noto Sans SC", cursive;
+}
+
 .home-landing__gallery {
   min-height: 520px;
   display: grid;
@@ -5272,5 +5342,309 @@
   .print-itinerary article,
   .print-itinerary section {
     break-inside: avoid;
+  }
+}
+
+/* Final planner refinements from the sketch style brief. */
+.route-recommendations__intro,
+.route-recommendations__path {
+  display: none !important;
+}
+
+.route-recommendations {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.route-recommendation-card {
+  display: grid;
+  min-height: 112px;
+  padding: 10px;
+  align-content: space-between;
+  border: 2px solid #2d2d2d;
+  border-radius: 26px 12px 22px 10px / 10px 24px 12px 26px;
+  background: #fff;
+  box-shadow: 3px 3px 0 #2d2d2d;
+  color: #2d2d2d;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 100ms ease, box-shadow 100ms ease, background 100ms ease;
+}
+
+.route-recommendation-card:hover {
+  transform: translate(2px, 2px) rotate(-0.4deg);
+  box-shadow: 1px 1px 0 #2d2d2d;
+}
+
+.route-recommendation-card.is-selected {
+  background: #fff9c4;
+  border-color: #ff4d4d;
+  box-shadow: 4px 4px 0 #ff4d4d;
+  transform: rotate(-0.5deg);
+}
+
+.route-recommendation-card > div {
+  display: grid;
+  gap: 4px;
+}
+
+.route-recommendation-card strong {
+  font: 700 18px/1.05 "Kalam", "Noto Serif SC", cursive;
+}
+
+.route-recommendation-card > div span,
+.route-recommendation-card small {
+  color: #5f574e;
+  font: 400 14px/1.15 "Patrick Hand", "Noto Sans SC", cursive;
+}
+
+.home-planner-list section {
+  grid-template-columns: 34px minmax(0, 1fr) repeat(4, 34px);
+  overflow: hidden;
+}
+
+.home-planner-list button {
+  min-width: 34px;
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.route-lock-btn {
+  position: relative;
+}
+
+.route-lock-btn .sketch-lock {
+  position: relative;
+  display: block;
+  width: 14px;
+  height: 12px;
+  margin: 5px auto 0;
+  border: 2px solid #2d2d2d;
+  border-radius: 4px 6px 3px 5px / 5px 3px 6px 4px;
+  background: transparent;
+  overflow: visible;
+  transform: rotate(-2deg);
+}
+
+.route-lock-btn .sketch-lock::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: -9px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #2d2d2d;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  transform: rotate(-28deg) translateX(4px);
+  transform-origin: bottom left;
+}
+
+.route-lock-btn .sketch-lock.is-locked::before {
+  transform: none;
+}
+
+.home-schema-list article {
+  border-left: 8px solid #ff4d4d;
+}
+
+.home-schema-list article.is-walk {
+  border-left-color: #2d5da1;
+  background: #eef4ff;
+}
+
+.home-schema-list article.is-walk > span {
+  background: #2d5da1;
+  color: #fff;
+}
+
+.home-schema-list article.is-drive {
+  border-left-color: #ff4d4d;
+  background: #fff9c4;
+}
+
+.home-schema-list article.is-drive > span {
+  background: #ff4d4d;
+  color: #fff;
+}
+
+.home-schema-list article.is-mixed {
+  border-left-color: #8b6f3f;
+  background: linear-gradient(105deg, #eef4ff 0 48%, #fff9c4 48% 100%);
+}
+
+.home-schema-list article.is-mixed > span {
+  background: #8b6f3f;
+  color: #fff;
+}
+
+.home-schema-list article.is-ferry,
+.home-schema-list article.is-ferry_drive {
+  border-left-color: #2f9fc7;
+  background: #edf9fb;
+}
+
+.home-schema-list article.is-ferry > span,
+.home-schema-list article.is-ferry_drive > span {
+  background: #2f9fc7;
+  color: #fff;
+}
+
+.paper-route-map__city-shape {
+  display: none !important;
+}
+
+.paper-route-map__path.is-walk {
+  stroke: #2d5da1;
+}
+
+.paper-route-map__path.is-drive {
+  stroke: #ff4d4d;
+}
+
+.paper-route-map__path.is-mixed {
+  stroke: #8b6f3f;
+  stroke-dasharray: 3 1.5;
+}
+
+.home-module--day-cards .cinematic-day-grid {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 3px 4px 12px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.home-module--day-cards .cinematic-day-card {
+  flex: 0 0 max(280px, calc((100% - 42px) / 4));
+  min-width: 280px;
+  max-width: 420px;
+  align-self: flex-start;
+  overflow: hidden;
+  scroll-snap-align: start;
+}
+
+.home-module--day-cards .cinematic-day-grid.is-expanded {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow-x: visible;
+  padding-bottom: 16px;
+  scroll-snap-type: none;
+}
+
+.home-module--day-cards .cinematic-day-grid.is-expanded .cinematic-day-card {
+  min-width: 0;
+  max-width: none;
+}
+
+.home-module--day-cards .cinematic-day-card > strong,
+.home-module--day-cards .cinematic-day-card > p,
+.home-module--day-cards .cinematic-day-card > small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.home-module--day-cards .cinematic-day-card__activity {
+  grid-template-columns: 28px minmax(52px, 72px) minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+}
+
+.home-module--day-cards .cinematic-day-card__activity strong,
+.home-module--day-cards .cinematic-day-card__activity em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.home-module--day-cards .cinematic-day-card__activity em {
+  grid-column: 2 / -1;
+}
+
+.home-module--day-cards {
+  width: 100%;
+  margin-top: 22px;
+}
+
+.home-module__head--day-plan {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.day-plan-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.day-plan-tools .home-download-btn {
+  width: 42px;
+  min-width: 42px;
+  min-height: 32px;
+  padding: 0;
+  font-size: 14px;
+}
+
+.cinematic-day-card__activity.is-drive {
+  background: #fff9c4;
+}
+
+.cinematic-day-card__activity.is-drive i {
+  background: #ff4d4d;
+}
+
+.cinematic-day-card__activity.is-walk {
+  background: #eef4ff;
+}
+
+.cinematic-day-card__activity.is-walk i {
+  background: #2d5da1;
+}
+
+.cinematic-day-card__activity.is-visit {
+  background: #fff;
+}
+
+.cinematic-day-card__activity.is-visit i {
+  background: #8b6f3f;
+}
+
+@media (max-width: 900px) {
+  .route-recommendations {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-module__head--day-plan {
+    align-items: flex-start;
+  }
+
+  .day-plan-tools {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .home-module--day-cards .cinematic-day-card,
+  .home-module--day-cards .cinematic-day-grid.is-expanded .cinematic-day-card {
+    flex-basis: min(340px, 84vw);
+    min-width: min(340px, 84vw);
+  }
+
+  .home-module--day-cards .cinematic-day-grid.is-expanded {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-module--day-cards .cinematic-day-grid.is-expanded .cinematic-day-card {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .home-module--day-cards .cinematic-day-grid.is-expanded {
+    grid-template-columns: 1fr;
   }
 }

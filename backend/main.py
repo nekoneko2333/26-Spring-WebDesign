@@ -94,6 +94,14 @@ class PlanPayload(BaseModel):
     pace: str = Field(default='Standard', pattern='^(Relaxed|Standard|Fast)$')
     language: str = Field(default='zh', pattern='^(zh|en)$')
 
+class SavedRoutePayload(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    route_ids: list[str] = Field(min_length=1, max_length=100)
+    locked_ids: list[str] = Field(default_factory=list, max_length=100)
+    days: int = Field(default=3, ge=1, le=30)
+    pace: str = Field(default='Standard', pattern='^(Relaxed|Standard|Fast)$')
+    travel_mode: str = Field(default='AUTO', pattern='^(AUTO|DRIVE|WALK)$')
+
 
 class RouteCoordinate(BaseModel):
     lon: float = Field(ge=-180, le=180)
@@ -408,6 +416,18 @@ def _init_account_db():
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS saved_routes (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                route_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_saved_routes_email_updated
+            ON saved_routes(email, updated_at DESC);
+
             CREATE TABLE IF NOT EXISTS data_import_batches (
                 id TEXT PRIMARY KEY,
                 generated_at TEXT NOT NULL,
@@ -563,6 +583,32 @@ def _save_plan(connection, email, plan):
         (email, json.dumps(plan, ensure_ascii=False), updated_at),
     )
     return {**plan, 'updated_at': updated_at}
+
+
+def _saved_routes_for_email(connection, email):
+    rows = connection.execute(
+        """
+        SELECT id, name, route_json, created_at, updated_at
+        FROM saved_routes
+        WHERE email = ?
+        ORDER BY updated_at DESC
+        """,
+        (email,),
+    ).fetchall()
+    items = []
+    for row in rows:
+        try:
+            route = json.loads(row['route_json'])
+        except json.JSONDecodeError:
+            route = {}
+        items.append({
+            'id': row['id'],
+            'name': row['name'],
+            **route,
+            'created_at': row['created_at'],
+            'updated_at': row['updated_at'],
+        })
+    return items
 
 
 def _require_user(authorization):
@@ -955,6 +1001,41 @@ def save_account_plan(payload: PlanPayload, authorization: str | None = Header(d
     with _DB_LOCK, _connect_db() as connection:
         saved = _save_plan(connection, email, plan)
         return {'plan': saved}
+
+
+@app.get('/api/account/routes')
+def get_saved_routes(authorization: str | None = Header(default=None)):
+    _, email, _ = _require_user(authorization)
+    with _DB_LOCK, _connect_db() as connection:
+        return {'items': _saved_routes_for_email(connection, email)}
+
+
+@app.post('/api/account/routes')
+def create_saved_route(payload: SavedRoutePayload, authorization: str | None = Header(default=None)):
+    _, email, _ = _require_user(authorization)
+    route_id = secrets.token_hex(8)
+    created_at = _now_iso()
+    route = payload.model_dump(exclude={'name'})
+    with _DB_LOCK, _connect_db() as connection:
+        connection.execute(
+            """
+            INSERT INTO saved_routes (id, email, name, route_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (route_id, email, payload.name.strip(), json.dumps(route, ensure_ascii=False), created_at, created_at),
+        )
+        return {'items': _saved_routes_for_email(connection, email)}
+
+
+@app.delete('/api/account/routes/{route_id}')
+def delete_saved_route(route_id: str, authorization: str | None = Header(default=None)):
+    _, email, _ = _require_user(authorization)
+    with _DB_LOCK, _connect_db() as connection:
+        connection.execute(
+            'DELETE FROM saved_routes WHERE id = ? AND email = ?',
+            (route_id, email),
+        )
+        return {'items': _saved_routes_for_email(connection, email)}
 
 
 @app.get('/api/landmarks')

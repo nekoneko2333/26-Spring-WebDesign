@@ -94,11 +94,41 @@ export function travelHoursAtProgress(plan, progress) {
   return elapsedHours;
 }
 
+export function visitHoursAtProgress(plan, progress) {
+  const stopIds = plan?.stopIds ?? [];
+  if (!stopIds.length) return 0;
+  const safeProgress = Math.max(0, Math.min(1, Number(progress) || 0));
+  if (safeProgress <= 0) return 0;
+
+  const segments = plan?.segments ?? [];
+  const totalDistanceKm = Number(plan?.totalDistanceKm) || 0;
+  let cumulativeDistanceKm = 0;
+  let elapsedVisitHours = 0;
+
+  stopIds.forEach((stopId, index) => {
+    const stopProgress = index === 0
+      ? 0
+      : totalDistanceKm > 0
+        ? cumulativeDistanceKm / totalDistanceKm
+        : index / Math.max(1, stopIds.length - 1);
+    if (safeProgress > stopProgress + 1e-7 || safeProgress >= 1) {
+      elapsedVisitHours += Math.max(0, Number(plan.visitHoursById?.[stopId] ?? 0) || 0);
+    }
+    cumulativeDistanceKm += Math.max(0, Number(segments[index]?.distanceKm ?? 0) || 0);
+  });
+
+  return elapsedVisitHours;
+}
+
 export function guideClockAtProgress(plan, progress, completedVisitHours = 0) {
   if (!plan) return { routeDay: 1, routeHour: GUIDE_DAY_START_HOUR };
+  const visitHours = Math.max(
+    Number(completedVisitHours) || 0,
+    visitHoursAtProgress(plan, progress),
+  );
   const activityHours = Math.max(
     0,
-    travelHoursAtProgress(plan, progress) + (Number(completedVisitHours) || 0),
+    travelHoursAtProgress(plan, progress) + visitHours,
   );
   const capacity = Math.max(0.5, plan.dailyLimitHours - plan.dailyBufferHours);
   const completedDays = Math.floor((activityHours + 1e-7) / capacity);

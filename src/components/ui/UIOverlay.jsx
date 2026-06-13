@@ -201,8 +201,8 @@ const driveRouteCopy = {
 };
 
 function getLandmarkName(landmark, language) {
-  return travelLandmarkMeta[landmark?.id]?.name?.[language]
-    ?? landmark?.localizedNames?.[language]
+  return landmark?.localizedNames?.[language]
+    ?? travelLandmarkMeta[landmark?.id]?.name?.[language]
     ?? landmark?.name
     ?? '';
 }
