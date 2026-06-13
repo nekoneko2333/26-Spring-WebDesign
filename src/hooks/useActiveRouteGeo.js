@@ -33,15 +33,32 @@ function orientToFirstStop(points, routeIds) {
 
 function buildModeRanges(segments, reversed) {
   const measured = segments
-    .map((segment) => {
-      const coordinates = segment.geometryCoordinates ?? [];
+    .flatMap((segment) => segment.parts?.length ? segment.parts : [segment])
+    .flatMap((part) => (
+      part.displayModeRanges?.length
+        ? part.displayModeRanges
+        : [part]
+    ))
+    .map((part) => {
+      if (Number.isFinite(part.distanceKm) && !part.geometryCoordinates) {
+        return {
+          travelMode: part.travelMode ?? 'DRIVE',
+          modeSource: part.modeSource ?? 'FALLBACK',
+          distanceKm: part.distanceKm,
+        };
+      }
+      const coordinates = part.geometryCoordinates ?? [];
       const distanceKm = coordinates.slice(1).reduce((sum, coordinate, index) => (
         sum + haversineKm(
           { lon: coordinates[index][0], lat: coordinates[index][1] },
           { lon: coordinate[0], lat: coordinate[1] },
         )
       ), 0);
-      return { travelMode: segment.travelMode ?? 'DRIVE', distanceKm };
+      return {
+        travelMode: part.displayTravelMode ?? part.travelMode ?? 'DRIVE',
+        modeSource: part.modeSource ?? 'FALLBACK',
+        distanceKm,
+      };
     })
     .filter((segment) => segment.distanceKm > 0);
   const totalKm = measured.reduce((sum, segment) => sum + segment.distanceKm, 0);
@@ -50,13 +67,19 @@ function buildModeRanges(segments, reversed) {
   const ranges = measured.map((segment) => {
     const start = cursor / totalKm;
     cursor += segment.distanceKm;
-    return { start, end: cursor / totalKm, travelMode: segment.travelMode };
+    return {
+      start,
+      end: cursor / totalKm,
+      travelMode: segment.travelMode,
+      modeSource: segment.modeSource,
+    };
   });
   return reversed
     ? ranges.reverse().map((range) => ({
       start: 1 - range.end,
       end: 1 - range.start,
       travelMode: range.travelMode,
+      modeSource: range.modeSource,
     }))
     : ranges;
 }
@@ -161,6 +184,7 @@ export function useActiveRouteGeo() {
     return {
       ...route,
       routeIds: effectiveRouteIds,
+      modeRanges,
       stopProgressById,
       distanceKm: Number.isFinite(distanceKm) && distanceKm > 0 ? distanceKm : route.totalKm,
       signature: `${points.length}:${points[0]?.lon ?? 0}:${points.at(-1)?.lat ?? 0}:${modeRanges.map((range) => range.travelMode).join(',')}`,

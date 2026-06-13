@@ -8,6 +8,7 @@ import { useAppStore } from '../../state/useAppStore.js';
 import { landmarks, worldUnitsFromMeters } from '../../data/landmarks.js';
 import { getRouteProfile } from '../../data/routes.js';
 import { sampleRoadSurface, worldPosToHeight } from '../../data/terrain.js';
+import { guideClockAtProgress } from '../../lib/itinerarySchedule.js';
 
 const START_PROGRESS = 0;
 const VEHICLE_SCALE = worldUnitsFromMeters(4.6) / 4.12;
@@ -43,7 +44,6 @@ const GUIDED_TOUR_STATES = {
   RESUME: 'RESUME',
   FINISHED: 'FINISHED',
 };
-const SIMULATED_DAYS = 3;
 const UI_SYNC_INTERVAL = 1 / 12;
 const wheelOffsets = [
   [-0.82, 0.2, 1.22],
@@ -377,13 +377,14 @@ function getRouteArrivalByProgress({ arrivalNotice, arrivedLandmarkIds, currentP
 }
 
 function getRouteTimeline(progress) {
-  const dayProgress = THREE.MathUtils.clamp(progress, 0, 0.9999) * SIMULATED_DAYS;
-  const routeDay = Math.floor(dayProgress) + 1;
-  const localDayProgress = dayProgress % 1;
+  const state = useAppStore.getState();
   return {
     routeProgress: progress,
-    routeDay,
-    routeHour: 7 + localDayProgress * 12,
+    ...guideClockAtProgress(
+      state.activeItineraryPlan,
+      progress,
+      state.itineraryVisitHours,
+    ),
   };
 }
 

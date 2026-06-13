@@ -35,6 +35,7 @@ const driveRouteCopy = {
       bridge: '潟湖入口路',
       tunnel: '山地隧道',
       ringRoad: '罗马环路',
+      ferry: 'Ferry',
     },
     surfaceLabels: {
       'asphalt / stone edge': '沥青 / 石材边缘',
@@ -130,6 +131,7 @@ const driveRouteCopy = {
       bridge: '潟湖入口路',
       tunnel: '山地隧道',
       ringRoad: '罗马环路',
+      ferry: '水路 / 轮渡',
     },
     surfaceLabels: {
       'asphalt / stone edge': '沥青 / 石材边缘',
@@ -231,9 +233,10 @@ function getArrivalMeta(landmarkId) {
 }
 
 function formatHour(hour) {
-  const safeHour = Number.isFinite(hour) ? hour : 7;
-  const h = Math.floor(safeHour);
-  const m = Math.round((safeHour - h) * 60);
+  const safeHour = Number.isFinite(hour) ? hour : 8;
+  const totalMinutes = Math.max(0, Math.round(safeHour * 60));
+  const h = Math.floor(totalMinutes / 60) % 24;
+  const m = totalMinutes % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
@@ -520,6 +523,7 @@ export function UIOverlay({ isStarted, onClose }) {
 
       <div className="route-timeline" aria-label={panelCopy.timeline} style={{ '--route-progress-ratio': String(Math.min(1, Math.max(0, routeProgress ?? 0))) }}>
         <div className="route-timeline__track">
+          <i className="route-timeline__travelled" aria-hidden="true" />
           {routeStops.map((stop, index) => {
             const stopRatio = (timelinePositions[index] ?? 0) / 100;
             const reached = isComplete || (routeProgress ?? 0) >= Math.max(0, stopRatio - 0.004);

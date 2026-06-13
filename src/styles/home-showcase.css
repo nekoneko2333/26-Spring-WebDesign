@@ -3639,6 +3639,12 @@
   stroke: #ff4d4d;
 }
 
+.paper-route-map__path.is-ferry_drive,
+.paper-route-map__path.is-ferry {
+  stroke: #2f9fc7;
+  stroke-width: 1.45;
+}
+
 .paper-route-map__legend {
   position: absolute;
   right: 16px;

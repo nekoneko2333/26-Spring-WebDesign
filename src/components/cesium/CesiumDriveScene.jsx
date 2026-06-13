@@ -4,6 +4,7 @@ import {
   Cartographic,
   buildModuleUrl,
   CameraEventType,
+  CallbackProperty,
   Color,
   createOsmBuildingsAsync,
   createWorldImageryAsync,
@@ -26,6 +27,7 @@ import {
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   Transforms,
+  VerticalOrigin,
   HeadingPitchRoll,
   Viewer,
 } from 'cesium';
@@ -34,11 +36,13 @@ import { useKeyboardDrive } from '../../hooks/useKeyboardDrive.js';
 import { useActiveRouteGeo } from '../../hooks/useActiveRouteGeo.js';
 import { landmarks } from '../../data/landmarks.js';
 import { useAppStore } from '../../state/useAppStore.js';
+import { guideClockAtProgress } from '../../lib/itinerarySchedule.js';
 
 buildModuleUrl.setBaseUrl(import.meta.env.DEV ? '/node_modules/cesium/Build/Cesium/' : '/cesium/');
 
 const START_PROGRESS = 0;
 const UI_SYNC_INTERVAL_MS = 100;
+const PASSED_ROUTE_CHUNK_COUNT = 200;
 const DISPLAY_ROUTE_MAX_POINTS = 12000;
 const ROUTE_SIMPLIFY_TOLERANCE_DEGREES = 0.000045;
 const NORMAL_SPEED_KMH = 100;
@@ -53,9 +57,84 @@ const ITALY_RECTANGLE = Rectangle.fromDegrees(6.2, 36.1, 19, 47.6);
 const DAYLIGHT_TIME = JulianDate.fromIso8601('2026-06-21T10:30:00Z');
 const tempGeodesic = new EllipsoidGeodesic();
 let landmarkDotImage = null;
+let boatMarkerImage = null;
 
 function routePositions(points) {
   return points.map(({ lon, lat }) => Cartesian3.fromDegrees(lon, lat));
+}
+
+function isFerryTravelMode(mode) {
+  return mode === 'FERRY_DRIVE' || mode === 'FERRY';
+}
+
+function buildPolylineRoute(points) {
+  const cumulativeKm = [0];
+  for (let index = 1; index < points.length; index += 1) {
+    cumulativeKm[index] = cumulativeKm[index - 1] + distanceKm(points[index - 1], points[index]);
+  }
+  const totalKm = cumulativeKm[cumulativeKm.length - 1] || 1;
+  return {
+    points,
+    cumulativeKm,
+    totalKm,
+    sample(progress) {
+      if (points.length === 1) return { ...points[0], index: 0 };
+      const distance = Math.max(0, Math.min(1, progress)) * totalKm;
+      let endIndex = cumulativeKm.findIndex((value) => value >= distance);
+      if (endIndex <= 0) endIndex = 1;
+      const startIndex = endIndex - 1;
+      const segmentKm = Math.max(cumulativeKm[endIndex] - cumulativeKm[startIndex], Number.EPSILON);
+      const fraction = (distance - cumulativeKm[startIndex]) / segmentKm;
+      return {
+        lon: points[startIndex].lon + (points[endIndex].lon - points[startIndex].lon) * fraction,
+        lat: points[startIndex].lat + (points[endIndex].lat - points[startIndex].lat) * fraction,
+        index: startIndex,
+      };
+    },
+  };
+}
+
+function routePointsBetweenProgress(route, startProgress, endProgress) {
+  const safeStart = Math.max(0, Math.min(1, startProgress));
+  const safeEnd = Math.max(safeStart, Math.min(1, endProgress));
+  const start = route.sample(safeStart);
+  const end = route.sample(safeEnd);
+  const middle = route.points.slice(start.index + 1, end.index + 1);
+  const result = [start, ...middle, end];
+  return result.length >= 2 ? result : [start, end];
+}
+
+function createBoatMarkerImage() {
+  if (boatMarkerImage) return boatMarkerImage;
+  const canvas = document.createElement('canvas');
+  canvas.width = 96;
+  canvas.height = 72;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.lineJoin = 'round';
+  context.fillStyle = '#fdfbf7';
+  context.strokeStyle = '#243642';
+  context.lineWidth = 5;
+  context.beginPath();
+  context.moveTo(15, 42);
+  context.lineTo(81, 42);
+  context.lineTo(68, 62);
+  context.lineTo(30, 62);
+  context.closePath();
+  context.fill();
+  context.stroke();
+  context.fillStyle = '#d96b4d';
+  context.fillRect(33, 23, 30, 20);
+  context.strokeRect(33, 23, 30, 20);
+  context.fillStyle = '#79b8cf';
+  context.fillRect(39, 28, 8, 7);
+  context.fillRect(51, 28, 8, 7);
+  context.beginPath();
+  context.moveTo(48, 23);
+  context.lineTo(48, 7);
+  context.stroke();
+  boatMarkerImage = canvas;
+  return boatMarkerImage;
 }
 
 function createWalkingPersonFrame(step = 1) {
@@ -331,19 +410,28 @@ function getStreamingPressure(queue, wasPaused) {
 function getLandmarkDotImage() {
   if (landmarkDotImage) return landmarkDotImage;
   const canvas = document.createElement('canvas');
-  canvas.width = 28;
-  canvas.height = 28;
+  canvas.width = 40;
+  canvas.height = 48;
   const context = canvas.getContext('2d');
-  context.clearRect(0, 0, 28, 28);
-  context.beginPath();
-  context.arc(14, 14, 8, 0, Math.PI * 2);
+  context.clearRect(0, 0, 40, 48);
   context.fillStyle = '#ff4d4d';
-  context.fill();
-  context.lineWidth = 4;
   context.strokeStyle = '#ffffff';
+  context.lineWidth = 4;
+  context.beginPath();
+  context.moveTo(20, 45);
+  context.bezierCurveTo(17, 36, 7, 29, 7, 18);
+  context.arc(20, 18, 13, Math.PI, 0);
+  context.bezierCurveTo(33, 29, 23, 36, 20, 45);
+  context.closePath();
+  context.fill();
   context.stroke();
-  context.lineWidth = 1.5;
+
+  context.fillStyle = '#fdfbf7';
   context.strokeStyle = '#2d2d2d';
+  context.lineWidth = 2;
+  context.beginPath();
+  context.arc(20, 18, 6, 0, Math.PI * 2);
+  context.fill();
   context.stroke();
   landmarkDotImage = canvas;
   return landmarkDotImage;
@@ -397,17 +485,19 @@ function orderedIndexedLandmarks(route) {
   return stops.sort((a, b) => a.progress - b.progress || a.index - b.index);
 }
 
-function addLandmarkEntity(viewer, landmark, highlighted) {
+function addLandmarkEntity(viewer, landmark, highlighted, labelSlot = 0) {
   const common = {
     id: `landmark-${landmark.id}`,
     position: Cartesian3.fromDegrees(landmark.lon, landmark.lat),
     billboard: {
       image: getLandmarkDotImage(),
-      width: 14,
-      height: 14,
+      width: 25,
+      height: 30,
       heightReference: HeightReference.RELATIVE_TO_GROUND,
+      verticalOrigin: VerticalOrigin.BOTTOM,
       disableDepthTestDistance: 1000000000,
       distanceDisplayCondition: new DistanceDisplayCondition(0, 60000),
+      pixelOffset: { x: 0, y: -5 },
     },
     label: {
       text: useAppStore.getState().language === 'zh'
@@ -421,7 +511,10 @@ function addLandmarkEntity(viewer, landmark, highlighted) {
       showBackground: true,
       backgroundColor: Color.fromCssColorString('#263238').withAlpha(0.72),
       backgroundPadding: { x: 7, y: 5 },
-      pixelOffset: { x: 0, y: -30 },
+      pixelOffset: {
+        x: ((labelSlot % 3) - 1) * 22,
+        y: -45 - (labelSlot % 2) * 18,
+      },
       distanceDisplayCondition: new DistanceDisplayCondition(0, 80000),
       scaleByDistance: new NearFarScalar(1500, 1, 80000, 0.48),
       disableDepthTestDistance: 1000000000,
@@ -463,7 +556,24 @@ export function CesiumDriveScene({ isStarted }) {
   const routeKey = `${route.signature}-${useAppStore((state) => state.tourResetToken)}`;
   const setCesiumStatus = useAppStore((state) => state.setCesiumStatus);
   const displayPoints = useMemo(() => buildDisplayPoints(route), [route]);
+  const displayRoute = useMemo(() => buildPolylineRoute(displayPoints), [displayPoints]);
   const routeCartesian = useMemo(() => routePositions(displayPoints), [displayPoints]);
+  const ferryRouteCartesians = useMemo(() => (
+    (route.modeRanges ?? [])
+      .filter((range) => isFerryTravelMode(range.travelMode))
+      .map((range) => routePositions(
+        routePointsBetweenProgress(displayRoute, range.start, range.end),
+      ))
+  ), [displayRoute, route.modeRanges]);
+  const passedRouteChunks = useMemo(() => (
+    Array.from({ length: PASSED_ROUTE_CHUNK_COUNT }, (_, index) => routePositions(
+      routePointsBetweenProgress(
+        displayRoute,
+        index / PASSED_ROUTE_CHUNK_COUNT,
+        (index + 1) / PASSED_ROUTE_CHUNK_COUNT,
+      ),
+    ))
+  ), [displayRoute]);
 
   useEffect(() => {
     isStartedRef.current = isStarted;
@@ -619,9 +729,51 @@ export function CesiumDriveScene({ isStarted }) {
             zIndex: 9,
           },
         });
+        ferryRouteCartesians.forEach((positions, index) => {
+          viewer.entities.add({
+            id: `route-ferry-${index}`,
+            polyline: {
+              positions,
+              width: 7,
+              material: Color.fromCssColorString('#4aa8c7'),
+              clampToGround: true,
+              zIndex: 10,
+            },
+          });
+        });
+        const passedRouteEntities = passedRouteChunks.map((positions, index) => (
+          viewer.entities.add({
+            id: `route-passed-${index}`,
+            polyline: {
+              positions,
+              width: 6,
+              material: Color.fromCssColorString('#df3f3f'),
+              clampToGround: true,
+              zIndex: 12,
+            },
+            show: false,
+          })
+        ));
+        let passedRouteHeadPositions = routePositions(
+          routePointsBetweenProgress(displayRoute, 0, 0),
+        );
+        const passedRouteHead = viewer.entities.add({
+          id: 'route-passed-head',
+          polyline: {
+            positions: new CallbackProperty(() => passedRouteHeadPositions, false),
+            width: 6,
+            material: Color.fromCssColorString('#df3f3f'),
+            clampToGround: true,
+            zIndex: 13,
+          },
+          show: false,
+        });
         const initialPosition = Cartesian3.fromDegrees(first.lon, first.lat, startHeight + 0.65);
+        const initialBoatPosition = Cartesian3.fromDegrees(first.lon, first.lat, 7);
         const walkingFrames = [createWalkingPersonFrame(-1), createWalkingPersonFrame(1)];
-        const startsWalking = route.travelModeAt(0) === 'WALK';
+        const initialTravelMode = route.travelModeAt(0);
+        const startsWalking = initialTravelMode === 'WALK';
+        const startsFerry = isFerryTravelMode(initialTravelMode);
         const initialOrientation = Transforms.headingPitchRollQuaternion(
           initialPosition,
           new HeadingPitchRoll(routeHeading(route, 0), 0, 0),
@@ -635,9 +787,9 @@ export function CesiumDriveScene({ isStarted }) {
             scale: 0.18,
             minimumPixelSize: 18,
             maximumScale: 1.4,
-            heightReference: HeightReference.RELATIVE_TO_GROUND,
+            heightReference: HeightReference.NONE,
           },
-          show: !startsWalking,
+          show: !startsWalking && !startsFerry,
         });
         const walker = viewer.entities.add({
           id: 'tour-walker',
@@ -646,16 +798,44 @@ export function CesiumDriveScene({ isStarted }) {
             image: walkingFrames[0],
             width: 58,
             height: 80,
-            heightReference: HeightReference.RELATIVE_TO_GROUND,
+            heightReference: HeightReference.NONE,
             disableDepthTestDistance: 5000,
             scaleByDistance: new NearFarScalar(100, 1.15, 8000, 0.55),
           },
           show: startsWalking,
         });
+        const boat = viewer.entities.add({
+          id: 'tour-boat',
+          position: initialBoatPosition,
+          orientation: initialOrientation,
+          model: {
+            uri: '/models/low-poly_ferry.glb',
+            scale: 1.15,
+            minimumPixelSize: 56,
+            maximumScale: 12,
+            heightReference: HeightReference.NONE,
+          },
+          show: startsFerry,
+        });
+        const boatMarker = viewer.entities.add({
+          id: 'tour-boat-marker',
+          position: initialBoatPosition,
+          billboard: {
+            image: createBoatMarkerImage(),
+            width: 62,
+            height: 47,
+            verticalOrigin: VerticalOrigin.BOTTOM,
+            pixelOffset: { x: 0, y: -38 },
+            disableDepthTestDistance: 1000000000,
+            scaleByDistance: new NearFarScalar(500, 1, 16000, 0.58),
+          },
+          show: startsFerry,
+        });
 
         const indexedLandmarks = orderedIndexedLandmarks(route);
         const landmarkEntities = new Map();
         const scratchPosition = new Cartesian3();
+        const scratchBoatPosition = new Cartesian3();
         const scratchCameraTarget = new Cartesian3();
         const scratchOrientation = new Quaternion();
         const scratchHpr = new HeadingPitchRoll();
@@ -666,6 +846,7 @@ export function CesiumDriveScene({ isStarted }) {
         let effectiveTimeScale = 0;
         let lastTime = performance.now();
         let lastUiSync = 0;
+        let visiblePassedChunkCount = 0;
         let lastLandmarkKey = '';
         let smoothedHeading = routeHeading(route, progress);
         let smoothedRange = 1500;
@@ -694,7 +875,10 @@ export function CesiumDriveScene({ isStarted }) {
           }
           visible.forEach((landmark, index) => {
             if (!landmarkEntities.has(landmark.id)) {
-              landmarkEntities.set(landmark.id, addLandmarkEntity(viewer, landmark, index === 1));
+              landmarkEntities.set(
+                landmark.id,
+                addLandmarkEntity(viewer, landmark, index === 1, index),
+              );
             }
           });
         };
@@ -813,16 +997,32 @@ export function CesiumDriveScene({ isStarted }) {
               smoothedHeading = routeHeading(route, progress);
               smoothedRange = 2500;
               state.setNearbyLandmarkId(jumpStop.id);
+              const jumpTravelMode = route.travelModeAt(progress);
+              const jumpIsWalking = jumpTravelMode === 'WALK';
+              const jumpIsFerry = isFerryTravelMode(jumpTravelMode);
+              const jumpClock = guideClockAtProgress(
+                state.activeItineraryPlan,
+                progress,
+                state.itineraryVisitHours,
+              );
               state.setVehicleState({
                 vehicleSpeed: 0,
                 vehicleSteer: 0,
                 routeProgress: progress,
-                routeDay: Math.min(3, Math.floor(progress * 3) + 1),
-                routeHour: 7 + (progress * 36 % 12),
+                ...jumpClock,
                 routeContext: {
                   point: { id: `cesium-${jumpStop.id}`, roadType: '真实道路' },
-                  segment: { id: 'cesium-route', type: 'scenic', speedLimit: 110, trafficState: 'normal' },
-                  profile: { label: 'Cesium 实景路线', surfaceLabel: '地形贴合道路', color: '#59666b' },
+                  segment: {
+                    id: 'cesium-route',
+                    type: jumpIsWalking ? 'walk' : jumpIsFerry ? 'ferry' : 'scenic',
+                    speedLimit: jumpIsWalking ? WALK_SPEED_KMH : 110,
+                    trafficState: 'normal',
+                  },
+                  profile: {
+                    label: jumpIsWalking ? '步行路线' : jumpIsFerry ? '水路 / 轮渡' : 'Cesium 实景路线',
+                    surfaceLabel: jumpIsWalking ? '步行道路' : jumpIsFerry ? '水道' : '地形贴合道路',
+                    color: '#59666b',
+                  },
                   currentStopId: forcedCurrentStopId,
                 },
               });
@@ -831,6 +1031,7 @@ export function CesiumDriveScene({ isStarted }) {
           const input = controls.current;
           const currentTravelMode = route.travelModeAt(progress);
           const isWalking = currentTravelMode === 'WALK';
+          const isFerry = isFerryTravelMode(currentTravelMode);
           const hasManualInput = input.forward || input.backward;
           if (routeLocked || (hasManualInput && state.autoDrive)) state.setAutoDrive(false);
 
@@ -868,6 +1069,30 @@ export function CesiumDriveScene({ isStarted }) {
             1,
             progress + (speedKmh / Math.max(route.distanceKm, 1) / 3600) * effectiveTimeScale * delta,
           ));
+          const nextPassedChunkCount = Math.min(
+            PASSED_ROUTE_CHUNK_COUNT,
+            Math.floor(progress * PASSED_ROUTE_CHUNK_COUNT),
+          );
+          if (nextPassedChunkCount !== visiblePassedChunkCount) {
+            if (nextPassedChunkCount > visiblePassedChunkCount) {
+              for (let index = visiblePassedChunkCount; index < nextPassedChunkCount; index += 1) {
+                passedRouteEntities[index].show = true;
+              }
+            } else {
+              for (let index = nextPassedChunkCount; index < visiblePassedChunkCount; index += 1) {
+                passedRouteEntities[index].show = false;
+              }
+            }
+            visiblePassedChunkCount = nextPassedChunkCount;
+          }
+          const passedHeadStart = Math.min(
+            progress,
+            visiblePassedChunkCount / PASSED_ROUTE_CHUNK_COUNT,
+          );
+          passedRouteHeadPositions = routePositions(
+            routePointsBetweenProgress(displayRoute, passedHeadStart, progress),
+          );
+          passedRouteHead.show = progress > 0 && progress < 1;
           if (progress >= 1 && speedKmh > 0) {
             speedKmh = 0;
             state.setAutoDrive(false);
@@ -877,9 +1102,19 @@ export function CesiumDriveScene({ isStarted }) {
           const point = route.sample(progress);
           const heading = routeHeading(route, progress);
           const routeGroundHeight = getRouteGroundHeight(point.lon, point.lat);
-          if (Number.isFinite(routeGroundHeight)) cameraGroundHeight = routeGroundHeight;
+          if (Number.isFinite(routeGroundHeight)) {
+            cameraGroundHeight = isFerry ? Math.max(0, routeGroundHeight) : routeGroundHeight;
+          }
           const cameraTargetHeight = cameraGroundHeight + 8;
-          Cartesian3.fromDegrees(point.lon, point.lat, 0.65, undefined, scratchPosition);
+          const movingModelHeight = isFerry ? 0 : Math.max(0, cameraGroundHeight);
+          Cartesian3.fromDegrees(
+            point.lon,
+            point.lat,
+            movingModelHeight + 0.8,
+            undefined,
+            scratchPosition,
+          );
+          Cartesian3.fromDegrees(point.lon, point.lat, 7, undefined, scratchBoatPosition);
           Cartesian3.fromDegrees(point.lon, point.lat, cameraTargetHeight, undefined, scratchCameraTarget);
           scratchHpr.heading = heading;
           scratchHpr.pitch = 0;
@@ -893,9 +1128,14 @@ export function CesiumDriveScene({ isStarted }) {
           );
           vehicle.position.setValue(scratchPosition);
           vehicle.orientation.setValue(scratchOrientation);
-          vehicle.show = !isWalking;
+          vehicle.show = !isWalking && !isFerry;
           walker.position.setValue(scratchPosition);
           walker.show = isWalking;
+          boat.position.setValue(scratchBoatPosition);
+          boat.orientation.setValue(scratchOrientation);
+          boat.show = isFerry;
+          boatMarker.position.setValue(scratchBoatPosition);
+          boatMarker.show = isFerry;
           if (isWalking) {
             const nextWalkingFrame = Math.floor(now / 280) % walkingFrames.length;
             if (nextWalkingFrame !== walkingFrameIndex) {
@@ -962,19 +1202,22 @@ export function CesiumDriveScene({ isStarted }) {
               vehicleSpeed: Math.abs(speedKmh),
               vehicleSteer: 0,
               routeProgress: progress,
-              routeDay: Math.min(3, Math.floor(progress * 3) + 1),
-              routeHour: 7 + (progress * 36 % 12),
+              ...guideClockAtProgress(
+                state.activeItineraryPlan,
+                progress,
+                state.itineraryVisitHours,
+              ),
               routeContext: {
                 point: { id: `cesium-${point.index}`, roadType: '真实道路' },
                 segment: {
                   id: 'cesium-route',
-                  type: isWalking ? 'walk' : 'scenic',
+                  type: isWalking ? 'walk' : isFerry ? 'ferry' : 'scenic',
                   speedLimit: isWalking ? WALK_SPEED_KMH : 110,
                   trafficState: 'normal',
                 },
                 profile: {
-                  label: isWalking ? '步行路线' : 'Cesium 实景路线',
-                  surfaceLabel: isWalking ? '步行道路' : '地形贴合道路',
+                  label: isWalking ? '步行路线' : isFerry ? '水路 / 轮渡' : 'Cesium 实景路线',
+                  surfaceLabel: isWalking ? '步行道路' : isFerry ? '水道' : '地形贴合道路',
                   color: '#59666b',
                 },
                 currentStopId,
@@ -1054,7 +1297,7 @@ export function CesiumDriveScene({ isStarted }) {
       viewer.destroy();
       viewerRef.current = null;
     };
-  }, [controls, route, routeCartesian, routeKey, setCesiumStatus]);
+  }, [controls, displayRoute, ferryRouteCartesians, passedRouteChunks, route, routeCartesian, routeKey, setCesiumStatus]);
 
   const showInitialLoading = !sceneError && !cesiumReady;
   const showStreamingPause = !sceneError && cesiumReady && streamingState.paused;

@@ -6,6 +6,12 @@ import { landmarks } from '../../data/landmarks.js';
 import { italyOutlineGeoJson } from '../../data/italyOutline.js';
 import { useAppStore } from '../../state/useAppStore.js';
 import { fetchRouteMetrics, useRouteMetrics } from '../../hooks/useRouteMetrics.js';
+import {
+  PACE_DAILY_HOURS,
+  PACE_PROFILES,
+  createGuideItineraryPlan,
+  plannedVisitHoursForLandmark,
+} from '../../lib/itinerarySchedule.js';
 import liveLandmarksData from '../../../public/data/live-landmarks.json';
 
 const ACTIVE_HOME_VERSION = { id: 'cinema', accent: '#80d7ff' };
@@ -66,20 +72,12 @@ const PACE_KEY = 'trip3d_pace';
 const LANGUAGE_KEY = 'trip3d_language';
 const MAX_TRIP_DAYS = 30;
 
-const paceDailyHours = {
-  Relaxed: 6,
-  Standard: 8,
-  Fast: 10,
-};
+const paceDailyHours = PACE_DAILY_HOURS;
 const paceLabels = {
   en: { Relaxed: 'Relaxed', Standard: 'Standard', Fast: 'Fast' },
   zh: { Relaxed: '轻松', Standard: '标准', Fast: '紧凑' },
 };
-const paceProfiles = {
-  Relaxed: { visitMultiplier: 1.3, dailyBufferHours: 1 },
-  Standard: { visitMultiplier: 1, dailyBufferHours: 0.5 },
-  Fast: { visitMultiplier: 0.75, dailyBufferHours: 0.25 },
-};
+const paceProfiles = PACE_PROFILES;
 const imageFallbacks = {
   italy_q1466700: 'https://commons.wikimedia.org/wiki/Special:FilePath/City%20of%20Rome%20during%20time%20of%20republic.jpg',
 };
@@ -653,6 +651,8 @@ function routeProviderLabel(mode, language) {
 }
 
 function travelModeLabel(mode, language) {
+  if (mode === 'FERRY_DRIVE') return homeText(language, '车渡轮', 'Car ferry');
+  if (mode === 'FERRY') return homeText(language, '\u8f6e\u6e21', 'Ferry');
   if (mode === 'MIXED') return homeText(language, '混合', 'Mixed');
   if (mode === 'WALK') return homeText(language, '步行', 'Walking');
   return homeText(language, '驾车', 'Driving');
@@ -1411,9 +1411,7 @@ function paceText(pace, language) {
 }
 
 function plannedVisitHours(landmark, language, pace) {
-  const baseHours = visitFor(landmark, language).durationHours;
-  const multiplier = paceProfiles[pace]?.visitMultiplier ?? 1;
-  return Math.max(0.5, Math.round(baseHours * multiplier * 4) / 4);
+  return plannedVisitHoursForLandmark(landmark, visitFor(landmark, language).durationHours, pace);
 }
 
 function paceLabel(pace, language) {
@@ -1454,7 +1452,9 @@ function pushTravelActivity(days, segment, dailyLimit, paceProfile, language) {
     const km = segment.distance * (hours / segment.duration);
     const kind = segment.travelMode === 'WALK'
       ? 'walk'
-      : segment.travelMode === 'MIXED' ? 'mixed' : 'drive';
+      : segment.travelMode === 'FERRY_DRIVE' ? 'ferry'
+      : segment.travelMode === 'FERRY' ? 'ferry'
+        : segment.travelMode === 'MIXED' ? 'mixed' : 'drive';
     const item = {
       kind,
       travelMode: segment.travelMode ?? 'DRIVE',
@@ -2535,6 +2535,7 @@ export function HomeShowcase({ onOpenDrive }) {
   const activeVersion = ACTIVE_HOME_VERSION;
   const setActiveRouteIds = useAppStore((state) => state.setActiveRouteIds);
   const setActiveRouteGeometry = useAppStore((state) => state.setActiveRouteGeometry);
+  const setActiveItineraryPlan = useAppStore((state) => state.setActiveItineraryPlan);
   const [hasEnteredHome, setHasEnteredHome] = useState(() => window.sessionStorage.getItem(HOME_ENTERED_KEY) === '1');
   const [language, setLanguage] = useState(() => {
     const stored = window.localStorage.getItem(LANGUAGE_KEY);
@@ -2884,6 +2885,20 @@ export function HomeShowcase({ onOpenDrive }) {
         segments: activeRouteSegmentsFor(metrics),
       });
     }
+    const guideSegments = routeSegmentsFor(
+      routeStops,
+      metrics?.routeSignature === routeSignature ? activeRouteSegmentsFor(metrics) : routeSegments,
+    );
+    setActiveItineraryPlan(createGuideItineraryPlan({
+      routeStops,
+      routeSegments: guideSegments,
+      days,
+      pace,
+      visitHoursById: Object.fromEntries(routeStops.map((stop) => [
+        stop.id,
+        plannedVisitHours(stop, language, pace),
+      ])),
+    }));
     onOpenDrive(landmarkId);
   };
   const saveAuthPayload = (payload) => {

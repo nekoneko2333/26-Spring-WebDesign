@@ -2534,3 +2534,32 @@ body.ui-awake .hud-mode {
   background: var(--drive-red, #ff4d4d) !important;
   color: #fff !important;
 }
+
+/* Final distance-driven timeline rail. */
+.app-shell .route-timeline__track::after {
+  display: none !important;
+}
+
+.app-shell .route-timeline__travelled {
+  position: absolute !important;
+  left: 18px !important;
+  top: 13px !important;
+  z-index: 1 !important;
+  display: block !important;
+  width: calc((100% - 36px) * var(--route-progress-ratio, 0)) !important;
+  max-width: calc(100% - 36px) !important;
+  height: 5px !important;
+  margin: 0 !important;
+  border: 2px solid var(--drive-ink) !important;
+  border-radius: 255px 12px 225px 10px / 10px 225px 12px 255px !important;
+  background: var(--drive-red, #ff4d4d) !important;
+  pointer-events: none;
+}
+
+@media (max-width: 780px) {
+  .app-shell .route-timeline__travelled {
+    left: 14px !important;
+    width: calc((100% - 28px) * var(--route-progress-ratio, 0)) !important;
+    max-width: calc(100% - 28px) !important;
+  }
+}

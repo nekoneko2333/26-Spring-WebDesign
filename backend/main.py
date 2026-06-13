@@ -140,6 +140,127 @@ def _decode_google_polyline(encoded):
     return coordinates
 
 
+def _duration_seconds(value):
+    return float(str(value or '0s').removesuffix('s') or 0)
+
+
+def _compact_provider_step(step):
+    return {
+        'travelMode': step.get('travelMode'),
+        'maneuver': step.get('navigationInstruction', {}).get('maneuver'),
+        'instruction': step.get('navigationInstruction', {}).get('instructions'),
+        'localizedValues': step.get('localizedValues'),
+        'transitVehicleType': step.get('transitDetails', {}).get('transitLine', {}).get('vehicle', {}).get('type'),
+        'transitLineName': step.get('transitDetails', {}).get('transitLine', {}).get('name'),
+    }
+
+
+def _mode_payload(display_mode, source, raw_mode=None):
+    model_map = {
+        'DRIVE': ('drive', 'drive'),
+        'WALK': ('walk', 'walk'),
+        'FERRY_DRIVE': ('ferry_drive', 'ferry'),
+    }
+    model_type, color_key = model_map.get(display_mode, ('drive', 'drive'))
+    return {
+        'travelMode': display_mode,
+        'displayTravelMode': display_mode,
+        'rawTravelMode': raw_mode or display_mode,
+        'modeSource': source,
+        'modelType': model_type,
+        'colorKey': color_key,
+    }
+
+
+def _water_signal_text(step):
+    values = [
+        step.get('travelMode'),
+        step.get('navigationInstruction', {}).get('maneuver'),
+        step.get('navigationInstruction', {}).get('instructions'),
+        step.get('transitDetails', {}).get('transitLine', {}).get('name'),
+        step.get('transitDetails', {}).get('transitLine', {}).get('vehicle', {}).get('type'),
+        step.get('localizedValues', {}).get('distance', {}).get('text'),
+        step.get('localizedValues', {}).get('duration', {}).get('text'),
+        step.get('localizedValues', {}).get('staticDuration', {}).get('text'),
+    ]
+    return ' '.join(str(value or '') for value in values).lower()
+
+
+def _is_google_drive_ferry_step(step):
+    maneuver = str(step.get('navigationInstruction', {}).get('maneuver', '')).upper()
+    if maneuver in ('FERRY', 'FERRY_TRAIN'):
+        return True
+    signal = _water_signal_text(step)
+    return any(token in signal for token in (
+        'ferry',
+        'ferry_train',
+        'traghetto',
+        'boat',
+        'car ferry',
+        'vehicle ferry',
+        '轮渡',
+        '渡轮',
+    ))
+
+
+def _google_route_steps(route, fallback_mode):
+    steps = []
+    for leg in route.get('legs') or []:
+        for step in leg.get('steps') or []:
+            encoded = step.get('polyline', {}).get('encodedPolyline', '')
+            raw_mode = str(step.get('travelMode') or fallback_mode or 'DRIVE').upper()
+            display_mode = 'FERRY_DRIVE' if _is_google_drive_ferry_step(step) else raw_mode
+            if display_mode not in ('DRIVE', 'WALK', 'FERRY_DRIVE'):
+                display_mode = 'DRIVE'
+            duration = step.get('duration') or step.get('staticDuration')
+            steps.append({
+                **_mode_payload(display_mode, 'GOOGLE', raw_mode),
+                'distanceKm': round(float(step.get('distanceMeters', 0)) / 1000, 3),
+                'durationHours': round(_duration_seconds(duration) / 3600, 3),
+                'geometryCoordinates': _decode_google_polyline(encoded) if encoded else [],
+                'providerStep': _compact_provider_step(step),
+            })
+    return steps
+
+
+def _osrm_step_mode(step, fallback_mode):
+    signal = ' '.join(str(step.get(key, '')) for key in ('mode', 'name', 'ref')).lower()
+    return 'FERRY' if any(token in signal for token in ('ferry', 'traghetto', 'fähre')) else fallback_mode
+
+
+def _osrm_step_mode(step, fallback_mode):
+    signal = ' '.join(str(step.get(key, '')) for key in ('mode', 'name', 'ref')).lower()
+    return 'FERRY_DRIVE' if any(token in signal for token in (
+        'ferry',
+        'traghetto',
+        'fähre',
+        'faehre',
+        'boat',
+        '轮渡',
+        '渡轮',
+    )) else fallback_mode
+
+
+def _osrm_route_steps(route, fallback_mode):
+    steps = []
+    for leg in route.get('legs') or []:
+        for step in leg.get('steps') or []:
+            display_mode = _osrm_step_mode(step, fallback_mode)
+            steps.append({
+                **_mode_payload(display_mode, 'OSRM', fallback_mode),
+                'distanceKm': round(float(step.get('distance', 0)) / 1000, 3),
+                'durationHours': round(float(step.get('duration', 0)) / 3600, 3),
+                'geometryCoordinates': step.get('geometry', {}).get('coordinates', []),
+                'providerStep': {
+                    'mode': step.get('mode'),
+                    'name': step.get('name'),
+                    'ref': step.get('ref'),
+                    'maneuver': step.get('maneuver', {}).get('type'),
+                },
+            })
+    return steps
+
+
 def _plan_google_route(coordinates, api_key, travel_mode='DRIVE'):
     waypoints = [
         {'location': {'latLng': {'latitude': point.lat, 'longitude': point.lon}}}
@@ -161,20 +282,41 @@ def _plan_google_route(coordinates, api_key, travel_mode='DRIVE'):
         headers={
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': api_key,
-            'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline',
+            'X-Goog-FieldMask': (
+                'routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,'
+                'routes.legs.steps.distanceMeters,routes.legs.steps.staticDuration,'
+                'routes.legs.steps.travelMode,routes.legs.steps.startLocation,routes.legs.steps.endLocation,'
+                'routes.legs.steps.localizedValues,'
+                'routes.legs.steps.polyline.encodedPolyline,'
+                'routes.legs.steps.navigationInstruction.maneuver,routes.legs.steps.navigationInstruction.instructions'
+            ),
         },
         payload=payload,
     )
     route = (response.get('routes') or [None])[0]
     if not route:
         raise RuntimeError('Google Routes returned no route')
-    duration_seconds = float(str(route.get('duration', '0s')).removesuffix('s') or 0)
+    steps = _google_route_steps(route, travel_mode)
+    step_geometry = _dedupe_geometry(steps)
+    route_geometry = step_geometry or _decode_google_polyline(route['polyline']['encodedPolyline'])
     return {
         'provider': 'google-routes',
         'travelMode': travel_mode,
+        'modeSource': 'GOOGLE',
         'distanceKm': round(float(route.get('distanceMeters', 0)) / 1000, 1),
-        'durationHours': round(duration_seconds / 3600, 2),
-        'geometryCoordinates': _decode_google_polyline(route['polyline']['encodedPolyline']),
+        'durationHours': round(_duration_seconds(route.get('duration')) / 3600, 2),
+        'geometryCoordinates': route_geometry,
+        'steps': steps,
+        'parts': steps,
+        'displayModeRanges': [
+            {
+                'travelMode': step['displayTravelMode'],
+                'displayTravelMode': step['displayTravelMode'],
+                'modeSource': step['modeSource'],
+                'distanceKm': step['distanceKm'],
+            }
+            for step in steps
+        ],
     }
 
 
@@ -189,18 +331,32 @@ def _plan_osrm_route(coordinates, travel_mode='DRIVE'):
         'overview': 'full',
         'geometries': 'geojson',
         'annotations': 'false',
-        'steps': 'false',
+        'steps': 'true',
     })
     response = _request_json(f'{base_url}/{encoded}?{query}')
     route = (response.get('routes') or [None])[0]
     if not route:
         raise RuntimeError('OSRM returned no route')
+    steps = _osrm_route_steps(route, travel_mode)
+    step_geometry = _dedupe_geometry(steps)
     return {
         'provider': 'osrm',
         'travelMode': travel_mode,
+        'modeSource': 'OSRM',
         'distanceKm': round(float(route.get('distance', 0)) / 1000, 1),
         'durationHours': round(float(route.get('duration', 0)) / 3600, 2),
-        'geometryCoordinates': route.get('geometry', {}).get('coordinates', []),
+        'geometryCoordinates': step_geometry or route.get('geometry', {}).get('coordinates', []),
+        'steps': steps,
+        'parts': steps,
+        'displayModeRanges': [
+            {
+                'travelMode': step['displayTravelMode'],
+                'displayTravelMode': step['displayTravelMode'],
+                'modeSource': step['modeSource'],
+                'distanceKm': step['distanceKm'],
+            }
+            for step in steps
+        ],
     }
 
 

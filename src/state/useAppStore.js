@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { GUIDE_DAY_START_HOUR, visitHoursBeforeStop } from '../lib/itinerarySchedule.js';
 
 export const useAppStore = create((set, get) => ({
   language: 'zh',
@@ -12,7 +13,9 @@ export const useAppStore = create((set, get) => ({
   routeContext: null,
   routeProgress: 0,
   routeDay: 1,
-  routeHour: 7,
+  routeHour: GUIDE_DAY_START_HOUR,
+  activeItineraryPlan: null,
+  itineraryVisitHours: 0,
   activeRouteIds: [],
   activeRouteGeometryCoordinates: [],
   activeRouteSegments: [],
@@ -43,18 +46,25 @@ export const useAppStore = create((set, get) => ({
     const nextSpeed = Number(routePlaybackSpeed);
     set({ routePlaybackSpeed: allowedSpeeds.includes(nextSpeed) ? nextSpeed : 8 });
   },
-  jumpVehicleToLandmark: (landmarkId) => set((state) => ({
-    vehicleJumpTarget: { landmarkId, token: (state.vehicleJumpTarget?.token ?? 0) + 1 },
-    autoDrive: false,
-    arrivalNotice: { landmarkId, source: 'jump' },
-    selectedLandmarkId: null,
-    focusPanelOpen: false,
-    modelViewerOpen: false,
-    guidedTourState: 'IDLE',
-    guidedTourLandmarkId: null,
-    guidedTourMessage: '',
-    cameraMode: 'follow',
-  })),
+  jumpVehicleToLandmark: (landmarkId) => set((state) => {
+    const stopIndex = state.activeItineraryPlan?.stopIds?.indexOf(landmarkId) ?? -1;
+    return {
+      vehicleJumpTarget: { landmarkId, token: (state.vehicleJumpTarget?.token ?? 0) + 1 },
+      autoDrive: false,
+      arrivalNotice: { landmarkId, source: 'jump' },
+      arrivedLandmarkIds: stopIndex > 0
+        ? state.activeItineraryPlan.stopIds.slice(0, stopIndex)
+        : [],
+      itineraryVisitHours: visitHoursBeforeStop(state.activeItineraryPlan, landmarkId),
+      selectedLandmarkId: null,
+      focusPanelOpen: false,
+      modelViewerOpen: false,
+      guidedTourState: 'IDLE',
+      guidedTourLandmarkId: null,
+      guidedTourMessage: '',
+      cameraMode: 'follow',
+    };
+  }),
   setCameraMode: (cameraMode) => set((state) => (
     state.cameraMode === cameraMode ? state : { cameraMode }
   )),
@@ -68,18 +78,33 @@ export const useAppStore = create((set, get) => ({
     set({ cameraMode: cameraMode === 'map' ? 'follow' : 'map' });
   },
   toggleAutoDrive: () => {
-    const { focusPanelOpen, modelViewerOpen } = get();
+    const { focusPanelOpen, modelViewerOpen, autoDrive, setAutoDrive } = get();
     if (focusPanelOpen || modelViewerOpen) return;
-    set((state) => ({ autoDrive: !state.autoDrive, cameraMode: 'follow' }));
+    setAutoDrive(!autoDrive);
   },
-  setAutoDrive: (autoDrive) => set((state) => ({
-    autoDrive,
-    cameraMode: autoDrive && !state.focusPanelOpen && !state.modelViewerOpen ? 'follow' : state.cameraMode,
-  })),
+  setAutoDrive: (autoDrive) => set((state) => {
+    const arrivedId = autoDrive ? state.arrivalNotice?.landmarkId : null;
+    const completesArrival = Boolean(arrivedId && !state.arrivedLandmarkIds.includes(arrivedId));
+    return {
+      autoDrive,
+      arrivalNotice: autoDrive ? null : state.arrivalNotice,
+      arrivedLandmarkIds: completesArrival
+        ? [...state.arrivedLandmarkIds, arrivedId]
+        : state.arrivedLandmarkIds,
+      itineraryVisitHours: completesArrival
+        ? state.itineraryVisitHours
+          + Number(state.activeItineraryPlan?.visitHoursById?.[arrivedId] ?? 0)
+        : state.itineraryVisitHours,
+      cameraMode: autoDrive && !state.focusPanelOpen && !state.modelViewerOpen ? 'follow' : state.cameraMode,
+    };
+  }),
   resetVehicleTour: () => set((state) => ({
     autoDrive: false,
     tourResetToken: state.tourResetToken + 1,
     routeProgress: 0,
+    routeDay: 1,
+    routeHour: GUIDE_DAY_START_HOUR,
+    itineraryVisitHours: 0,
     vehicleSpeed: 0,
     vehicleSteer: 0,
     nearbyLandmarkId: null,
@@ -93,6 +118,12 @@ export const useAppStore = create((set, get) => ({
   setNearbyLandmarkId: (nearbyLandmarkId) => set((state) => (
     state.nearbyLandmarkId === nearbyLandmarkId ? state : { nearbyLandmarkId }
   )),
+  setActiveItineraryPlan: (activeItineraryPlan) => set({
+    activeItineraryPlan,
+    itineraryVisitHours: 0,
+    routeDay: 1,
+    routeHour: activeItineraryPlan?.startHour ?? GUIDE_DAY_START_HOUR,
+  }),
   setVehicleState: ({ vehicleSpeed, vehicleSteer, routeContext, routeProgress, routeDay, routeHour }) => set((state) => ({
     vehicleSpeed,
     vehicleSteer,
@@ -112,6 +143,10 @@ export const useAppStore = create((set, get) => ({
     tourResetToken: state.tourResetToken + 1,
     autoDrive: false,
     routeProgress: 0,
+    routeDay: 1,
+    routeHour: GUIDE_DAY_START_HOUR,
+    activeItineraryPlan: null,
+    itineraryVisitHours: 0,
     vehicleSpeed: 0,
     vehicleSteer: 0,
     nearbyLandmarkId: null,
@@ -133,6 +168,9 @@ export const useAppStore = create((set, get) => ({
     tourResetToken: state.tourResetToken + 1,
     autoDrive: false,
     routeProgress: 0,
+    routeDay: 1,
+    routeHour: GUIDE_DAY_START_HOUR,
+    itineraryVisitHours: 0,
     vehicleSpeed: 0,
     vehicleSteer: 0,
     nearbyLandmarkId: null,
@@ -153,28 +191,30 @@ export const useAppStore = create((set, get) => ({
   }),
   showArrivalNotice: (landmarkId) => set((state) => {
     if (!landmarkId || state.arrivedLandmarkIds.includes(landmarkId) || state.arrivalNotice?.landmarkId === landmarkId) return {};
+    const isFinalStop = state.activeItineraryPlan?.stopIds?.at(-1) === landmarkId;
     return {
       autoDrive: false,
       arrivalNotice: { landmarkId },
+      arrivedLandmarkIds: isFinalStop
+        ? [...state.arrivedLandmarkIds, landmarkId]
+        : state.arrivedLandmarkIds,
+      itineraryVisitHours: isFinalStop
+        ? state.itineraryVisitHours
+          + Number(state.activeItineraryPlan?.visitHoursById?.[landmarkId] ?? 0)
+        : state.itineraryVisitHours,
       guidedTourState: 'FOCUS_POI',
       guidedTourLandmarkId: landmarkId,
       guidedTourMessage: '已到达景点',
     };
   }),
-  continueVehicleTour: () => set((state) => {
-    const arrivedId = state.arrivalNotice?.landmarkId;
-    return {
-      autoDrive: true,
-      cameraMode: 'follow',
-      arrivalNotice: null,
-      arrivedLandmarkIds: arrivedId && !state.arrivedLandmarkIds.includes(arrivedId)
-        ? [...state.arrivedLandmarkIds, arrivedId]
-        : state.arrivedLandmarkIds,
+  continueVehicleTour: () => {
+    get().setAutoDrive(true);
+    set({
       guidedTourState: 'DRIVING',
       guidedTourLandmarkId: null,
       guidedTourMessage: '',
-    };
-  }),
+    });
+  },
   clearGuidedTourFocus: () => set({
     selectedLandmarkId: null,
     focusPanelOpen: false,
