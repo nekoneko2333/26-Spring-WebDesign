@@ -1,145 +1,222 @@
-# Trip3D 意大利自驾 3D 导览
+# Trip3D
 
-Trip3D 是一个基于 React、Vite、CesiumJS 和 FastAPI 的意大利自驾游路线规划与 3D 导览项目。核心定位是自驾旅行：车是主载具，步行只用于同城短距离景点切换，轮渡表示“车辆搭乘轮渡”，不会默认混入公交、地铁、火车等公共交通。
+Trip3D 是一个面向意大利旅行的景点浏览、路线规划、日程拆分与 Cesium 3D 路线导览项目。
 
-完整功能、技术栈和数据流可参考 [FEATURES_AND_TECH_STACK.md](./FEATURES_AND_TECH_STACK.md)。
+用户可以搜索和筛选景点，将景点加入路线，调整停靠顺序，选择交通偏好与旅行节奏，生成包含交通、参观和机动时间的每日安排，并沿规划结果进入沉浸式 3D 导览。
 
-## 路线到底怎么规划
+项目采用手绘旅行手账视觉风格。界面样式应遵循 `Styles/sketch.txt`。
 
-### 1. 用户选择景点和路线模式
+## 核心功能
 
-首页把用户选择的景点 ID 传给 `src/hooks/useRouteMetrics.js` 的 `fetchRouteMetrics(routeIds, routePreference)`。路线按相邻两个景点逐段规划，而不是一次性把整条路线当成一个黑盒。
+- 浏览约 500 个意大利景点及其基本资料。
+- 按地区、类型、适合时间、旅行偏好和关键词筛选景点。
+- 收藏景点、对比景点、查看景点详情。
+- 添加、删除、排序和锁定路线站点。
+- 选择自动、驾车或步行路线。
+- 查看道路级路线、总距离和预计交通时间。
+- 使用推荐顺序减少回头或按南北方向排列。
+- 根据交通时间、参观时间和旅行节奏自动估算天数。
+- 将行程拆分为每日交通、参观和机动安排。
+- 导出 TXT 或 PDF 行程。
+- 注册、登录并保存多条路线。
+- 在 Cesium 场景中沿真实道路进行 3D 导览。
 
-当前前端支持三种偏好：
+## 页面结构
 
-- `AUTO`：默认模式，自驾优先，只在很短的同城段比较步行候选。
-- `DRIVE`：强制每段按自驾规划。
-- `WALK`：强制每段按步行规划，主要用于测试或手动切换。
+### 首页
 
-### 2. AUTO 的总原则
+首页由以下区域组成：
 
-AUTO 不是“公共交通混合路线”。它的规则是：
+1. 顶部导航和语言切换。
+2. 项目主视觉与当前路线预览。
+3. 景点搜索、筛选和景点卡片。
+4. 路线站点管理、路线推荐与路线地图。
+5. 每日行程安排与导出入口。
+6. 3D 路线导览入口。
+7. 收藏、对比、路线优化、行程和账户快捷服务。
+8. 景点资料、账户摘要和页脚导航。
 
-- 跨城默认 `DRIVE`。
-- 同城但直线距离超过 `1 km`，仍然默认 `DRIVE`。
-- 只有同城且直线距离不超过 `1 km` 的短段，才会同时请求 `DRIVE` 和 `WALK` 做比较。
-- 只有真实步行路线明显更合理时才选 `WALK`。
-- 不会默认请求 `TRANSIT`，所以不会把公交、地铁、火车、缆车混进当前自驾导览。
+### 3D 导览
 
-步行会被选中的条件在 `shouldAutoUseWalking()` 中：
+3D 导览使用规划后的道路坐标，并根据不同路段显示汽车、步行人物或轮渡。场景包含路线进度、站点时间轴、视角切换、自动导览和景点聚焦功能。
 
-- 路线不是坐标估算结果。
-- 步行距离、步行时间有效。
-- 优先条件：步行距离不超过 `1 km`，且步行耗时不超过驾车耗时的 `80%`。
-- 兜底条件：步行距离不超过 `1.6 km`、步行不超过 `0.4 h`，并且驾车路线明显绕行或比步行长 `1.6x` 以上。
+## 按钮功能说明
 
-### 3. 每一段如何请求路线
+以下内容描述每个交互按钮预期实现的功能。相同功能在不同页面出现时，应保持状态同步。
 
-前端每段调用 `planLeg(coords, travelMode)`，优先请求本地后端：
+### 开场与顶部导航
 
-```text
-POST /api/routes/plan
-```
+| 按钮 | 预期功能 |
+| --- | --- |
+| 进入首页 | 结束开场动画并显示完整首页。 |
+| Trip3D 标志 | 滚动回首页顶部。 |
+| 菜单 / 收起 | 在窄屏设备上展开或收起顶部导航。 |
+| 首页 | 滚动到主视觉区域。 |
+| 目的地 | 滚动到景点搜索和列表区域。 |
+| 路线规划 | 滚动到路线编辑区域。 |
+| 3D 导览 | 滚动到 3D 导览入口。 |
+| 景点资料 | 滚动到景点资料卡区域。 |
+| 功能服务 | 滚动到旅行工具区域。 |
+| 账户 | 滚动到账户摘要区域。 |
+| 中文 | 将当前界面语言切换为中文并保存偏好。 |
+| EN | 将当前界面语言切换为英文并保存偏好。 |
+| 使用提示 | 打开分步骤的新手引导。 |
+| 登录 / 用户名 | 未登录时打开登录注册弹窗；已登录时打开账户和保存路线列表。 |
 
-请求体包含坐标和 `travelMode`。后端处理顺序是：
+### 首页主视觉
 
-1. 如果 `.env.backend` 配置了 `GOOGLE_MAPS_API_KEY`，优先请求 Google Routes API。
-2. Google 请求失败、没有 key 或返回不可用时，降级到 OSRM。
-3. 如果后端不可用，前端会直接请求公共 OSRM。
-4. 如果路线服务都不可用，最后才使用坐标直线估算。
+| 按钮 | 预期功能 |
+| --- | --- |
+| 开始规划路线 | 滚动到路线规划区域。 |
+| 进入 3D 导览 | 滚动到 3D 导览入口。 |
+| 打开 3D Drive | 使用当前路线和当前选中景点打开 3D 导览。 |
 
-### 4. Google 是主数据源，但只请求自驾/步行
+### 景点搜索与筛选
 
-后端 `backend/main.py` 的 `_plan_google_route()` 使用 Google Routes API。当前只给 Google 传入应用允许的模式：
+| 控件 | 预期功能 |
+| --- | --- |
+| 搜索框 | 按景点名称、城市、地区和旅行关键词过滤景点。 |
+| 地区 | 按区域或城市过滤景点。 |
+| 类型 | 按教堂、博物馆、遗址、自然景观等类型过滤。 |
+| 时间 | 按适合参观的季节或时段过滤。 |
+| 排序 | 按推荐、名称或由北向南重新排列结果。 |
+| 都看看 | 清除旅行偏好过滤。 |
+| 旅行偏好标签 | 只显示符合对应偏好的景点。 |
+| 展示更多景点 | 增加当前显示的景点卡数量。 |
+| 收起景点列表 | 恢复默认显示数量。 |
 
-- `DRIVE`
-- `WALK`
+### 景点卡片与景点详情
 
-不会默认传 `TRANSIT`。这符合自驾游主题。
+| 按钮 | 预期功能 |
+| --- | --- |
+| 收藏 | 添加或取消收藏当前景点，并同步到账户状态。 |
+| 对比 | 添加或移出景点对比列表。 |
+| 加入路线 | 将景点加入当前路线。 |
+| 取消加入 | 从当前路线移除景点。 |
+| 查看详情 | 打开景点详情页。 |
+| 关闭 | 关闭景点详情页并返回之前的位置。 |
+| 背景资料 | 仅在景点详情页打开外部背景资料。 |
 
-Google field mask 会请求 step 级数据：
+### 路线规划
 
-- `routes.distanceMeters`
-- `routes.duration`
-- `routes.polyline.encodedPolyline`
-- `routes.legs.steps.distanceMeters`
-- `routes.legs.steps.staticDuration`
-- `routes.legs.steps.travelMode`
-- `routes.legs.steps.startLocation`
-- `routes.legs.steps.endLocation`
-- `routes.legs.steps.localizedValues`
-- `routes.legs.steps.polyline.encodedPolyline`
-- `routes.legs.steps.navigationInstruction.maneuver`
-- `routes.legs.steps.navigationInstruction.instructions`
+| 按钮或控件 | 预期功能 |
+| --- | --- |
+| 自动 | 根据距离和城市条件选择驾车或步行。 |
+| 驾车 | 强制路线按驾车方式规划。 |
+| 步行 | 强制路线按步行方式规划。 |
+| 路线搜索结果 | 将搜索结果对应的景点加入路线。 |
+| ↑ | 将站点向前移动一位。 |
+| ↓ | 将站点向后移动一位。 |
+| 锁定状态 | 锁定站点，使路线优化时保留其位置。 |
+| 解锁状态 | 取消站点的位置保护。 |
+| × | 将站点移出当前路线。 |
+| 优化顺序 | 在保留锁定站点的前提下减少路线回头。 |
+| 回到默认路线 | 恢复项目预设路线。 |
+| 一键清空 | 清除当前路线的全部站点。 |
+| 保存路线 | 登录后将当前路线保存为一条独立记录；允许保存多条路线。 |
 
-也就是说，前端最终使用的不是一条整段 polyline 的猜测结果，而是 Google/OSRM 返回的 step polyline。
+### 推荐路线
 
-### 5. Step 如何标准化
+| 推荐项 | 预期功能 |
+| --- | --- |
+| 当前顺序 | 保留用户当前站点顺序。 |
+| 减少回头 | 使用更短、更连续的站点顺序。 |
+| 从南向北 | 按纬度由南向北排列站点。 |
+| 从北向南 | 按纬度由北向南排列站点。 |
 
-后端会把 provider 的每个 step 标准化为 `parts[]`：
+点击推荐卡片本身即应用该路线。当前采用的推荐卡应高亮，不显示额外的“选择这条路线”按钮。
 
-```js
-{
-  travelMode: 'DRIVE' | 'WALK' | 'FERRY_DRIVE',
-  displayTravelMode: 'DRIVE' | 'WALK' | 'FERRY_DRIVE',
-  rawTravelMode: 'DRIVE' | 'WALK',
-  modeSource: 'GOOGLE' | 'OSRM' | 'FALLBACK',
-  modelType: 'drive' | 'walk' | 'ferry_drive',
-  colorKey: 'drive' | 'walk' | 'ferry',
-  distanceKm,
-  durationHours,
-  geometryCoordinates,
-  providerStep
-}
-```
+### 日程安排与导出
 
-其中 `FERRY_DRIVE` 的含义是“车上轮渡”，不是用户改乘公共交通船线。
+| 按钮或控件 | 预期功能 |
+| --- | --- |
+| 天数 | 手动修改旅行天数，并立即重新拆分每日行程。 |
+| 节奏 | 在轻松、标准和紧凑节奏之间切换每日可用时间。 |
+| TXT | 下载纯文本行程。 |
+| PDF | 打开打印视图，用于保存或打印 PDF。 |
+| 展开其余天数 | 在当前横向日程区域下方增加更多行并显示全部天数。 |
+| 收起天数 | 恢复默认单排行程预览。 |
 
-### 6. 轮渡怎么识别
+每日安排必须同时计算交通时间、景点参观时间和机动时间。交通、步行和参观使用不同但符合整体风格的颜色。
 
-当前只把自驾路线里的轮渡识别为轮渡：
+### 3D 导览入口
 
-- Google step 的 `navigationInstruction.maneuver` 是 `FERRY` 或 `FERRY_TRAIN`，归一为 `FERRY_DRIVE`。
-- Google step 文本、指令或 vehicle 相关字段命中 `ferry`、`ferry_train`、`traghetto`、`boat`、`car ferry`、`vehicle ferry` 等，也归一为 `FERRY_DRIVE`。
-- OSRM step 的 `mode/name/ref` 命中 `ferry`、`traghetto`、`faehre`、`boat` 等，也归一为 `FERRY_DRIVE`。
+| 按钮 | 预期功能 |
+| --- | --- |
+| 进入 | 使用当前路线打开 Cesium 3D 路线导览。没有有效路线时按钮不可用。 |
+| 开始驾驶 | 关闭 3D 开场页并启动导览界面。 |
+| 返回首页 | 关闭 3D 导览并保留当前规划状态。 |
 
-不会因为某段跨水就直接画水道。跨海兜底只在 provider 没给出可用轮渡 step 时使用。
+### 3D 导览控制
 
-### 7. 跨海路线怎么处理
+| 按钮或控件 | 预期功能 |
+| --- | --- |
+| 收起 / 展开控制区 | 缩小或恢复导览控制面板。 |
+| 导览倍速 | 调整动画播放速度，不改变真实行程时间。 |
+| 跟随视角 | 相机跟随当前车辆或步行人物。 |
+| 俯视视角 | 切换到路线地图视角。 |
+| 自由视角 | 允许用户自由旋转、缩放和观察场景。 |
+| 开始 / 继续导览 | 启动自动沿路线移动。 |
+| 暂停 | 暂停自动移动。 |
+| 重置路线 | 将车辆、进度和到站状态恢复到路线起点。 |
+| 时间轴站点 | 打开该站点的路线摘要。 |
+| 跳转到此处 | 将车辆和相机跳转到所选站点。 |
+| 时间轴弹窗 × | 关闭站点摘要。 |
+| 返回路线 | 退出景点聚焦状态并恢复路线视角。 |
+| 查看模型 | 打开当前景点的独立 3D 模型查看器。 |
+| 模型查看器 × | 关闭模型查看器。 |
+| 重新导览 | 在路线结束后从起点重新开始。 |
+| 切换路线 | 返回首页修改或选择路线。 |
+| 返回首页 | 结束当前 3D 导览并返回首页。 |
 
-前端会用粗略区域判断是否涉及西西里或撒丁岛这类跨海段：
+键盘驾驶支持方向键或 `WASD`，具体行为以页面提示为准。
 
-1. 先照常请求 `DRIVE` provider 路线。
-2. 如果 provider 返回的 `parts[]` 里已经有 `FERRY_DRIVE`，直接信任 provider 的 step geometry。
-3. 如果 provider 没有返回轮渡 step，才使用本地 `WATER_CROSSINGS` 表兜底，把路线拆成：
-   - 出发点到港口：`DRIVE`
-   - 港口到港口：`FERRY_DRIVE`
-   - 港口到目的地：`DRIVE`
+### 收藏与对比夹页
 
-### 8. 威尼斯怎么处理
+| 按钮 | 预期功能 |
+| --- | --- |
+| 合上夹页 | 关闭收藏或对比面板。 |
+| 去挑目的地 | 关闭面板并滚动到景点列表。 |
+| 看看详情 | 打开对应景点详情页。 |
+| 加入路线 / 取消加入 | 修改当前路线中的景点状态。 |
+| 取消收藏 | 从收藏列表移除景点。 |
+| 移出对比 | 从对比列表移除景点。 |
 
-威尼斯不再强行画手写水道，也不再把内部路线默认当成船线。
+### 功能服务卡片
 
-当前策略是：
+| 按钮 | 预期功能 |
+| --- | --- |
+| 收藏目的地 | 打开收藏景点夹页。 |
+| 景点对比 | 打开景点对比夹页。 |
+| 顺路整理 | 执行路线优化并定位到路线规划区域。 |
+| 按天安排行程 | 定位到日程安排区域。 |
+| 旅行资料 | 定位到景点资料区域。 |
+| 我的旅行手册 | 打开账户或登录入口。 |
 
-- 威尼斯内部景点到景点：`WALK`。
-- 外部进入威尼斯：先 `DRIVE` 到接驳点，再 `WALK` 到核心景点。
-- 从威尼斯离开：先 `WALK` 到接驳点，再 `DRIVE` 离开。
-- 只有 Google/OSRM 在自驾 step 里真实返回车渡轮，才显示 `FERRY_DRIVE`。
+### 账户与保存路线
 
-### 9. 前端如何消费路线
+| 按钮 | 预期功能 |
+| --- | --- |
+| 登录 | 使用邮箱和密码登录，并恢复账户保存状态。 |
+| 注册 | 创建账户并进入登录状态。 |
+| 登录 / 注册切换 | 在登录表单和注册表单之间切换。 |
+| 退出登录 | 结束账户会话，但保留可恢复的游客本地状态。 |
+| 打开保存路线 | 将所选保存路线载入当前规划器。 |
+| 保存路线 × | 删除指定保存路线，不影响其他路线。 |
+| 账户弹窗 × | 关闭账户弹窗。 |
 
-前端拿到 provider 的 `parts[]` 后，会把所有 step geometry 去重拼接成整条 `geometryCoordinates`。首页简报、路线草图、导览时间、3D 路线、已走红线、进度轴和载具切换都基于同一套 parts 数据。
+### 新手引导
 
-3D 表现规则：
+| 按钮 | 预期功能 |
+| --- | --- |
+| 跳过 | 立即关闭引导。 |
+| 上一步 | 返回前一个引导步骤。 |
+| 下一步 | 前进到下一个引导步骤。 |
+| 完成 | 结束最后一个引导步骤并保存完成状态。 |
 
-- `DRIVE`：小车模型，陆路颜色。
-- `WALK`：行人模型，仅短距离同城。
-- `FERRY_DRIVE`：轮渡模型，水路颜色，语义为车在轮渡上移动。
+### 页脚
 
-### 10. 时间怎么算
-
-导览时间不直接用画面车速倒推真实行程，而是使用路线 provider 返回的 `durationHours` 与景点停留计划。播放倍率只影响动画播放速度，不改变真实计划时间。
+页脚中的首页、目的地、路线规划和 3D 导览按钮分别滚动到对应页面区域。
 
 ## 快速启动
 
@@ -147,131 +224,127 @@ Google field mask 会请求 step 级数据：
 
 - Node.js `20.19+` 或 `22.12+`
 - npm
-- Python `3.11+`，仅完整后端需要
+- Python `3.11+`
 - 可选：Cesium ion token
-- 可选：Google Maps API key，用于 Google Routes
+- 可选：Google Maps API key
+- 可选：PostgreSQL
 
-安装依赖：
+### 安装前端依赖
 
 ```powershell
 npm install
-```
-
-复制前端环境变量：
-
-```powershell
 Copy-Item .env.example .env.local
 ```
 
-`.env.local` 示例：
+`.env.local`：
 
 ```env
 VITE_CESIUM_ION_TOKEN=your-cesium-ion-token
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-启动前端：
+### 启动前端
 
 ```powershell
-npm.cmd run dev
+npm run dev
 ```
 
-访问：
+访问 `http://127.0.0.1:5173/`。
 
-```text
-http://127.0.0.1:5173/
-```
-
-## 后端
-
-安装后端依赖：
+### 启动后端
 
 ```powershell
 conda create -n web3d-backend python=3.11
 conda run -n web3d-backend pip install -r backend/requirements.txt
-```
-
-启动 SQLite 后端：
-
-```powershell
 npm run dev:backend
 ```
 
-使用 PostgreSQL 后端：
+默认后端地址为 `http://127.0.0.1:8000`。
+
+### PostgreSQL 模式
 
 ```powershell
 Copy-Item .env.backend.example .env.backend
 npm run dev:backend:postgres
 ```
 
-`.env.backend` 示例：
+`.env.backend`：
 
 ```env
-DATABASE_URL=postgresql://trip3d_app:replace-with-a-strong-password@127.0.0.1:5432/trip3d
+DATABASE_URL=postgresql://trip3d_app:password@127.0.0.1:5432/trip3d
 CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
 BACKEND_PORT=8001
 GOOGLE_MAPS_API_KEY=
 ```
 
-配置 `GOOGLE_MAPS_API_KEY` 后，后端优先使用 Google Routes。未配置或请求失败时，降级到 OSRM。
-
 ## 常用命令
 
 ```powershell
-npm run dev                       # 前端开发服务器
-npm run dev:backend               # SQLite 后端，127.0.0.1:8000
-npm run dev:backend:postgres      # PostgreSQL 后端，端口来自 .env.backend
-npm run fetch:live-data           # 更新公开景点数据
-npm run import:live-data:postgres # 导入 PostgreSQL
-npm run build                     # 生产构建
-npm run preview                   # 本地预览生产构建
-```
-
-## 验证
-
-```powershell
+npm run dev
+npm run dev:backend
+npm run dev:backend:postgres
+npm run fetch:live-data
+npm run enrich:live-data
+npm run clean:live-data
+npm run validate:live-data
+npm run import:live-data:postgres
 npm run build
-conda run -n web3d-backend python -m py_compile backend/main.py
-git diff --check
+npm run preview
 ```
 
-当前生产构建可能提示主 bundle 较大，这是 Cesium/Three.js 打包体积导致的警告，不代表构建失败。
-
-## 主要目录
+## 项目目录
 
 ```text
-backend/main.py                         FastAPI 入口、路线代理和 provider step 解析
-src/hooks/useRouteMetrics.js            逐段规划、AUTO 选择、轮渡兜底和路线诊断
-src/hooks/useActiveRouteGeo.js          3D 路线采样和交通方式区间
-src/components/cesium/                  Cesium 场景、路线、载具和地标
-src/components/home/                    首页、路线简报、路线草图和行程 UI
-src/components/ui/                      HUD、时间轴、详细信息面板
-src/state/useAppStore.js                Zustand 全局路线/导览状态
-src/styles/                             全局和页面样式
-public/models/                          车辆、轮渡和景点 GLB 模型
-tools/                                  数据抓取、导入和启动脚本
+web3d-project/
+├─ backend/                 FastAPI 接口、账户、路线代理和数据库访问
+├─ data/                    数据处理过程使用的源数据或中间数据
+├─ docs/                    项目技术文档
+│  └─ TECH_STACK.md         技术栈、架构和数据流
+├─ public/
+│  ├─ data/                 浏览器直接读取的景点数据
+│  └─ models/               车辆、轮渡和景点 GLB 模型
+├─ src/
+│  ├─ assets/               前端静态资源
+│  ├─ components/
+│  │  ├─ camera/            Three.js 相机组件
+│  │  ├─ cesium/            Cesium 路线导览场景
+│  │  ├─ home/              首页、景点、路线和日程界面
+│  │  ├─ landmarks/         景点模型
+│  │  ├─ layout/            页面和导览外壳
+│  │  ├─ scene/             Three.js 场景组件
+│  │  ├─ ui/                3D HUD、弹窗和模型查看器
+│  │  └─ vehicle/           Three.js 车辆控制
+│  ├─ config/               主题等应用配置
+│  ├─ data/                 景点、路线、文案和地图数据
+│  ├─ hooks/                路线、资料和输入状态 Hooks
+│  ├─ lib/                  行程拆分等纯业务逻辑
+│  ├─ state/                Zustand 全局状态
+│  └─ styles/               按页面和功能拆分的样式
+├─ Styles/
+│  └─ sketch.txt            手绘视觉规范
+├─ tools/                   数据抓取、校验、导入和启动脚本
+├─ .env.example             前端环境变量示例
+├─ .env.backend.example     后端环境变量示例
+├─ package.json             前端依赖和脚本
+└─ vite.config.js           Vite 与 Cesium 构建配置
 ```
 
-## 常见问题
+以下目录和文件属于运行产物，不应作为源代码维护：
 
-### 为什么某段没有显示轮渡
+- `dist/`
+- `node_modules/`
+- `backend/__pycache__/`
+- `backend/accounts.sqlite3`
+- `.vite-dev.log`
+- `.chrome-shot*`
 
-当前不会简单因为跨水就画轮渡。优先看 Google/OSRM 的 step 是否返回了 ferry 相关 maneuver 或说明。如果 provider 没有返回轮渡 step，只有命中本地跨海兜底表时才会生成 `FERRY_DRIVE`。
+## 技术文档
 
-### 为什么威尼斯内部不是水路
+完整技术栈、系统架构和数据流见 [`docs/TECH_STACK.md`](./docs/TECH_STACK.md)。
 
-当前产品定位是自驾游。威尼斯核心区车辆不可连续通行，因此内部短距离按步行处理；水上公交、vaporetto 等公共交通不会混进自驾主路线。
-
-### 为什么 AUTO 没有选步行
-
-AUTO 只在同城且直线距离不超过 `1 km` 的短段比较步行。步行路线还必须是真实 provider 路线，并且比驾车明显更合理。否则会保持自驾。
-
-### 路线变成直线是什么意思
-
-这表示 Google、后端 OSRM、前端公共 OSRM 都没有返回可用道路 geometry，应用进入了坐标估算兜底。此时应检查后端是否启动、网络是否可用、Google key 是否有效。
-
-## 安全说明
+## 配置与安全
 
 - 不要提交 `.env.local`、`.env.backend`、数据库密码、Cesium token 或 Google API key。
-- 前端 token 会暴露给浏览器，生产环境应使用最小权限和来源限制。
-- 公共 OSRM 适合开发和低频测试，正式部署应使用自建或有服务保障的路线 provider。
+- 前端环境变量会发送到浏览器，生产环境应限制 token 权限和允许来源。
+- 公共 OSRM 适合开发和低频测试；生产环境应使用有服务保障的路线提供方。
+- SQLite 文件仅适合本地开发，正式环境建议使用 PostgreSQL。

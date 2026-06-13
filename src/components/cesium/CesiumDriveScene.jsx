@@ -485,15 +485,15 @@ function orderedIndexedLandmarks(route) {
   return stops.sort((a, b) => a.progress - b.progress || a.index - b.index);
 }
 
-function addLandmarkEntity(viewer, landmark, highlighted, labelSlot = 0) {
+function addLandmarkEntity(viewer, landmark, groundHeight, highlighted, labelSlot = 0) {
   const common = {
     id: `landmark-${landmark.id}`,
-    position: Cartesian3.fromDegrees(landmark.lon, landmark.lat),
+    position: Cartesian3.fromDegrees(landmark.lon, landmark.lat, groundHeight + 0.35),
     billboard: {
       image: getLandmarkDotImage(),
       width: 25,
       height: 30,
-      heightReference: HeightReference.RELATIVE_TO_GROUND,
+      heightReference: HeightReference.NONE,
       verticalOrigin: VerticalOrigin.BOTTOM,
       disableDepthTestDistance: 1000000000,
       distanceDisplayCondition: new DistanceDisplayCondition(0, 60000),
@@ -528,7 +528,7 @@ function addLandmarkEntity(viewer, landmark, highlighted, labelSlot = 0) {
         uri: landmark.modelPath,
         minimumPixelSize: highlighted ? 24 : 16,
         maximumScale: 24,
-        heightReference: HeightReference.CLAMP_TO_GROUND,
+        heightReference: HeightReference.NONE,
         runAnimations: false,
         color: Color.WHITE,
       },
@@ -833,6 +833,26 @@ export function CesiumDriveScene({ isStarted }) {
         });
 
         const indexedLandmarks = orderedIndexedLandmarks(route);
+        const landmarkGroundHeights = new Map();
+        if (hasDetailedTerrain && indexedLandmarks.length) {
+          try {
+            const sampledLandmarks = await sampleTerrainMostDetailed(
+              terrainProvider,
+              indexedLandmarks.map(({ landmark }) => (
+                Cartographic.fromDegrees(landmark.lon, landmark.lat)
+              )),
+            );
+            if (disposed) return;
+            sampledLandmarks.forEach((sampled, index) => {
+              landmarkGroundHeights.set(
+                indexedLandmarks[index].id,
+                Number.isFinite(sampled?.height) ? sampled.height : 0,
+              );
+            });
+          } catch {
+            indexedLandmarks.forEach(({ id }) => landmarkGroundHeights.set(id, 0));
+          }
+        }
         const landmarkEntities = new Map();
         const scratchPosition = new Cartesian3();
         const scratchBoatPosition = new Cartesian3();
@@ -877,7 +897,13 @@ export function CesiumDriveScene({ isStarted }) {
             if (!landmarkEntities.has(landmark.id)) {
               landmarkEntities.set(
                 landmark.id,
-                addLandmarkEntity(viewer, landmark, index === 1, index),
+                addLandmarkEntity(
+                  viewer,
+                  landmark,
+                  landmarkGroundHeights.get(landmark.id) ?? 0,
+                  index === 1,
+                  index,
+                ),
               );
             }
           });
@@ -1198,15 +1224,16 @@ export function CesiumDriveScene({ isStarted }) {
                 ? forcedCurrentStopId
                 : nearbyDistance <= 5 ? nearbyLandmark?.id ?? null : null,
             );
+            const guideClock = guideClockAtProgress(
+              state.activeItineraryPlan,
+              progress,
+              state.itineraryVisitHours,
+            );
             state.setVehicleState({
               vehicleSpeed: Math.abs(speedKmh),
               vehicleSteer: 0,
               routeProgress: progress,
-              ...guideClockAtProgress(
-                state.activeItineraryPlan,
-                progress,
-                state.itineraryVisitHours,
-              ),
+              ...guideClock,
               routeContext: {
                 point: { id: `cesium-${point.index}`, roadType: '真实道路' },
                 segment: {

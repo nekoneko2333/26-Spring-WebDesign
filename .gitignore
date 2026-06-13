@@ -13,6 +13,7 @@ dist-ssr
 *.local
 data/raw/
 tools/amsterdam-vr/.cache/
+.chrome-shot*/
 
 # Python / backend generated files
 __pycache__/
