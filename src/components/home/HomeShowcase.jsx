@@ -1635,39 +1635,6 @@ function makeItineraryPlan(routeStops, days, pace = 'Standard', language = 'en',
 }
 
 
-function routeExperienceAudit(routeStops, plan, routeSegments, language) {
-  const stopCount = routeStops.length;
-  const regions = new Set(routeStops.map((stop) => regionFor(stop)));
-  const walkingSegments = routeSegments.filter((segment) => segment.travelMode === 'WALK').length;
-  const longTravelDays = plan.days.filter((day) => day.travelHours >= 5).length;
-  const feasibleBonus = plan.isFeasible ? 18 : -10;
-  const diversityScore = Math.min(24, regions.size * 6 + Math.min(stopCount, 6));
-  const rhythmScore = Math.max(0, 24 - longTravelDays * 5 - Math.max(0, plan.minimumDays - plan.days.length) * 4);
-  const immersionScore = Math.min(24, stopCount * 3 + walkingSegments * 4 + (plan.bufferHours > 0 ? 5 : 0));
-  const score = Math.max(45, Math.min(98, Math.round(34 + feasibleBonus + diversityScore + rhythmScore + immersionScore)));
-  const items = [];
-
-  if (!plan.isFeasible) {
-    items.push(homeText(language, `建议把天数调到 ${plan.minimumDays} 天以上，避免导览像赶路。`, `Try ${plan.minimumDays}+ days so the guide feels less rushed.`));
-  } else {
-    items.push(homeText(language, '时间节奏可行，适合在课堂展示“可执行的路线规划”。', 'Timing is feasible, which helps the project feel actionable.'));
-  }
-
-  if (regions.size < 3 && stopCount >= 4) {
-    items.push(homeText(language, '可以加入北部/中部/南部不同类型景点，提升路线层次。', 'Add stops across north/central/south Italy for stronger variety.'));
-  } else {
-    items.push(homeText(language, '路线覆盖层次较丰富，方便讲清“城市—道路—景点”的故事线。', 'The route has enough variety for a city-road-landmark story arc.'));
-  }
-
-  if (walkingSegments === 0 && stopCount > 1) {
-    items.push(homeText(language, '可切换“自动混合”或加入同城短距离景点，让步行段更有沉浸感。', 'Use Auto mix or add short city stops to create immersive walking moments.'));
-  } else {
-    items.push(homeText(language, `已有 ${walkingSegments} 段步行/近距离体验，适合突出沉浸导览创意。`, `${walkingSegments} walk/nearby segment(s) support the immersive guide concept.`));
-  }
-
-  return { score, items };
-}
-
 function starRating(value) {
   const count = Math.max(1, Math.min(5, Math.round(value)));
   return '★★★★★'.slice(0, count) + '☆☆☆☆☆'.slice(0, 5 - count);
@@ -2150,7 +2117,6 @@ function RoutePlannerSection(props) {
     }))
     .slice(0, 4), [language, pace, props.recommendationMetrics, props.routeRecommendations]);
   const printPdf = () => window.print();
-  const experienceAudit = routeExperienceAudit(routeStops, plan, routeSegments, language);
   const healthReport = routeHealthReport(routeStops, plan, routeSegments, props.routeDiagnostics, language);
 
   return (
@@ -2311,15 +2277,6 @@ function RoutePlannerSection(props) {
                   <p>{healthReport.advice}</p>
                 </>
               )}
-            </aside>
-            <aside className="experience-audit" aria-label={homeText(language, '项目得分建议', 'Project score suggestions')}>
-              <div>
-                <span>{homeText(language, '创意完成度', 'Creative readiness')}</span>
-                <strong>{experienceAudit.score}</strong>
-              </div>
-              <ul>
-                {experienceAudit.items.map((item) => <li key={item}>{item}</li>)}
-              </ul>
             </aside>
           </section>
         </div>
@@ -2502,8 +2459,15 @@ function TravelNotesSection({ language, stops }) {
 }
 
 function AccountSummarySection({ language, favorites, routeStops, lockedIds, userSession, onSignIn, myReviews, savedRoutes }) {
-  const items = [[language === 'zh' ? '\u5f53\u524d\u6a21\u5f0f' : 'Current mode', userSession ? userSession.name : homeText(language, '\u6e38\u5ba2\u6a21\u5f0f', 'Guest mode')], [language === 'zh' ? '\u5df2\u6536\u85cf\u666f\u70b9' : 'Saved stops', favorites.size], [language === 'zh' ? '\u5f53\u524d\u8def\u7ebf\u666f\u70b9' : 'Route stops', routeStops.length], [language === 'zh' ? '\u5df2\u9501\u5b9a\u666f\u70b9' : 'Locked stops', lockedIds.size]];
-  return <section id="home-account" className="cinematic-section cinematic-account-summary"><div className="cinematic-section__head"><span>{homeText(language, '\u8d26\u6237', 'Account')}</span><h2>{language === 'zh' ? '\u8d26\u6237\u4e0e\u6536\u85cf\u72b6\u6001' : 'Account and saved state'}</h2></div><div className="cinematic-account-summary__grid">{items.map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}<button type="button" onClick={onSignIn}>{userSession ? (language === 'zh' ? '\u67e5\u770b\u8d26\u6237' : 'View account') : (language === 'zh' ? '\u767b\u5f55' : 'Sign in')}</button></div></section>;
+  const items = [
+    [language === 'zh' ? '\u5f53\u524d\u6a21\u5f0f' : 'Current mode', userSession ? userSession.name : homeText(language, '\u6e38\u5ba2\u6a21\u5f0f', 'Guest mode')],
+    [homeText(language, '我评价过', 'Reviewed stops'), Object.keys(myReviews ?? {}).length],
+    [homeText(language, '收藏了', 'Favorites'), favorites.size],
+    [homeText(language, '保存了路线', 'Saved routes'), savedRoutes?.length ?? 0],
+    [language === 'zh' ? '\u5f53\u524d\u8def\u7ebf\u666f\u70b9' : 'Route stops', routeStops.length],
+    [language === 'zh' ? '\u5df2\u9501\u5b9a\u666f\u70b9' : 'Locked stops', lockedIds.size],
+  ];
+  return <section id="home-account" className="cinematic-section cinematic-account-summary"><div className="cinematic-section__head"><span>{homeText(language, '\u8d26\u6237', 'Account')}</span><h2>{language === 'zh' ? '我的旅行手册汇总' : 'My travel notebook summary'}</h2></div><div className="cinematic-account-summary__grid">{items.map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}<button type="button" onClick={onSignIn}>{userSession ? (language === 'zh' ? '\u67e5\u770b\u8d26\u6237' : 'View account') : (language === 'zh' ? '\u767b\u5f55' : 'Sign in')}</button></div></section>;
 }
 
 function HomeFooter({ language }) {
