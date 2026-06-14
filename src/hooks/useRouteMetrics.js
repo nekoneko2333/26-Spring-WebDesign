@@ -3,7 +3,7 @@ import { landmarks } from '../data/landmarks.js';
 import { travelLandmarkMeta } from '../data/travelGuide.js';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
-const ROUTE_METRICS_SCHEMA_VERSION = 6;
+const ROUTE_METRICS_SCHEMA_VERSION = 7;
 const DRIVABLE_ACCESS_POINTS = {
   milan_duomo: { lon: 9.1954, lat: 45.4614 },
   venice_rialto: { lon: 12.3181, lat: 45.4379 },
@@ -405,6 +405,29 @@ async function planLeg(coords, travelMode) {
   };
 }
 
+function forceRouteTravelMode(route, travelMode) {
+  if (!route) return route;
+  const modelType = travelMode === 'WALK' ? 'walk' : 'drive';
+  const colorKey = travelMode === 'WALK' ? 'walk' : 'drive';
+  return {
+    ...route,
+    travelMode,
+    parts: (route.parts ?? []).map((part) => ({
+      ...part,
+      travelMode,
+      displayTravelMode: travelMode,
+      rawTravelMode: travelMode,
+      modelType,
+      colorKey,
+    })),
+    displayModeRanges: (route.displayModeRanges ?? []).map((range) => ({
+      ...range,
+      travelMode,
+      displayTravelMode: travelMode,
+    })),
+  };
+}
+
 async function buildMixedSegment(from, to, index, routePreference = 'AUTO') {
   const baseMode = routePreference === 'DRIVE' || routePreference === 'WALK'
     ? routePreference
@@ -413,7 +436,9 @@ async function buildMixedSegment(from, to, index, routePreference = 'AUTO') {
   const toAccess = to.city === 'Venice' ? VENICE_ACCESS_POINT : DRIVABLE_ACCESS_POINTS[to.id];
   const parts = [];
 
-  if (from.city === 'Venice' && to.city === 'Venice') {
+  if (routePreference === 'WALK') {
+    parts.push(forceRouteTravelMode(await planLeg([from, to], 'WALK'), 'WALK'));
+  } else if (from.city === 'Venice' && to.city === 'Venice') {
     parts.push(await planLeg([from, to], 'WALK'));
   } else if (from.city === 'Venice' && fromAccess) {
     parts.push(await planLeg([from, { ...fromAccess, city: from.city }], 'WALK'));

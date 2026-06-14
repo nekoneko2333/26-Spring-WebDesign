@@ -1542,39 +1542,61 @@ function addActivityToDay(day, item) {
   day.totalKm += item.km;
 }
 
-function distributeActivitiesAcrossDays(days, requestedDays, dailyLimit, paceProfile) {
+function distributeActivitiesAcrossDays(days, requestedDays, dailyLimit) {
   const activities = days.flatMap((day) => day.activities);
-  if (!activities.length || requestedDays <= days.length) return days;
-  const totalActivityHours = activities.reduce((sum, item) => sum + item.hours, 0);
-  const usableDailyLimit = Math.max(0.5, dailyLimit - paceProfile.dailyBufferHours);
-  const targetHours = Math.min(usableDailyLimit, Math.max(0.5, totalActivityHours / requestedDays));
-  const output = [makeEmptyItineraryDay(0, dailyLimit)];
+  if (!activities.length) return days;
 
-  activities.forEach((item, index) => {
-    let day = output[output.length - 1];
-    const dayHours = day.travelHours + day.visitHours;
-    const remainingItems = activities.length - index;
-    const remainingSlots = requestedDays - output.length;
-    const shouldAdvance = day.activities.length
-      && output.length < requestedDays
-      && dayHours + item.hours > targetHours
-      && remainingItems > remainingSlots;
-    if (shouldAdvance) {
-      day = makeEmptyItineraryDay(output.length, dailyLimit);
-      output.push(day);
+  const activityCount = activities.length;
+  const groupCount = Math.max(1, Math.min(clampDays(requestedDays), activityCount));
+  const weights = activities.map((item) => safeNumber(item.hours));
+  const prefixHours = [0];
+  weights.forEach((hours) => prefixHours.push(prefixHours.at(-1) + hours));
+
+  const maxHours = Array.from({ length: groupCount + 1 }, () => Array(activityCount + 1).fill(Infinity));
+  const balanceScore = Array.from({ length: groupCount + 1 }, () => Array(activityCount + 1).fill(Infinity));
+  const splitAt = Array.from({ length: groupCount + 1 }, () => Array(activityCount + 1).fill(0));
+  maxHours[0][0] = 0;
+  balanceScore[0][0] = 0;
+
+  for (let group = 1; group <= groupCount; group += 1) {
+    for (let itemCount = group; itemCount <= activityCount; itemCount += 1) {
+      for (let split = group - 1; split < itemCount; split += 1) {
+        if (!Number.isFinite(maxHours[group - 1][split])) continue;
+        const segmentHours = prefixHours[itemCount] - prefixHours[split];
+        const candidateMax = Math.max(maxHours[group - 1][split], segmentHours);
+        const candidateBalance = balanceScore[group - 1][split] + segmentHours ** 2;
+        const isBetter = candidateMax < maxHours[group][itemCount] - 0.001
+          || (Math.abs(candidateMax - maxHours[group][itemCount]) <= 0.001
+            && candidateBalance < balanceScore[group][itemCount]);
+        if (isBetter) {
+          maxHours[group][itemCount] = candidateMax;
+          balanceScore[group][itemCount] = candidateBalance;
+          splitAt[group][itemCount] = split;
+        }
+      }
     }
-    addActivityToDay(day, item);
-  });
+  }
 
-  return output;
+  const groups = [];
+  let group = groupCount;
+  let itemCount = activityCount;
+  while (group > 0) {
+    const split = splitAt[group][itemCount];
+    groups.unshift(activities.slice(split, itemCount));
+    itemCount = split;
+    group -= 1;
+  }
+
+  return groups.map((groupItems, index) => {
+    const day = makeEmptyItineraryDay(index, dailyLimit);
+    groupItems.forEach((item) => addActivityToDay(day, item));
+    return day;
+  });
 }
 
 
 
-function buildItineraryDays(routeStops, dayCount, pace, language, segmentOverrides = []) {
-  const safeDays = clampDays(dayCount);
-  const dailyLimit = paceDailyHours[pace] ?? paceDailyHours.Standard;
-  const paceProfile = paceProfiles[pace] ?? paceProfiles.Standard;
+function buildBaseItineraryDays(routeStops, dailyLimit, paceProfile, pace, language, segmentOverrides = []) {
   const uniqueStops = [...new Map(routeStops.map((stop) => [stop.id, stop])).values()];
   const buckets = [makeEmptyItineraryDay(0, dailyLimit)];
 
@@ -1586,7 +1608,19 @@ function buildItineraryDays(routeStops, dayCount, pace, language, segmentOverrid
     pushVisitActivity(buckets, stop, plannedVisitHours(stop, language, pace), dailyLimit, paceProfile, language);
   });
 
-  const distributedBuckets = distributeActivitiesAcrossDays(buckets, safeDays, dailyLimit, paceProfile);
+  return buckets;
+}
+
+function buildItineraryDays(routeStops, dayCount, pace, language, segmentOverrides = []) {
+  const safeDays = clampDays(dayCount);
+  const dailyLimit = paceDailyHours[pace] ?? paceDailyHours.Standard;
+  const paceProfile = paceProfiles[pace] ?? paceProfiles.Standard;
+  const buckets = buildBaseItineraryDays(routeStops, dailyLimit, paceProfile, pace, language, segmentOverrides);
+  const baseDayCount = buckets.filter((day) => day.activities.length > 0).length || 1;
+
+  const distributedBuckets = safeDays === baseDayCount
+    ? buckets
+    : distributeActivitiesAcrossDays(buckets, safeDays, dailyLimit);
   buckets.splice(0, buckets.length, ...distributedBuckets);
 
   const outputDays = Math.max(safeDays, buckets.length);
@@ -1609,8 +1643,16 @@ function buildItineraryDays(routeStops, dayCount, pace, language, segmentOverrid
 }
 
 function minimumDaysFor(routeStops, pace, language, segmentOverrides = []) {
-  return buildItineraryDays(routeStops, 1, pace, language, segmentOverrides)
+  const dailyLimit = paceDailyHours[pace] ?? paceDailyHours.Standard;
+  const paceProfile = paceProfiles[pace] ?? paceProfiles.Standard;
+  return buildBaseItineraryDays(routeStops, dailyLimit, paceProfile, pace, language, segmentOverrides)
     .filter((day) => day.activities.length > 0).length || 1;
+}
+
+function physicalMinimumDaysFor(routeStops, pace, language, segments = []) {
+  const travelHours = segments.reduce((sum, segment) => sum + safeNumber(segment.duration), 0);
+  const visitHours = routeStops.reduce((sum, stop) => sum + plannedVisitHours(stop, language, pace), 0);
+  return Math.max(1, Math.ceil((travelHours + visitHours) / 24));
 }
 
 function makeItineraryPlan(routeStops, days, pace = 'Standard', language = 'en', segmentOverrides = []) {
@@ -1621,16 +1663,18 @@ function makeItineraryPlan(routeStops, days, pace = 'Standard', language = 'en',
   const visitHours = routeStops.reduce((sum, stop) => sum + plannedVisitHours(stop, language, pace), 0);
   const bufferHours = itineraryDays.reduce((sum, day) => sum + day.bufferHours, 0);
   const minimumDays = minimumDaysFor(routeStops, pace, language, segments);
+  const physicalMinimumDays = physicalMinimumDaysFor(routeStops, pace, language, segments);
   return {
     days: itineraryDays,
     dailyLimit,
     minimumDays,
+    physicalMinimumDays,
     travelHours,
     visitHours,
     bufferHours,
     totalHours: travelHours + visitHours + bufferHours,
     totalKm: Number(segments.reduce((sum, segment) => sum + segment.distance, 0).toFixed(2)),
-    isFeasible: itineraryDays.every((day) => day.overHours <= 0.05) && clampDays(days) >= minimumDays,
+    isFeasible: itineraryDays.every((day) => day.overHours <= 0.05) && clampDays(days) >= physicalMinimumDays,
   };
 }
 
@@ -2104,6 +2148,7 @@ function RoutePlannerSection(props) {
   const [showAllDays, setShowAllDays] = useState(false);
   const plan = makeItineraryPlan(routeStops, days, pace, language, routeSegments);
   const exportText = itineraryExportText(language, routeStops, days, pace, routeSegments);
+  const minSelectableDays = plan.physicalMinimumDays ?? 1;
   const visiblePlanDays = showAllDays ? plan.days : plan.days.slice(0, 4);
   const hiddenDayCount = Math.max(0, plan.days.length - visiblePlanDays.length);
   const routeRecommendations = useMemo(() => [...(props.routeRecommendations ?? [])]
@@ -2118,6 +2163,14 @@ function RoutePlannerSection(props) {
     .slice(0, 4), [language, pace, props.recommendationMetrics, props.routeRecommendations]);
   const printPdf = () => window.print();
   const healthReport = routeHealthReport(routeStops, plan, routeSegments, props.routeDiagnostics, language);
+  const handleDaysChange = (event) => {
+    setDays(Math.max(clampDays(event.target.value), minSelectableDays));
+  };
+  const handleDaysKeyDown = (event) => {
+    if (event.key === 'ArrowDown' && days <= minSelectableDays) {
+      event.preventDefault();
+    }
+  };
 
   return (
     <section id="home-planner" className="cinematic-section cinematic-route-planner" data-guide="planner">
@@ -2213,7 +2266,17 @@ function RoutePlannerSection(props) {
           <section className="home-module home-module--itinerary-controls">
             <div className="home-module__head"><span>{homeText(language, '按天安排', 'Day plan')}</span><strong>{days}</strong></div>
             <div className="home-planner-controls">
-              <label><span>{homeText(language, '天数', 'Days')}</span><input type="number" min="1" max={MAX_TRIP_DAYS} value={days} onChange={(event) => setDays(clampDays(event.target.value))} /></label>
+              <label>
+                <span>{homeText(language, '天数', 'Days')}</span>
+                <input
+                  type="number"
+                  min={minSelectableDays}
+                  max={MAX_TRIP_DAYS}
+                  value={days}
+                  onChange={handleDaysChange}
+                  onKeyDown={handleDaysKeyDown}
+                />
+              </label>
               <label><span>{homeText(language, '节奏', 'Pace')}</span><select value={pace} onChange={(event) => setPace(event.target.value)}>{Object.keys(paceDailyHours).map((item) => <option key={item} value={item}>{paceLabel(item, language)}</option>)}</select></label>
             </div>
             <p className="planner-note">{paceText(pace, language)}</p>
@@ -2711,6 +2774,8 @@ export function HomeShowcase({ onOpenDrive }) {
   const [compare, setCompare] = useState(() => loadStoredSet(COMPARE_KEY));
   const [selectedId, setSelectedId] = useState(initialRouteIds[0]);
   const [days, setDays] = useState(() => clampDays(window.localStorage.getItem(DAYS_KEY)));
+  const [daysMode, setDaysMode] = useState('auto');
+  const savedDaysOverrideRef = useRef(null);
   const [pace, setPace] = useState(() => {
     const stored = window.localStorage.getItem(PACE_KEY);
     return paceDailyHours[stored] ? stored : 'Standard';
@@ -2843,6 +2908,12 @@ export function HomeShowcase({ onOpenDrive }) {
     setLockedIds(new Set(uniqueValidRouteIds(plan.locked_ids ?? [])));
     setFavorites(new Set(uniqueValidRouteIds(plan.favorites ?? [])));
     setCompare(new Set(uniqueValidRouteIds(plan.compare ?? [])));
+    if (plan.days != null) {
+      const savedDays = clampDays(plan.days);
+      savedDaysOverrideRef.current = savedDays;
+      setDays(savedDays);
+      setDaysMode('manual');
+    }
     if (paceDailyHours[plan.pace]) setPace(plan.pace);
   }, []);
 
@@ -2921,10 +2992,40 @@ export function HomeShowcase({ onOpenDrive }) {
     () => buildRouteRecommendations(routeIds, lockedIds, language),
     [language, lockedIds, routeIds],
   );
+  const planningContextKey = `${routeSignature}|${pace}|${language}`;
+  const planningContextKeyRef = useRef(planningContextKey);
+  const suggestedDays = useMemo(
+    () => clampDays(minimumDaysFor(routeStops, pace, language, routeSegments)),
+    [language, pace, routeSegments, routeStops],
+  );
+  const minimumSelectableDays = useMemo(
+    () => physicalMinimumDaysFor(routeStops, pace, language, routeSegments),
+    [language, pace, routeSegments, routeStops],
+  );
   useEffect(() => {
-    const suggestedDays = clampDays(minimumDaysFor(routeStops, pace, language, routeSegments));
-    setDays((current) => (current === suggestedDays ? current : suggestedDays));
-  }, [language, pace, routeSegments, routeStops]);
+    const contextChanged = planningContextKeyRef.current !== planningContextKey;
+    if (contextChanged) {
+      planningContextKeyRef.current = planningContextKey;
+      const savedDays = savedDaysOverrideRef.current;
+      savedDaysOverrideRef.current = null;
+      if (savedDays != null) {
+        setDaysMode('manual');
+        setDays(Math.max(savedDays, minimumSelectableDays));
+        return;
+      }
+      setDaysMode('auto');
+      setDays(suggestedDays);
+      return;
+    }
+    setDays((current) => {
+      if (daysMode === 'auto') return current === suggestedDays ? current : suggestedDays;
+      return current < minimumSelectableDays ? minimumSelectableDays : current;
+    });
+  }, [daysMode, minimumSelectableDays, planningContextKey, suggestedDays]);
+  const setManualDays = useCallback((value) => {
+    setDays(Math.max(clampDays(value), minimumSelectableDays));
+    setDaysMode('manual');
+  }, [minimumSelectableDays]);
   useEffect(() => {
     if (!routeIds.length) return;
     setSelectedId((current) => (routeIds.includes(current) ? current : routeIds[0]));
@@ -3181,7 +3282,12 @@ export function HomeShowcase({ onOpenDrive }) {
     const nextRouteIds = uniqueValidRouteIds(route.route_ids ?? []);
     setRouteIds(nextRouteIds);
     setLockedIds(new Set(uniqueValidRouteIds(route.locked_ids ?? [])));
-    setDays(clampDays(route.days));
+    if (route.days != null) {
+      const savedDays = clampDays(route.days);
+      savedDaysOverrideRef.current = savedDays;
+      setDays(savedDays);
+      setDaysMode('manual');
+    }
     if (paceDailyHours[route.pace]) setPace(route.pace);
     if (['AUTO', 'DRIVE', 'WALK'].includes(route.travel_mode)) setRouteTravelPreference(route.travel_mode);
     setSelectedId(nextRouteIds[0] ?? null);
@@ -3252,7 +3358,7 @@ export function HomeShowcase({ onOpenDrive }) {
     savedRoutes,
     myReviews,
     days,
-    setDays,
+    setDays: setManualDays,
     pace,
     setPace,
     optimizeMessage,
