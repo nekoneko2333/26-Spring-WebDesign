@@ -26,6 +26,7 @@ const liveIndex = new Map((liveLandmarksData.items ?? []).map((item) => [item.id
 const routeMatrixIds = liveLandmarksData.routeMatrix?.ids ?? [];
 const routeMatrixIndex = new Map(routeMatrixIds.map((id, index) => [id, index]));
 const initialRouteIds = ['milan_duomo', 'venice_rialto', 'florence_duomo', 'pisa', 'colosseum', 'pompeii'];
+const classicRouteIds = ['colosseum', 'florence_duomo', 'pisa', 'venice_rialto', 'milan_duomo'];
 
 const STORY_PARTICLE_COUNT = 7600;
 const STORY_MODEL_SAMPLE_COUNT = 8200;
@@ -70,6 +71,7 @@ const COMPARE_KEY = 'trip3d_compare';
 const DAYS_KEY = 'trip3d_days';
 const PACE_KEY = 'trip3d_pace';
 const LANGUAGE_KEY = 'trip3d_language';
+const MY_REVIEWS_KEY = 'trip3d_my_reviews';
 const MAX_TRIP_DAYS = 30;
 
 const paceDailyHours = PACE_DAILY_HOURS;
@@ -1633,6 +1635,26 @@ function makeItineraryPlan(routeStops, days, pace = 'Standard', language = 'en',
 }
 
 
+function starRating(value) {
+  const count = Math.max(1, Math.min(5, Math.round(value)));
+  return '★★★★★'.slice(0, count) + '☆☆☆☆☆'.slice(0, 5 - count);
+}
+
+function routeHealthReport(routeStops, plan, routeSegments, diagnostics, language) {
+  if (routeStops.length < 2) {
+    return { empty: true, message: homeText(language, '加入至少 2 个景点后，我会帮你检查路线是否顺路。', 'Add at least 2 stops and I will check whether the route is sensible.') };
+  }
+  const distance = plan.totalKm;
+  const recommendedDays = Math.max(plan.minimumDays, Math.ceil((plan.travelHours + plan.visitHours) / (plan.dailyLimit || 8)));
+  const directness = Math.max(2, Math.min(5, 5 - (diagnostics?.excessiveOverlap ? 1.2 : 0) - Math.max(0, routeStops.length - 6) * 0.25 - Math.max(0, distance - 900) / 650));
+  const comfort = Math.max(1, Math.min(5, 5 - (plan.isFeasible ? 0 : 1.5) - Math.max(0, plan.minimumDays - plan.days.length) * 0.75));
+  const friendly = Math.max(2, Math.min(5, 5 - Math.max(0, routeStops.length - 5) * 0.35 - Math.max(0, distance - 1100) / 900));
+  let advice = homeText(language, '当前路线整体顺路，适合首次意大利旅行。', 'This route is generally direct and friendly for a first Italy trip.');
+  if (!plan.isFeasible || routeStops.length > 7 || distance > 1200) advice = homeText(language, '这条路线可能比较紧凑，建议增加旅行天数或切换为轻松节奏。', 'This route may feel compact. Add days or switch to a relaxed pace.');
+  if (diagnostics?.excessiveOverlap) advice = homeText(language, '当前路线可能存在回头路，建议点击“减少回头”优化顺序。', 'This route may double back. Try Optimize to reduce backtracking.');
+  return { empty: false, directness: starRating(directness), comfort: starRating(comfort), friendly: starRating(friendly), distance, trafficHours: plan.travelHours, recommendedDays, advice };
+}
+
 
 function itineraryExportText(language, routeStops, days, pace, segmentOverrides = []) {
   const plan = makeItineraryPlan(routeStops, days, pace, language, segmentOverrides);
@@ -1710,9 +1732,9 @@ function HomeHeader({ language, setLanguage, userSession, onAccount, onHelp }) {
   );
 }
 
-function HomeHero({ language, routeStops, selectedStop, onOpenDrive }) {
+function HomeHero({ language, routeStops, selectedStop, onOpenDrive, onClassicRoute }) {
   const title = language === 'zh' ? '\u4eca\u5929\u60f3\u53bb\u54ea\uff1f' : 'Where to today?';
-  return <section id="home-hero" className="cinematic-section cinematic-hero"><div className="cinematic-hero__copy"><span>{language === 'zh' ? '\u610f\u5927\u5229\u65c5\u884c\u624b\u8bb0' : 'Italy travel notebook'}</span><h1>{title}</h1><p>{language === 'zh' ? '\u7b5b\u9009\u666f\u70b9\uff0c\u5f00\u59cb\u89c4\u5212\uff01' : 'Filter stops and start planning.'}</p><div className="cinematic-actions"><button className="concept-btn concept-btn--primary" type="button" onClick={() => scrollToHomeSection('home-planner')}>{language === 'zh' ? '\u5f00\u59cb\u89c4\u5212\u8def\u7ebf' : 'Start planning'}</button><button className="concept-btn" type="button" onClick={() => scrollToHomeSection('home-3d')}>{language === 'zh' ? '\u8fdb\u51653D\u5bfc\u89c8' : 'Enter 3D guide'}</button></div></div><div className="cinematic-hero__preview" aria-label={language === 'zh' ? '\u8def\u7ebf\u548c3D\u5bfc\u89c8\u9884\u89c8' : 'Route and 3D guide preview'}><div className="cinematic-hero__media">{imageFor(selectedStop, language) && <img src={imageFor(selectedStop, language)} alt="" loading="eager" />}<button type="button" onClick={() => onOpenDrive(selectedStop.id)}>{language === 'zh' ? '\u6253\u5f00 3D Drive' : 'Open 3D Drive'}</button></div><div className="cinematic-hero__route"><span>{language === 'zh' ? '\u5f53\u524d\u8def\u7ebf' : 'Current route'}</span>{routeStops.slice(0, 5).map((stop, index) => <strong key={stop.id}>{index + 1}. {nameFor(stop, language)}</strong>)}</div></div></section>;
+  return <section id="home-hero" className="cinematic-section cinematic-hero"><div className="cinematic-hero__copy"><span>{language === 'zh' ? '\u610f\u5927\u5229\u65c5\u884c\u624b\u8bb0' : 'Italy travel notebook'}</span><h1>{title}</h1><p>{language === 'zh' ? '\u7b5b\u9009\u666f\u70b9\uff0c\u5f00\u59cb\u89c4\u5212\uff01' : 'Filter stops and start planning.'}</p><div className="cinematic-actions"><button className="concept-btn concept-btn--primary" type="button" onClick={() => scrollToHomeSection('home-planner')}>{language === 'zh' ? '\u5f00\u59cb\u89c4\u5212\u8def\u7ebf' : 'Start planning'}</button><button className="concept-btn concept-btn--classic" type="button" onClick={onClassicRoute}>{homeText(language, '试试经典路线', 'Try classic route')}</button><button className="concept-btn" type="button" onClick={() => scrollToHomeSection('home-3d')}>{language === 'zh' ? '\u8fdb\u51653D\u5bfc\u89c8' : 'Enter 3D guide'}</button></div></div><div className="cinematic-hero__preview" aria-label={language === 'zh' ? '\u8def\u7ebf\u548c3D\u5bfc\u89c8\u9884\u89c8' : 'Route and 3D guide preview'}><div className="cinematic-hero__media">{imageFor(selectedStop, language) && <img src={imageFor(selectedStop, language)} alt="" loading="eager" />}<button type="button" disabled={routeStops.length < 2} title={routeStops.length < 2 ? homeText(language, '请至少加入 2 个景点后再进入 3D 导览。', 'Add at least 2 stops before entering the 3D guide.') : ''} onClick={() => routeStops.length >= 2 && onOpenDrive(selectedStop.id)}>{language === 'zh' ? '\u6253\u5f00 3D Drive' : 'Open 3D Drive'}</button></div><div className="cinematic-hero__route"><span>{language === 'zh' ? '\u5f53\u524d\u8def\u7ebf' : 'Current route'}</span>{routeStops.slice(0, 5).map((stop, index) => <strong key={stop.id}>{index + 1}. {nameFor(stop, language)}</strong>)}</div></div></section>;
 }
 
 const ROUTE_MAP_BOUNDS = { lonMin: 6.4, lonMax: 19.0, latMin: 35.4, latMax: 47.2 };
@@ -2095,6 +2117,7 @@ function RoutePlannerSection(props) {
     }))
     .slice(0, 4), [language, pace, props.recommendationMetrics, props.routeRecommendations]);
   const printPdf = () => window.print();
+  const healthReport = routeHealthReport(routeStops, plan, routeSegments, props.routeDiagnostics, language);
 
   return (
     <section id="home-planner" className="cinematic-section cinematic-route-planner" data-guide="planner">
@@ -2131,6 +2154,7 @@ function RoutePlannerSection(props) {
             </label>
             {routeQuery && <div className="concept-suggestion-list">{routeMatches.slice(0, 5).map((stop) => <button key={stop.id} type="button" onClick={() => props.onAddRoute(stop.id)}><strong>{nameFor(stop, language)}</strong><span>{locationLabel(stop, language) || regionText(stop, language)} / {kindText(stop, language)}</span></button>)}</div>}
             <div className="home-planner-list">
+              {!routeStops.length && <p className="planner-empty-state">{homeText(language, '路线本里还没有目的地，先从景点卡片中加入几个想去的地方吧。', 'Your route notebook is empty. Add a few places from destination cards first.')}</p>}
               {routeStops.map((stop, index) => (
                 <section key={stop.id}>
                   <span>{String(index + 1).padStart(2, '0')}</span>
@@ -2145,7 +2169,8 @@ function RoutePlannerSection(props) {
               ))}
             </div>
             <div className="concept-actions concept-actions--compact">
-              <button className="concept-btn" type="button" onClick={props.onOptimize}>{homeText(language, '优化顺序', 'Optimize')}</button>
+              <button className="concept-btn" type="button" onClick={props.onOptimize}>{homeText(language, '减少回头', 'Reduce backtracking')}</button>
+              <button className="concept-btn concept-btn--classic" type="button" onClick={props.onClassicRoute}>{homeText(language, '一键体验经典意大利路线', 'Try classic Italy route')}</button>
               <button className="concept-btn" type="button" onClick={props.onResetRoute}>{homeText(language, '回到默认路线', 'Reset route')}</button>
               <button className="concept-btn" type="button" onClick={props.onClearRoute}>{homeText(language, '一键清空', 'Clear route')}</button>
               <button className="concept-btn" type="button" onClick={props.onSaveRoute}>
@@ -2237,6 +2262,22 @@ function RoutePlannerSection(props) {
               <section><strong>{formatHours(plan.visitHours)} h</strong><span>{homeText(language, '慢慢看', 'Exploring')}</span></section>
               <section><strong>{formatHours(plan.bufferHours)} h</strong><span>{homeText(language, '机动缓冲', 'Buffer time')}</span></section>
             </div>
+            <aside className="route-health-card">
+              <div className="home-module__head"><span>{homeText(language, '路线体检报告', 'Route health report')}</span><strong>{healthReport.empty ? '--' : healthReport.recommendedDays + homeText(language, '天', 'd')}</strong></div>
+              {healthReport.empty ? <p>{healthReport.message}</p> : (
+                <>
+                  <dl>
+                    <div><dt>{homeText(language, '路线顺路度', 'Directness')}</dt><dd>{healthReport.directness}</dd></div>
+                    <div><dt>{homeText(language, '节奏舒适度', 'Pace comfort')}</dt><dd>{healthReport.comfort}</dd></div>
+                    <div><dt>{homeText(language, '首次旅行友好度', 'First-trip friendly')}</dt><dd>{healthReport.friendly}</dd></div>
+                    <div><dt>{homeText(language, '总距离', 'Total distance')}</dt><dd>{formatKm(healthReport.distance)}</dd></div>
+                    <div><dt>{homeText(language, '预计交通时间', 'Transit time')}</dt><dd>{formatDuration(healthReport.trafficHours)}</dd></div>
+                    <div><dt>{homeText(language, '推荐天数', 'Recommended days')}</dt><dd>{healthReport.recommendedDays}</dd></div>
+                  </dl>
+                  <p>{healthReport.advice}</p>
+                </>
+              )}
+            </aside>
           </section>
         </div>
       </div>
@@ -2256,6 +2297,12 @@ function RoutePlannerSection(props) {
                   <span>{homeText(language, `第 ${day.day} 天`, `Day ${day.day}`)}</span>
                   <strong>{formatDuration(day.totalHours)} / {formatKm(day.totalKm)}</strong>
                   <p>{day.activities.length ? homeText(language, '当天安排', 'Day plan') : homeText(language, '留作机动日', 'A flexible day')}</p>
+                  <div className="day-time-ratio" style={{ '--travel': `${Math.max(4, (day.travelHours / Math.max(day.totalHours, 0.1)) * 100)}%`, '--visit': `${Math.max(4, (day.visitHours / Math.max(day.totalHours, 0.1)) * 100)}%`, '--buffer': `${Math.max(4, (day.bufferHours / Math.max(day.totalHours, 0.1)) * 100)}%` }}>
+                    <i className="is-travel" title={homeText(language, '交通时间', 'Transit time')} />
+                    <i className="is-visit" title={homeText(language, '参观时间', 'Visit time')} />
+                    <i className="is-buffer" title={homeText(language, '机动时间', 'Buffer time')} />
+                  </div>
+                  <div className="day-time-ratio__legend"><span>{homeText(language, '交通', 'Transit')} {formatHours(day.travelHours)}h</span><span>{homeText(language, '参观', 'Visit')} {formatHours(day.visitHours)}h</span><span>{homeText(language, '机动', 'Buffer')} {formatHours(day.bufferHours)}h</span></div>
                   {day.activities.length > 0 && (
                     <div className="cinematic-day-card__timeline">
                       {day.activities.map((item, index) => {
@@ -2284,7 +2331,7 @@ function RoutePlannerSection(props) {
                     </div>
                   )}
                   <small>{day.overHours > 0
-                    ? homeText(language, `会多出约 ${formatHours(day.overHours)} 小时，建议挪走一个景点。`, `About ${formatHours(day.overHours)} hours over the limit. Move one stop to another day.`)
+                    ? homeText(language, `这一天可能比较紧凑，建议增加天数或调整为轻松节奏。`, `About ${formatHours(day.overHours)} hours over the limit. Move one stop to another day.`)
                     : homeText(language, `${formatHours(day.travelHours)} 小时在路上，${formatHours(day.visitHours)} 小时参观，${formatHours(day.bufferHours)} 小时机动`, `${formatHours(day.travelHours)} hours in transit, ${formatHours(day.visitHours)} hours exploring, ${formatHours(day.bufferHours)} hours buffer`)}</small>
                 </article>
               ))}
@@ -2307,7 +2354,7 @@ function ThreeDGuideSection({ language, selectedStop, routeStops, onOpenDrive })
   const entryStop = selectedStop && routeStops.some((stop) => stop.id === selectedStop.id)
     ? selectedStop
     : routeStops[0] ?? null;
-  return <section id="home-3d" className="cinematic-section cinematic-3d"><div className="cinematic-section__head"><span>{language === 'zh' ? '3D旅行导览' : '3D travel guide'}</span><h2>{language === 'zh' ? '进入3D路线导览' : 'Enter the 3D route guide'}</h2><p>{language === 'zh' ? '沉浸式体验规划路线' : 'Experience your planned route immersively.'}</p></div><div className="cinematic-3d__layout"><div className="cinematic-3d__copy"><strong>{entryStop ? nameFor(entryStop, language) : homeText(language, '还没有选择路线', 'No route selected')}</strong><p>{language === 'zh' ? '当前路线包含 ' + routeStops.length + ' 个停靠点，准备好后就沿着选好的路出发。' : 'Your route has ' + routeStops.length + ' stops. When you are ready, set off along the roads you picked.'}</p></div><div className="cinematic-entry-grid cinematic-entry-grid--single"><article><strong>3D Drive</strong><p>{language === 'zh' ? '沿当前路线进入沉浸式导览；规划页会按距离和城市条件自动混合驾车与步行。' : 'Enter immersive guidance along the current route; the planner mixes driving and walking based on distance and city conditions.'}</p><button type="button" disabled={!entryStop} onClick={() => entryStop && onOpenDrive(entryStop.id)}>{language === 'zh' ? '进入' : 'Enter'}</button></article></div></div></section>;
+  return <section id="home-3d" className="cinematic-section cinematic-3d"><div className="cinematic-section__head"><span>{language === 'zh' ? '3D旅行导览' : '3D travel guide'}</span><h2>{language === 'zh' ? '进入3D路线导览' : 'Enter the 3D route guide'}</h2><p>{language === 'zh' ? '沉浸式体验规划路线' : 'Experience your planned route immersively.'}</p></div><div className="cinematic-3d__layout"><div className="cinematic-3d__copy"><strong>{entryStop ? nameFor(entryStop, language) : homeText(language, '还没有选择路线', 'No route selected')}</strong><p>{language === 'zh' ? '当前路线包含 ' + routeStops.length + ' 个停靠点，准备好后就沿着选好的路出发。' : 'Your route has ' + routeStops.length + ' stops. When you are ready, set off along the roads you picked.'}</p></div><div className="cinematic-entry-grid cinematic-entry-grid--single"><article><strong>3D Drive</strong><p>{language === 'zh' ? '沿当前路线进入沉浸式导览；规划页会按距离和城市条件自动混合驾车与步行。' : 'Enter immersive guidance along the current route; the planner mixes driving and walking based on distance and city conditions.'}</p><button type="button" disabled={!entryStop || routeStops.length < 2} onClick={() => entryStop && routeStops.length >= 2 && onOpenDrive(entryStop.id)}>{language === 'zh' ? '进入' : 'Enter'}</button>{routeStops.length < 2 && <small className="planner-note">{homeText(language, '请至少加入 2 个景点后再进入 3D 导览。', 'Add at least 2 stops before entering the 3D guide.')}</small>}</article></div></div></section>;
 }
 
 function FeatureSection({ language, favorites, compare, routeStops, userSession, onOpenService }) {
@@ -2411,9 +2458,16 @@ function TravelNotesSection({ language, stops }) {
   return <section id="home-notes" className="cinematic-section cinematic-notes"><div className="cinematic-section__head"><span>{language === 'zh' ? '\u65c5\u884c\u653b\u7565 / \u80cc\u666f\u8d44\u6599' : 'Travel notes / background'}</span><h2>{language === 'zh' ? '\u51fa\u53d1\u524d\u8bfb\u4e00\u8bfb\u5f53\u524d\u8def\u7ebf\u7684\u76ee\u7684\u5730' : 'Read about the stops in this route before you go'}</h2></div>{noteStops.length ? <div className="cinematic-notes-grid">{noteStops.map((stop) => <article key={stop.id}>{imageFor(stop, language) && <img src={imageFor(stop, language)} alt="" loading="lazy" />}<span>{regionText(stop, language)}</span><strong>{nameFor(stop, language)}</strong><p>{summaryFor(stop, language).slice(0, 160)}</p><a className="concept-btn" href={pageUrlFor(stop, language)} target="_blank" rel="noreferrer">{homeText(language, '\u67e5\u770b\u8be6\u60c5', 'View details')}</a></article>)}</div> : <p className="planner-note">{homeText(language, '当前路线里还没有可打开资料页的景点。', 'No route stop has a source page yet.')}</p>}</section>;
 }
 
-function AccountSummarySection({ language, favorites, routeStops, lockedIds, userSession, onSignIn }) {
-  const items = [[language === 'zh' ? '\u5f53\u524d\u6a21\u5f0f' : 'Current mode', userSession ? userSession.name : homeText(language, '\u6e38\u5ba2\u6a21\u5f0f', 'Guest mode')], [language === 'zh' ? '\u5df2\u6536\u85cf\u666f\u70b9' : 'Saved stops', favorites.size], [language === 'zh' ? '\u5f53\u524d\u8def\u7ebf\u666f\u70b9' : 'Route stops', routeStops.length], [language === 'zh' ? '\u5df2\u9501\u5b9a\u666f\u70b9' : 'Locked stops', lockedIds.size]];
-  return <section id="home-account" className="cinematic-section cinematic-account-summary"><div className="cinematic-section__head"><span>{homeText(language, '\u8d26\u6237', 'Account')}</span><h2>{language === 'zh' ? '\u8d26\u6237\u4e0e\u6536\u85cf\u72b6\u6001' : 'Account and saved state'}</h2></div><div className="cinematic-account-summary__grid">{items.map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}<button type="button" onClick={onSignIn}>{userSession ? (language === 'zh' ? '\u67e5\u770b\u8d26\u6237' : 'View account') : (language === 'zh' ? '\u767b\u5f55' : 'Sign in')}</button></div></section>;
+function AccountSummarySection({ language, favorites, routeStops, lockedIds, userSession, onSignIn, myReviews, savedRoutes }) {
+  const items = [
+    [language === 'zh' ? '\u5f53\u524d\u6a21\u5f0f' : 'Current mode', userSession ? userSession.name : homeText(language, '\u6e38\u5ba2\u6a21\u5f0f', 'Guest mode')],
+    [homeText(language, '我评价过', 'Reviewed stops'), Object.keys(myReviews ?? {}).length],
+    [homeText(language, '收藏了', 'Favorites'), favorites.size],
+    [homeText(language, '保存了路线', 'Saved routes'), savedRoutes?.length ?? 0],
+    [language === 'zh' ? '\u5f53\u524d\u8def\u7ebf\u666f\u70b9' : 'Route stops', routeStops.length],
+    [language === 'zh' ? '\u5df2\u9501\u5b9a\u666f\u70b9' : 'Locked stops', lockedIds.size],
+  ];
+  return <section id="home-account" className="cinematic-section cinematic-account-summary"><div className="cinematic-section__head"><span>{homeText(language, '\u8d26\u6237', 'Account')}</span><h2>{language === 'zh' ? '我的旅行手册汇总' : 'My travel notebook summary'}</h2></div><div className="cinematic-account-summary__grid">{items.map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}<button type="button" onClick={onSignIn}>{userSession ? (language === 'zh' ? '\u67e5\u770b\u8d26\u6237' : 'View account') : (language === 'zh' ? '\u767b\u5f55' : 'Sign in')}</button></div></section>;
 }
 
 function HomeFooter({ language }) {
@@ -2422,8 +2476,11 @@ function HomeFooter({ language }) {
 }
 
 
-function DestinationDetailPage({ language, stop, routeStops, favorites, compare, onFavorite, onCompare, onAddRoute, onClose }) {
+function DestinationDetailPage({ language, stop, routeStops, favorites, compare, onFavorite, onCompare, onAddRoute, onClose, onReviewSaved }) {
   if (!stop) return null;
+  const [myReviews, setMyReviews] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem(MY_REVIEWS_KEY) || '{}'); } catch { return {}; }
+  });
   const galleryStops = [stop, ...routeStops.filter((item) => item.id !== stop.id), ...landmarks.filter((item) => item.id !== stop.id)].filter((item, index, list) => list.findIndex((match) => match.id === item.id) === index).slice(0, 5);
   const nearbyStops = nearbyStopsFor(stop, routeStops, language);
   const visit = visitFor(stop, language);
@@ -2437,6 +2494,15 @@ function DestinationDetailPage({ language, stop, routeStops, favorites, compare,
     [homeText(language, '无障碍信息', 'Accessibility'), visitorInfo.wheelchairAccessibility],
     [homeText(language, '年访客量', 'Annual visitors'), visitorInfo.annualVisitors],
   ].filter(([, value]) => value !== null && value !== undefined && value !== '');
+  const savedReview = myReviews[stop.id] ?? { rating: 5, tags: [], note: '', time: language === 'zh' ? '春季' : 'Spring' };
+  const reviewTags = [homeText(language, '适合拍照', 'Photo-friendly'), homeText(language, '人较多', 'Crowded'), homeText(language, '交通方便', 'Easy transit'), homeText(language, '适合亲子', 'Family-friendly'), homeText(language, '建议提前预约', 'Book ahead')];
+  const saveReview = (patch) => {
+    const nextReview = { ...savedReview, ...patch };
+    const next = { ...myReviews, [stop.id]: nextReview };
+    setMyReviews(next);
+    window.localStorage.setItem(MY_REVIEWS_KEY, JSON.stringify(next));
+    onReviewSaved?.(next);
+  };
   return (
     <section className="destination-detail" role="dialog" aria-modal="true" aria-label={homeText(language, '\u76ee\u7684\u5730\u8be6\u60c5', 'Destination details')}>
       <div className="destination-detail__panel">
@@ -2469,6 +2535,13 @@ function DestinationDetailPage({ language, stop, routeStops, favorites, compare,
             <article><span>{homeText(language, '\u9644\u8fd1\u987a\u8def', 'Nearby on route')}</span><p>{nearbyStops.join(' / ')}</p></article>
             <article><span>{homeText(language, '\u8d44\u6599\u6765\u6e90', 'Sources')}</span><p>{sourceLabelsFor(stop, language)}{url ? ` / ${url}` : ''}</p></article>
           </div>
+          <section className="my-travel-review">
+            <h3>{homeText(language, '我的评价 / 我的旅行足迹', 'My review / travel footprint')}</h3>
+            <label><span>{homeText(language, '星级评分', 'Rating')}</span><select value={savedReview.rating} onChange={(event) => saveReview({ rating: Number(event.target.value) })}>{[1, 2, 3, 4, 5].map((rating) => <option key={rating} value={rating}>{'★'.repeat(rating)}</option>)}</select></label>
+            <div className="my-travel-review__tags">{reviewTags.map((tag) => <button key={tag} type="button" className={savedReview.tags.includes(tag) ? 'is-on' : ''} onClick={() => saveReview({ tags: savedReview.tags.includes(tag) ? savedReview.tags.filter((item) => item !== tag) : [...savedReview.tags, tag] })}>{tag}</button>)}</div>
+            <label><span>{homeText(language, '参观时间', 'Visit time')}</span><input value={savedReview.time} onChange={(event) => saveReview({ time: event.target.value })} placeholder={homeText(language, '春季 / 上午 / 傍晚', 'Spring / morning / evening')} /></label>
+            <label><span>{homeText(language, '一句话感受', 'One-line note')}</span><textarea value={savedReview.note} onChange={(event) => saveReview({ note: event.target.value })} placeholder={homeText(language, '写下你对这个景点的印象', 'Write your impression of this stop')} /></label>
+          </section>
         </div>
       </div>
     </section>
@@ -2596,14 +2669,14 @@ function CinematicHomePage(props) {
     <>
       <HomeHeader language={language} setLanguage={setLanguage} userSession={userSession} onAccount={onSignIn} onHelp={onHelp} />
       <div className="cinematic-home-page">
-        <HomeHero language={language} routeStops={routeStops} selectedStop={selectedStop} onOpenDrive={onOpenDrive} />
+        <HomeHero language={language} routeStops={routeStops} selectedStop={selectedStop} onOpenDrive={onOpenDrive} onClassicRoute={props.onClassicRoute} />
         <DestinationSection {...props} />
         <RoutePlannerSection {...props} />
         <ThreeDGuideSection language={language} selectedStop={selectedStop} routeStops={routeStops} onOpenDrive={onOpenDrive} />
         <FeatureSection language={language} favorites={props.favorites} compare={props.compare} routeStops={routeStops} userSession={userSession} onOpenService={props.onOpenService} />
         <ReviewSection language={language} stops={routeStops} visibleCount={props.reviewVisibleCount} onShowMore={props.onShowMoreReviews} onCollapse={props.onCollapseReviews} />
         <TravelNotesSection language={language} stops={routeStops} />
-        <AccountSummarySection language={language} favorites={props.favorites} routeStops={routeStops} lockedIds={props.lockedIds} userSession={userSession} onSignIn={onSignIn} />
+        <AccountSummarySection language={language} favorites={props.favorites} routeStops={routeStops} lockedIds={props.lockedIds} userSession={userSession} onSignIn={onSignIn} myReviews={props.myReviews} savedRoutes={props.savedRoutes} />
         <HomeFooter language={language} />
       </div>
     </>
@@ -2661,6 +2734,9 @@ export function HomeShowcase({ onOpenDrive }) {
   const [recommendationMetrics, setRecommendationMetrics] = useState({});
   const [onboardingOpen, setOnboardingOpen] = useState(() => hasEnteredHome && window.localStorage.getItem(ONBOARDING_SEEN_KEY) !== '1');
   const [routeTravelPreference, setRouteTravelPreference] = useState('AUTO');
+  const [myReviews, setMyReviews] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem(MY_REVIEWS_KEY) || '{}'); } catch { return {}; }
+  });
   const routeSignature = routeSignatureFor(routeIds);
   const routeMetricsQuery = useRouteMetrics(routeIds, routeTravelPreference);
 
@@ -2943,6 +3019,7 @@ export function HomeShowcase({ onOpenDrive }) {
       .catch(() => {});
   };
   const resetRoute = () => {
+    if (routeIds.length && !window.confirm(homeText(language, '确定要回到默认路线吗？', 'Reset to the default route?'))) return;
     setRouteIds(initialRouteIds);
     setSelectedId(initialRouteIds[0]);
     setLockedIds(new Set());
@@ -2951,6 +3028,7 @@ export function HomeShowcase({ onOpenDrive }) {
     setRouteSaveStatus('');
   };
   const clearRoute = () => {
+    if (routeIds.length && !window.confirm(homeText(language, '确定要清空当前路线吗？', 'Clear the current route?'))) return;
     setRouteIds([]);
     setSelectedId(null);
     setLockedIds(new Set());
@@ -2958,6 +3036,16 @@ export function HomeShowcase({ onOpenDrive }) {
     setActiveRouteGeometry();
     setOptimizeMessage('');
     setRouteSaveStatus('');
+  };
+  const applyClassicRoute = () => {
+    if (routeIds.length && !window.confirm(homeText(language, '当前路线已有内容，是否替换为经典路线？', 'This route already has stops. Replace it with the classic route?'))) return;
+    setRouteIds(classicRouteIds);
+    setSelectedId(classicRouteIds[0]);
+    setLockedIds(new Set());
+    setActiveRouteIds(classicRouteIds);
+    setActiveRouteGeometry();
+    setOptimizeMessage(homeText(language, '已加入经典意大利路线，可以继续调整天数或进入 3D 导览。', 'Classic Italy route loaded. You can still adjust days or enter the 3D guide.'));
+    requestAnimationFrame(() => scrollToHomeSection('home-planner'));
   };
   const openDriveWithCurrentRoute = async (landmarkId = null) => {
     setActiveRouteIds(routeIds);
@@ -3104,6 +3192,7 @@ export function HomeShowcase({ onOpenDrive }) {
 
   const deleteSavedRoute = async (routeId) => {
     if (!authToken) return;
+    if (!window.confirm(homeText(language, '确定删除这条保存路线吗？', 'Delete this saved route?'))) return;
     const response = await fetch(`${API_BASE_URL}/api/account/routes/${routeId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` },
@@ -3160,6 +3249,8 @@ export function HomeShowcase({ onOpenDrive }) {
     selectedStop,
     userSession,
     accountHistory,
+    savedRoutes,
+    myReviews,
     days,
     setDays,
     pace,
@@ -3214,6 +3305,7 @@ export function HomeShowcase({ onOpenDrive }) {
     onSignOut: handleSignOut,
     onHelp: () => setOnboardingOpen(true),
     onOpenDrive: openDriveWithCurrentRoute,
+    onClassicRoute: applyClassicRoute,
   };
 
   if (!hasEnteredHome) {
@@ -3238,6 +3330,7 @@ export function HomeShowcase({ onOpenDrive }) {
           onFavorite={commonPageProps.onFavorite}
           onCompare={commonPageProps.onCompare}
           onAddRoute={commonPageProps.onAddRoute}
+          onReviewSaved={setMyReviews}
           onClose={() => setDetailStopId(null)}
         />
       )}
