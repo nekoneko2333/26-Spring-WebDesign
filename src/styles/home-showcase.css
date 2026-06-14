@@ -5648,3 +5648,145 @@
     grid-template-columns: 1fr;
   }
 }
+
+.concept-btn--classic {
+  background: #fff9c4;
+  color: #2d2d2d;
+}
+
+.planner-empty-state,
+.route-health-card {
+  border: 2px dashed #2d2d2d;
+  border-radius: 18px 26px 16px 22px / 22px 16px 26px 18px;
+  background: rgba(255, 249, 196, 0.5);
+  color: #4f4a42;
+  font: 700 14px/1.5 var(--font-ui, system-ui);
+}
+
+.planner-empty-state {
+  margin: 0;
+  padding: 16px;
+}
+
+.route-health-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  box-shadow: 3px 3px 0 #2d2d2d;
+  transform: rotate(-0.25deg);
+}
+
+.route-health-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.route-health-card dl div {
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.route-health-card dt {
+  color: #6d6257;
+  font: 800 11px/1 var(--font-ui, system-ui);
+}
+
+.route-health-card dd {
+  margin: 0;
+  color: #2d2d2d;
+  font: 900 15px/1.2 var(--font-ui, system-ui);
+}
+
+.route-health-card p {
+  margin: 0;
+}
+
+.day-time-ratio {
+  display: flex;
+  gap: 3px;
+  height: 13px;
+  margin: 10px 0 7px;
+  padding: 2px;
+  border: 2px solid #2d2d2d;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.day-time-ratio i {
+  min-width: 8px;
+  border-radius: 999px;
+}
+
+.day-time-ratio .is-travel { width: var(--travel); background: #80d7ff; }
+.day-time-ratio .is-visit { width: var(--visit); background: #ffcf6b; }
+.day-time-ratio .is-buffer { width: var(--buffer); background: #c7e8bd; }
+
+.day-time-ratio__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  color: #5f574e;
+  font: 800 11px/1.2 var(--font-ui, system-ui);
+}
+
+.my-travel-review {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 2px solid #2d2d2d;
+  border-radius: 20px 12px 18px 14px / 14px 18px 12px 20px;
+  background: rgba(255, 249, 196, 0.45);
+}
+
+.my-travel-review h3 {
+  margin: 0;
+  font: 700 22px/1.1 "Kalam", "Noto Serif SC", cursive;
+}
+
+.my-travel-review label {
+  display: grid;
+  gap: 5px;
+  color: #4f4a42;
+  font: 800 12px/1 var(--font-ui, system-ui);
+}
+
+.my-travel-review input,
+.my-travel-review select,
+.my-travel-review textarea {
+  min-height: 38px;
+  border: 1px solid #c8b78e;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 8px 10px;
+  font: 700 13px/1.3 var(--font-ui, system-ui);
+}
+
+.my-travel-review textarea { min-height: 74px; resize: vertical; }
+
+.my-travel-review__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.my-travel-review__tags button {
+  min-height: 32px;
+  border: 1px solid #2d2d2d;
+  border-radius: 999px;
+  background: #fff;
+  color: #2d2d2d;
+  font: 800 12px/1 var(--font-ui, system-ui);
+  cursor: pointer;
+}
+
+.my-travel-review__tags button.is-on {
+  background: #2d2d2d;
+  color: #fff9c4;
+}

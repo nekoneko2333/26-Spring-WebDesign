@@ -94,11 +94,22 @@ const driveRouteCopy = {
       heading: '前往中',
       pending: '未到达',
       summaryTitle: '导览完成',
+      completionMessage: '本次导览完成，下面是你的旅行完成总结。',
+      passedStops: '经过景点数量',
+      routeNames: '经过城市 / 景点',
+      postcardTitle: '旅行明信片',
+      travelTip: '旅行提示',
+      postcardTip: '建议停留片刻，查看模型或打开详情，再继续下一段导览。',
+      viewModel: '查看模型',
+      backToRoute: '返回路线',
+      exportBook: '导出旅行手册',
+      stamps: '旅行印章',
+      recommendedDays: '推荐旅行天数',
       visitedCount: '已游览景点',
       routeDistance: '模拟路线距离',
       nextStep: '推荐下一步：可重新导览、切换路线，或返回首页调整路线。',
       restart: '重新导览',
-      switchRoute: '切换路线',
+      switchRoute: '返回修改路线',
       home: '返回首页',
     },
   },
@@ -190,11 +201,22 @@ const driveRouteCopy = {
       heading: '前往中',
       pending: '未到达',
       summaryTitle: '导览完成',
+      completionMessage: '本次导览完成，下面是你的旅行完成总结。',
+      passedStops: '经过景点数量',
+      routeNames: '经过城市 / 景点',
+      postcardTitle: '旅行明信片',
+      travelTip: '旅行提示',
+      postcardTip: '建议停留片刻，查看模型或打开详情，再继续下一段导览。',
+      viewModel: '查看模型',
+      backToRoute: '返回路线',
+      exportBook: '导出旅行手册',
+      stamps: '旅行印章',
+      recommendedDays: '推荐旅行天数',
       visitedCount: '已游览景点',
       routeDistance: '模拟路线距离',
       nextStep: '推荐下一步：可重新导览、切换路线，或返回首页调整路线。',
       restart: '重新导览',
-      switchRoute: '切换路线',
+      switchRoute: '返回修改路线',
       home: '返回首页',
     },
   },
@@ -274,6 +296,7 @@ export function UIOverlay({ isStarted, onClose }) {
     toggleAutoDrive,
     openLandmarkFocus,
     jumpVehicleToLandmark,
+    continueVehicleTour,
     clearLandmark,
   } = useAppStore();
 
@@ -339,6 +362,8 @@ export function UIOverlay({ isStarted, onClose }) {
   const timelineLandmark = landmarks.find((item) => item.id === timelineLandmarkId);
   const timelineMeta = getArrivalMeta(timelineLandmark?.id);
   const visitedCount = Math.max(arrivedLandmarkIds.length, isComplete ? routeStops.length : 0);
+  const recommendedTourDays = Math.max(1, Math.ceil(routeStops.length / 2));
+  const routeStampNames = routeStops.map((stop) => getLandmarkName(stop, language).split(/[ /·]/)[0]).slice(0, 6);
   const distanceText = activeRouteDistanceKm
     ? `${activeRouteDistanceKm < 10 ? activeRouteDistanceKm.toFixed(1) : Math.round(activeRouteDistanceKm)} km`
     : '约 920 km';
@@ -520,6 +545,20 @@ export function UIOverlay({ isStarted, onClose }) {
         </aside>
       )}
 
+      {arrivalLandmark && !isComplete && (
+        <aside className="arrival-card travel-postcard" role="dialog" aria-live="polite">
+          <p>{panelCopy.postcardTitle}</p>
+          <h2>{language === 'zh' ? '已到达：' : 'Arrived: '}{getLandmarkName(arrivalLandmark, language)}</h2>
+          <span>{getShortText(getLandmarkDescription(arrivalLandmark, language), 92)}</span>
+          <div className="arrival-card__meta"><strong>{panelCopy.stay} {arrivalMeta.stay}</strong><strong>{panelCopy.travelTip}</strong></div>
+          <p className="arrival-card__reason">{panelCopy.postcardTip}</p>
+          <div className="arrival-card__actions">
+            <button type="button" onClick={continueVehicleTour}>{panelCopy.continue}</button>
+            <button type="button" onClick={() => { openLandmarkFocus(arrivalLandmark.id); setModelViewerOpen(true); }}>{panelCopy.viewModel}</button>
+            <button type="button" onClick={() => clearLandmark()}>{panelCopy.backToRoute}</button>
+          </div>
+        </aside>
+      )}
 
       <div className="route-timeline" aria-label={panelCopy.timeline} style={{ '--route-progress-ratio': String(Math.min(1, Math.max(0, routeProgress ?? 0))) }}>
         <div className="route-timeline__track">
@@ -562,14 +601,18 @@ export function UIOverlay({ isStarted, onClose }) {
       {isComplete && (
         <aside className="tour-summary-card" role="dialog" aria-live="polite">
           <p>{panelCopy.summaryTitle}</p>
-          <h2>{routeStops.length > 1 ? `${getLandmarkName(routeStops[0], language)} -> ${getLandmarkName(routeStops.at(-1), language)}` : panelCopy.freeRoute}</h2>
-          <div><span>{panelCopy.visitedCount}</span><strong>{visitedCount} / {routeStops.length}</strong></div>
+          <h2>{language === 'zh' ? '本次导览完成' : 'Guide completed'}</h2>
+          <small>{panelCopy.completionMessage}</small>
+          <div><span>{panelCopy.passedStops}</span><strong>{visitedCount} / {routeStops.length}</strong></div>
           <div><span>{panelCopy.routeDistance}</span><strong>{distanceText}</strong></div>
+          <div><span>{panelCopy.recommendedDays}</span><strong>{recommendedTourDays}</strong></div>
+          <small>{panelCopy.routeNames}: {routeStops.map((stop) => getLandmarkName(stop, language)).join(' / ')}</small>
+          <small>{panelCopy.stamps}: {routeStampNames.join(' / ')}</small>
           <small>{panelCopy.nextStep}</small>
           <section>
             <button type="button" onClick={resetVehicleTour}>{panelCopy.restart}</button>
             <button type="button" onClick={onClose}>{panelCopy.switchRoute}</button>
-            <button type="button" onClick={onClose}>{panelCopy.home}</button>
+            <button type="button" onClick={() => window.print()}>{panelCopy.exportBook}</button>
           </section>
         </aside>
       )}

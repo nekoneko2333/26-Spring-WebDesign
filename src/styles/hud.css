@@ -2563,3 +2563,26 @@ body.ui-awake .hud-mode {
     max-width: calc(100% - 28px) !important;
   }
 }
+
+.travel-postcard {
+  transform: rotate(-0.8deg);
+}
+
+.travel-postcard::after,
+.tour-summary-card::after {
+  content: "TRIP3D";
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--drive-red, #c74b3f);
+  border-radius: 50%;
+  color: var(--drive-red, #c74b3f);
+  font: 900 10px/1 var(--font-sketch, system-ui);
+  transform: rotate(12deg);
+  opacity: 0.78;
+  pointer-events: none;
+}
